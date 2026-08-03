@@ -9,6 +9,18 @@ const bool = z
   .union([z.boolean(), z.string()])
   .transform((v) => (typeof v === 'boolean' ? v : ['1', 'true', 'yes', 'on'].includes(v.toLowerCase())));
 
+/**
+ * Optional string that treats "" as absent.
+ *
+ * `FOO=` in a .env file yields an empty string, which is truthy-adjacent enough
+ * to slip past `??` and reach downstream code as a real value — e.g. a transfer
+ * to phone number "".
+ */
+const optionalStr = z
+  .string()
+  .optional()
+  .transform((v) => (v === undefined || v.trim() === '' ? undefined : v.trim()));
+
 const int = (fallback: number) =>
   z
     .union([z.number(), z.string()])
@@ -38,19 +50,50 @@ export const ApiEnv = z
     CRM_DRIVER: CrmDriver.default('mock'),
     STORAGE_DRIVER: z.enum(['local', 'r2']).default('local'),
 
-    ANTHROPIC_API_KEY: z.string().optional(),
+    ANTHROPIC_API_KEY: optionalStr,
     ANTHROPIC_MODEL: z.string().default('claude-opus-5'),
     OLLAMA_BASE_URL: z.string().default('http://127.0.0.1:11434'),
     OLLAMA_MODEL: z.string().default('llama3.2'),
 
-    BITRIX_WEBHOOK_URL: z.string().optional(),
-    BITRIX_INBOUND_TOKEN: z.string().optional(),
+    BITRIX_WEBHOOK_URL: optionalStr,
+    BITRIX_INBOUND_TOKEN: optionalStr,
+
+    /* ── ElevenLabs ──────────────────────────────────────────────────────── */
+    ELEVENLABS_API_KEY: optionalStr,
+    /** The Agent that owns the voice loop. Created once, then reused. */
+    ELEVENLABS_AGENT_ID: optionalStr,
+    /** Shared secret for verifying their post-call / init webhooks. */
+    ELEVENLABS_WEBHOOK_SECRET: optionalStr,
+    /**
+     * Bearer secret for the custom-LLM bridge and the escalate server tool.
+     *
+     * Those two endpoints cannot use webhook HMAC (ElevenLabs doesn't sign them),
+     * and they are consequential: the bridge runs our orchestrator and the tool
+     * can force an escalation. Configure the same value as a custom header on the
+     * ElevenLabs side. Required whenever the ElevenLabs driver is active.
+     */
+    ELEVENLABS_BRIDGE_SECRET: optionalStr,
+    /** Voice used for synthesis and for the Agent's TTS. */
+    ELEVENLABS_VOICE_ID: z.string().default('21m00Tcm4TlvDq8ikWAM'),
+    ELEVENLABS_MODEL_ID: z.string().default('eleven_flash_v2_5'),
+    /**
+     * Where an escalated call is transferred. Optional: without a licensed UAE
+     * trunk there is no agent phone number yet, so escalation still fires our
+     * screen-pop and the AI explains the handoff, but no media transfer occurs.
+     */
+    ELEVENLABS_TRANSFER_NUMBER: optionalStr,
+    /**
+     * Publicly reachable base URL ElevenLabs calls back on (custom LLM bridge,
+     * webhooks, server tools). Required for real calls — localhost is not
+     * reachable from their infrastructure, so this needs a tunnel or a deploy.
+     */
+    PUBLIC_BASE_URL: optionalStr,
 
     STORAGE_LOCAL_DIR: z.string().default('.storage'),
-    R2_ACCOUNT_ID: z.string().optional(),
-    R2_ACCESS_KEY_ID: z.string().optional(),
-    R2_SECRET_ACCESS_KEY: z.string().optional(),
-    R2_BUCKET: z.string().optional(),
+    R2_ACCOUNT_ID: optionalStr,
+    R2_ACCESS_KEY_ID: optionalStr,
+    R2_SECRET_ACCESS_KEY: optionalStr,
+    R2_BUCKET: optionalStr,
 
     INSTITUTE_TIMEZONE: z.string().default('Asia/Dubai'),
     RECORDING_RETENTION_DAYS: int(365),
@@ -77,6 +120,33 @@ export const ApiEnv = z
         message:
           'BITRIX_WEBHOOK_URL is required when CRM_DRIVER=bitrix (Bitrix24 → Developer resources → Inbound webhook)',
       });
+    }
+    if (env.TELEPHONY_DRIVER === 'elevenlabs') {
+      if (!env.ELEVENLABS_API_KEY) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ELEVENLABS_API_KEY'],
+          message: 'ELEVENLABS_API_KEY is required when TELEPHONY_DRIVER=elevenlabs',
+        });
+      }
+      if (!env.ELEVENLABS_BRIDGE_SECRET) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['ELEVENLABS_BRIDGE_SECRET'],
+          message:
+            'ELEVENLABS_BRIDGE_SECRET is required when TELEPHONY_DRIVER=elevenlabs — the custom-LLM ' +
+            'bridge and the escalate tool are publicly routable and must not be left unauthenticated',
+        });
+      }
+      if (!env.PUBLIC_BASE_URL) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PUBLIC_BASE_URL'],
+          message:
+            'PUBLIC_BASE_URL is required when TELEPHONY_DRIVER=elevenlabs — ElevenLabs must be able ' +
+            'to reach the custom-LLM bridge and webhooks, and localhost is not reachable from their side',
+        });
+      }
     }
     if (env.STORAGE_DRIVER === 'r2' && !env.R2_BUCKET) {
       ctx.addIssue({

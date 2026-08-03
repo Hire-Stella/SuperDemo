@@ -47,7 +47,7 @@ None of these would have been caught by a mocked dashboard.
 
 | Area | What's real | What's mocked | To make it real |
 |---|---|---|---|
-| **PSTN carrier** | Call state machine, routing, queueing, escalation, recording, transcript, analytics, CRM push | No actual phone network. `simulated` driver replays scripted FIT calls; `browser` driver uses real mic/speaker between two browser tabs | Contract a TDRA-licensed UAE SIP trunk, implement `livekit/livekit-telephony.ts` against the existing `TelephonyProvider` interface |
+| **PSTN carrier** | Call state machine, routing, queueing, escalation, recording, transcript, analytics, CRM push. **The ElevenLabs driver is built** — real telephony, STT, TTS and turn-taking, with our API as the brain via the custom-LLM bridge | No number is attached yet, and no ElevenLabs key is configured. `simulated` remains the default | Add `ELEVENLABS_API_KEY` + a public `PUBLIC_BASE_URL`, then attach a number: Twilio for a dialable test line, or a **TDRA-licensed UAE trunk** via their SIP support for production |
 | **STT** | Transcript storage, segments, speaker labels, search, waveform sync | Chrome `webkitSpeechRecognition` — free, browser-only, English-biased, degrades on poor audio | Swap `STT_DRIVER=deepgram` (or self-host whisper.cpp) |
 | **TTS** | Turn loop, audio delivery, barge-in timing | `SpeechSynthesis` — robotic, OS-voice-dependent, no Arabic-accented English | Swap `TTS_DRIVER=elevenlabs` or self-host Piper |
 | **Conversation brain** | Turn loop, KB retrieval, escalation rules, session accounting | `scripted` driver: keyword + embedding match over the FIT course KB. Deterministic and safe, but cannot handle genuinely novel phrasing | Swap `LLM_DRIVER=claude` (defaults to `claude-opus-5`, structured output at low effort). Interface is unchanged |
@@ -92,7 +92,7 @@ None of these would have been caught by a mocked dashboard.
 
 | # | Question | Who | Why it blocks |
 |---|---|---|---|
-| 1 | Which **TDRA-licensed** UAE carrier will provide the SIP trunk / DID? | Client + Neeraj | Nothing about real calling can proceed without it. **UAE law restricts PSTN-terminating VoIP to licensed operators — we cannot lawfully replace their carrier with an international trunk.** What we *can* deliver: their agents in India and Egypt work on browser softphones with no SIM and no roaming, with calls egressing through a licensed UAE trunk. That does solve their stated cost problem — but it needs a carrier |
+| 1 | Which **TDRA-licensed** UAE carrier will provide the SIP trunk / DID? ElevenLabs supports third-party SIP, so this drops in with no code change. | Client + Neeraj | Nothing about real calling can proceed without it. **UAE law restricts PSTN-terminating VoIP to licensed operators — we cannot lawfully replace their carrier with an international trunk.** What we *can* deliver: their agents in India and Egypt work on browser softphones with no SIM and no roaming, with calls egressing through a licensed UAE trunk. That does solve their stated cost problem — but it needs a carrier |
 | 2 | Bitrix24 portal URL + an inbound webhook with `crm` and `telephony` scopes | Client | Blocks the real-CRM demo. Takes them 2 minutes |
 | 3 | Does FIT require **UAE data residency**? | Client | Changes hosting from Vercel/Neon to a Dubai VPS. No architectural change |
 | 4 | Recording retention period, and consent wording per jurisdiction | Client legal | Dubai, India and Egypt differ. Consent announcement is on by default |

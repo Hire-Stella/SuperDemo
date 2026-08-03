@@ -17,6 +17,9 @@ import { LlmModule } from './integrations/llm/llm.module';
 import { StorageModule } from './integrations/storage/storage.module';
 import { TelephonyModule } from './integrations/telephony/telephony.module';
 import { CrmModule } from './integrations/crm/crm.module';
+import { ElevenLabsModule } from './integrations/elevenlabs/elevenlabs.module';
+import { ElevenLabsController } from './integrations/elevenlabs/elevenlabs.controller';
+import { TtsModule } from './integrations/tts/tts.module';
 import { CallsModule } from './calls/calls.module';
 import { ConversationsModule } from './conversations/conversations.module';
 import { AnalyticsModule } from './analytics/analytics.module';
@@ -44,6 +47,8 @@ import { HealthController } from './health.controller';
     // Integration drivers — each selects its implementation from env at boot.
     LlmModule,
     StorageModule,
+    ElevenLabsModule,
+    TtsModule,
     TelephonyModule,
     CrmModule,
 
@@ -57,7 +62,7 @@ import { HealthController } from './health.controller';
     AdminModule,
     MediaModule,
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, ElevenLabsController],
   providers: [
     MaintenanceService,
     // Auth is global and opt-out: a new controller is protected by default, and

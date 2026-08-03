@@ -82,7 +82,51 @@ sync are **production code**. Only the external systems are substituted — visi
 | `LLM_DRIVER` | `scripted` — deterministic KB retrieval, zero cost, cannot hallucinate a fee | `claude` (Opus 5) or `ollama` |
 | `CRM_DRIVER` | `mock` | `bitrix` + an inbound webhook URL (~2 minutes for the client to create) |
 | `MESSAGING_DRIVER` | `mock` | `meta` (needs Meta business verification) |
-| `STT` / `TTS` | browser Web Speech — free, Chrome/Edge only | Deepgram / ElevenLabs |
+| `STT` / `TTS` | browser Web Speech — free, Chrome/Edge only | `TTS_DRIVER=elevenlabs` for real voices, or the full ElevenLabs telephony path below |
+
+### Real calling via ElevenLabs
+
+`TELEPHONY_DRIVER=elevenlabs` puts real phone calls on the platform while **our
+API stays the brain**. ElevenLabs does the part we don't want to build — PSTN,
+speech-to-text, turn-taking, barge-in, low-latency synthesis. Everything that
+makes this platform worth paying for stays here.
+
+```
+Caller ──SIP/Twilio──> ElevenLabs Agent
+                            │  each turn
+                            ▼
+   POST /api/elevenlabs/llm/v1/chat/completions   (OpenAI-compatible, SSE)
+                            │  KB retrieval · confidence floor · escalation policy
+                            ▼
+   escalate_to_advisor ──> our routing + agent screen-pop ──> Bitrix
+```
+
+Endpoints ElevenLabs calls, and how each is authenticated:
+
+| Endpoint | Purpose | Auth |
+|---|---|---|
+| `POST /api/elevenlabs/webhooks/conversation-init` | create the Call, return `fit_call_id` | `elevenlabs-signature` HMAC |
+| `POST /api/elevenlabs/llm/v1/chat/completions` | the brain, streamed as SSE | `Bearer ELEVENLABS_BRIDGE_SECRET` |
+| `POST /api/elevenlabs/tools/escalate` | hand to a human immediately | `Bearer ELEVENLABS_BRIDGE_SECRET` |
+| `POST /api/elevenlabs/webhooks/post-call` | transcript + recording ingest | `elevenlabs-signature` HMAC |
+
+To turn it on you need three things: an ElevenLabs API key, a **public HTTPS
+URL** for `PUBLIC_BASE_URL` (they can't reach localhost — use
+`cloudflared tunnel --url http://localhost:3101` or deploy), and a number
+attached to the ElevenLabs workspace (Twilio import or a SIP trunk).
+
+**This does not solve the UAE number problem.** ElevenLabs supports third-party
+SIP trunking, so a TDRA-licensed UAE trunk terminates straight into it with no
+code change — but ElevenLabs and Twilio cannot themselves issue UAE numbers.
+Until FIT contract a licensed carrier, leave `ELEVENLABS_TRANSFER_NUMBER` blank:
+escalation still fires the screen-pop and the CRM sync, the caller is just told
+an advisor will pick up rather than having their audio moved.
+
+Verified without an account: the SSE bridge (correct KB answer, sentence-chunked
+for lower latency), escalation reaching `AGENT_RINGING` in the right queue, the
+escalate tool's idempotency, HMAC accept/reject/replay-reject, and bearer
+accept/reject. Not verifiable without one: the conversation-init webhook's
+response shape, which is implemented defensively with fallbacks.
 
 **The one thing to be careful about in front of the client:** UAE law reserves PSTN-terminating
 voice to TDRA-licensed operators, so this platform cannot issue UAE numbers itself. What it *can*

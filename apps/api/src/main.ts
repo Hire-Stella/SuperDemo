@@ -12,6 +12,11 @@ async function bootstrap(): Promise<void> {
   const env = parseApiEnv(process.env);
 
   const app = await NestFactory.create(AppModule, {
+    // Webhook signatures are computed over the exact bytes received, so the raw
+    // body must be preserved alongside the parsed one. Nest's own option does
+    // this without displacing its body parser — mounting express.json() by hand
+    // silently left req.body undefined on every route, login included.
+    rawBody: true,
     logger:
       env.NODE_ENV === 'production'
         ? ['error', 'warn', 'log']

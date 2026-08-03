@@ -7,6 +7,7 @@ import {
 import { ENV } from '../../config/config.module';
 import { SimulatedTelephony } from './simulated.telephony';
 import { BrowserTelephony } from './browser.telephony';
+import { ElevenLabsTelephony } from '../elevenlabs/elevenlabs.telephony';
 
 export const TELEPHONY_PROVIDER = Symbol('TELEPHONY_PROVIDER');
 
@@ -63,10 +64,17 @@ export class LiveKitTelephony implements TelephonyProvider {
         env: ApiEnv,
         simulated: SimulatedTelephony,
         browser: BrowserTelephony,
+        elevenlabs: ElevenLabsTelephony,
         livekit: LiveKitTelephony,
       ): TelephonyProvider => {
         const log = new Logger('TelephonyModule');
         switch (env.TELEPHONY_DRIVER) {
+          case 'elevenlabs':
+            log.log(
+              `telephony: elevenlabs (real PSTN via Twilio or SIP; our API is the brain via the ` +
+                `custom-LLM bridge at ${env.PUBLIC_BASE_URL ?? '<PUBLIC_BASE_URL unset>'})`,
+            );
+            return elevenlabs;
           case 'browser':
             log.log('telephony: browser (real mic/speaker via Web Speech + WebRTC)');
             return browser;
@@ -81,7 +89,7 @@ export class LiveKitTelephony implements TelephonyProvider {
             return simulated;
         }
       },
-      inject: [ENV, SimulatedTelephony, BrowserTelephony, LiveKitTelephony],
+      inject: [ENV, SimulatedTelephony, BrowserTelephony, ElevenLabsTelephony, LiveKitTelephony],
     },
   ],
   // Both concrete mock drivers are exported so the simulator and browser-call

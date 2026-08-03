@@ -28,6 +28,7 @@ import { ENV } from '../config/config.module';
 import { TELEPHONY_PROVIDER } from '../integrations/telephony/telephony.module';
 import { SimulatedTelephony } from '../integrations/telephony/simulated.telephony';
 import { BrowserTelephony } from '../integrations/telephony/browser.telephony';
+import { ElevenLabsTelephony } from '../integrations/elevenlabs/elevenlabs.telephony';
 import { OutboxService } from '../outbox/outbox.service';
 
 /**
@@ -64,6 +65,7 @@ export class CallsService implements TelephonySink, OnModuleInit {
     private readonly outbox: OutboxService,
     private readonly simulated: SimulatedTelephony,
     private readonly browser: BrowserTelephony,
+    private readonly elevenlabs: ElevenLabsTelephony,
     @Inject(TELEPHONY_PROVIDER) private readonly telephony: TelephonyProvider,
     @Inject(ENV) private readonly env: ApiEnv,
   ) {}
@@ -74,6 +76,11 @@ export class CallsService implements TelephonySink, OnModuleInit {
     // browser call at the same time.
     this.simulated.attachSink(this);
     this.browser.attachSink(this);
+    this.elevenlabs.attachSink(this);
+    // The ElevenLabs driver needs to call back into this service, but this
+    // service already depends on it — hand the reference over here rather than
+    // creating a constructor cycle.
+    this.elevenlabs.setCallsService(this);
   }
 
   /* ==================== state machine ==================== */
