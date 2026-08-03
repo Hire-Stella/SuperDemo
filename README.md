@@ -110,10 +110,48 @@ Endpoints ElevenLabs calls, and how each is authenticated:
 | `POST /api/elevenlabs/tools/escalate` | hand to a human immediately | `Bearer ELEVENLABS_BRIDGE_SECRET` |
 | `POST /api/elevenlabs/webhooks/post-call` | transcript + recording ingest | `elevenlabs-signature` HMAC |
 
-To turn it on you need three things: an ElevenLabs API key, a **public HTTPS
-URL** for `PUBLIC_BASE_URL` (they can't reach localhost — use
-`cloudflared tunnel --url http://localhost:3101` or deploy), and a number
-attached to the ElevenLabs workspace (Twilio import or a SIP trunk).
+#### Two ways to run it
+
+|  | Browser call (no carrier) | Phone call |
+|---|---|---|
+| Needs | API key + public URL | the above **plus** Twilio or a SIP trunk |
+| Inbound | ✅ someone clicks "Start call" and speaks | ✅ a real number rings |
+| Outbound to a real phone | ❌ impossible without a carrier | ✅ |
+| Voice quality, turn-taking, barge-in | identical — same agent | identical |
+| Our brain, KB, escalation, CRM | identical | identical |
+
+**The browser path is the demo path.** ElevenLabs runs the media over WebRTC, so
+you get their voice, real speech recognition, real turn-taking and working
+barge-in with no Twilio account and no per-minute telephony. It's on
+*Simulator → Talk to the AI — ElevenLabs voice*.
+
+**Outbound to a real phone is not possible without a carrier.** ElevenLabs does
+not sell numbers; outbound needs PSTN termination from Twilio or a SIP trunk.
+Outbound *campaigns* can be demonstrated with the scripted simulator, but that is
+a simulation and the UI labels it as one.
+
+#### Turning it on
+
+```bash
+# 1. keys + a public URL (they cannot reach localhost)
+ELEVENLABS_API_KEY=...
+ELEVENLABS_BRIDGE_SECRET=$(openssl rand -hex 32)
+ELEVENLABS_WEBHOOK_SECRET=$(openssl rand -hex 32)
+PUBLIC_BASE_URL=https://<your-tunnel>.trycloudflare.com
+
+# 2. create the agent (one call, returns the id)
+curl -X POST -H "Authorization: Bearer <admin jwt>" \
+  http://localhost:3101/api/elevenlabs/setup/agent
+
+# 3. put the returned id in ELEVENLABS_AGENT_ID, restart, and in the ElevenLabs
+#    dashboard store ELEVENLABS_BRIDGE_SECRET as a workspace secret named
+#    FIT_BRIDGE_SECRET, and point the post-call webhook at
+#    <PUBLIC_BASE_URL>/api/elevenlabs/webhooks/post-call
+```
+
+`TELEPHONY_DRIVER` can stay `simulated` for the browser path — the ElevenLabs
+endpoints work regardless of which driver is active, so scripted traffic and a
+live ElevenLabs call can run side by side during a demo.
 
 **This does not solve the UAE number problem.** ElevenLabs supports third-party
 SIP trunking, so a TDRA-licensed UAE trunk terminates straight into it with no

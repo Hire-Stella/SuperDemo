@@ -14,7 +14,7 @@ import type { Request, Response } from 'express';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import type { ApiEnv } from '@fit-ai/contracts';
 import { ENV } from '../../config/config.module';
-import { Public } from '../../auth/guards';
+import { Public, Roles } from '../../auth/guards';
 import { ElevenLabsService, type PostCallTranscription } from './elevenlabs.service';
 import { ElevenLabsTelephony } from './elevenlabs.telephony';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -139,6 +139,97 @@ export class ElevenLabsController {
       conversation_config_override: {
         agent: { first_message: greeting },
       },
+    };
+  }
+
+  /* ================================ setup ================================ */
+
+  /**
+   * One-call bootstrap: create the ElevenLabs Agent wired to our bridge.
+   *
+   * Returns the agent id to paste into `ELEVENLABS_AGENT_ID`. Separate from
+   * normal operation on purpose — an agent is a persistent resource, and
+   * creating one per boot would leave orphans accumulating in the workspace.
+   */
+  @Roles('ADMIN')
+  @Post('setup/agent')
+  @HttpCode(201)
+  async setupAgent() {
+    if (!this.env.ELEVENLABS_API_KEY) {
+      throw new ForbiddenException('ELEVENLABS_API_KEY is not configured');
+    }
+    if (!this.env.PUBLIC_BASE_URL) {
+      throw new ForbiddenException(
+        'PUBLIC_BASE_URL must be a public HTTPS origin — ElevenLabs cannot reach localhost. ' +
+          'Use a tunnel (cloudflared tunnel --url http://localhost:3101) or deploy first.',
+      );
+    }
+
+    const aiAgent = await this.prisma.aiAgent.findFirst({
+      where: { isActive: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const created = await this.service.createAgent({
+      name: 'FIT Institute — admissions voice line',
+      firstMessage: aiAgent?.greeting ?? 'Thank you for calling FIT Institute.',
+      publicBaseUrl: this.env.PUBLIC_BASE_URL,
+    });
+
+    return {
+      agentId: created.agent_id,
+      next: [
+        `Set ELEVENLABS_AGENT_ID=${created.agent_id} in .env and restart the API.`,
+        'In the ElevenLabs dashboard, store ELEVENLABS_BRIDGE_SECRET as a workspace secret ' +
+          'named FIT_BRIDGE_SECRET (the agent references it for the bridge and the escalate tool).',
+        `Point the post-call webhook at ${this.env.PUBLIC_BASE_URL}/api/elevenlabs/webhooks/post-call ` +
+          'and use ELEVENLABS_WEBHOOK_SECRET as its signing secret.',
+        'For a dialable phone line, import a Twilio number or connect a SIP trunk. ' +
+          'Browser calls work without either.',
+      ],
+    };
+  }
+
+  /* ========================= browser voice session ======================== */
+
+  /**
+   * Start a browser voice call.
+   *
+   * Creates our Call row first, then mints a WebRTC token, and hands both back.
+   * The browser passes `fit_call_id` as a dynamic variable when it opens the
+   * session, so every bridge turn is tied to the right call — which keeps the
+   * unverified conversation-init webhook off the critical path for a demo.
+   *
+   * Authenticated with the normal session JWT: a staff member starts this from
+   * the dashboard, so there is no reason to expose it publicly.
+   */
+  @Post('browser/start')
+  @HttpCode(201)
+  async startBrowserVoiceCall(
+    @Body() body: { callerName?: string; fromNumber?: string; toNumber?: string },
+  ) {
+    if (!this.env.ELEVENLABS_AGENT_ID) {
+      throw new ForbiddenException(
+        'ELEVENLABS_AGENT_ID is not configured — create an agent first (see README).',
+      );
+    }
+
+    const { callId, greeting } = await this.telephony.registerInbound({
+      providerCallId: `elweb-${randomUUID()}`,
+      fromNumber: body.fromNumber ?? '+971500000000',
+      toNumber: body.toNumber ?? (await this.defaultNumber()),
+    });
+
+    const { token } = await this.service.getWebRtcToken(this.env.ELEVENLABS_AGENT_ID);
+
+    return {
+      callId,
+      conversationToken: token,
+      agentId: this.env.ELEVENLABS_AGENT_ID,
+      greeting,
+      // The browser must send this back as a dynamic variable, or the bridge
+      // cannot tell which call a turn belongs to.
+      dynamicVariables: { fit_call_id: callId },
     };
   }
 

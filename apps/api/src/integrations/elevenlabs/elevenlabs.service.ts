@@ -240,6 +240,24 @@ export class ElevenLabsService {
     return Buffer.from(await res.arrayBuffer());
   }
 
+  /* ---------------------------- browser sessions -------------------------- */
+
+  /**
+   * Mint a short-lived WebRTC conversation token for a browser session.
+   *
+   * This is the no-carrier path: the caller's browser talks to the ElevenLabs
+   * agent directly over WebRTC — real STT, real turn-taking, real barge-in, real
+   * voice — with our bridge still deciding every reply. The API key stays on the
+   * server; the browser only ever sees the token.
+   *
+   * Tokens are single-use and expire quickly, so one is minted per call.
+   */
+  async getWebRtcToken(agentId: string): Promise<{ token: string }> {
+    return this.call<{ token: string }>(
+      `/v1/convai/conversation/token?agent_id=${encodeURIComponent(agentId)}`,
+    );
+  }
+
   /* -------------------------------- TTS ---------------------------------- */
 
   /**

@@ -11,6 +11,7 @@ import type {
 } from '@fit-ai/contracts';
 import { api } from '@/lib/api';
 import { Badge, Button, Card, Input, MockNotice, Select, Spinner, cn } from '@/components/composites';
+import { ElevenLabsCall } from '@/components/elevenlabs-call';
 
 /* ------------------------- Web Speech type shims -------------------------- */
 /* Not in lib.dom yet; declared narrowly rather than reaching for `any`.       */
@@ -267,11 +268,17 @@ export default function SimulatorPage() {
         </MockNotice>
       </div>
 
+      {/* ElevenLabs first: it's the one to demo. The Web Speech card below is the
+          zero-cost fallback for when there's no API key. */}
+      <div className="mb-4">
+        <ElevenLabsCall />
+      </div>
+
       <div className="grid gap-4 lg:grid-cols-2">
         {/* ---------------------- live browser call ---------------------- */}
         <Card
-          title="Talk to the AI yourself"
-          subtitle="Your microphone, the real assistant, real escalation — zero provider cost"
+          title="Talk to the AI — browser speech (free fallback)"
+          subtitle="Web Speech API: no API key, no cost, but robotic and no barge-in"
           action={
             callId ? (
               <Button variant="danger" size="sm" onClick={() => void endCall()}>
