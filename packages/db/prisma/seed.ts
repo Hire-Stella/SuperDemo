@@ -328,8 +328,11 @@ async function main() {
       calls: 0, aiContained: 0, escalated: 0, abandoned: 0, answeredWithinSla: 0,
       talkMs: 0, handleMs: 0, queueWaitMs: 0, wrapMs: 0, answered: 0,
     };
+    // noUncheckedIndexedAccess makes the index read possibly-undefined; the keys
+    // always exist on `row`, but be explicit rather than assert it away.
+    const counters = row as unknown as Record<string, number>;
     for (const [k, v] of Object.entries(patch)) {
-      (row as unknown as Record<string, number>)[k] += v as number;
+      counters[k] = (counters[k] ?? 0) + (v as number);
     }
     dailyMetrics.set(key, row);
   }
