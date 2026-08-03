@@ -94,17 +94,17 @@ export const CALL_STATE_STYLE: Record<CallState, { label: string; className: str
   QUEUED: { label: 'In queue', className: 'bg-warn-soft text-warn' },
   AGENT_RINGING: { label: 'Ringing agent', className: 'bg-warn-soft text-warn' },
   AGENT_TALKING: { label: 'With agent', className: 'bg-live-soft text-live' },
-  WRAPUP: { label: 'Wrap-up', className: 'bg-surface-2 text-muted' },
-  COMPLETED: { label: 'Completed', className: 'bg-surface-2 text-muted' },
+  WRAPUP: { label: 'Wrap-up', className: 'bg-muted text-muted-foreground' },
+  COMPLETED: { label: 'Completed', className: 'bg-muted text-muted-foreground' },
 };
 
 export const AGENT_STATUS_STYLE: Record<AgentStatus, { label: string; dot: string; text: string }> = {
   AVAILABLE: { label: 'Available', dot: 'bg-live', text: 'text-live' },
-  ON_CALL: { label: 'On a call', dot: 'bg-brand', text: 'text-brand' },
+  ON_CALL: { label: 'On a call', dot: 'bg-primary', text: 'text-primary' },
   WRAPUP: { label: 'Wrap-up', dot: 'bg-ai', text: 'text-ai' },
   BUSY: { label: 'Busy', dot: 'bg-warn', text: 'text-warn' },
   BREAK: { label: 'On break', dot: 'bg-warn', text: 'text-warn' },
-  OFFLINE: { label: 'Offline', dot: 'bg-faint', text: 'text-faint' },
+  OFFLINE: { label: 'Offline', dot: 'bg-muted-foreground/50', text: 'text-muted-foreground/70' },
 };
 
 export const CHANNEL_LABEL: Record<Channel, string> = {

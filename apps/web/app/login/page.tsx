@@ -4,7 +4,8 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Headphones, ArrowRight } from 'lucide-react';
 import { useSession } from '@/components/providers';
-import { Button, Input, Spinner } from '@/components/ui';
+import { Button, Input, Spinner } from '@/components/composites';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 /** Seeded accounts, so a demo doesn't stall on "what was the password?". */
 const DEMO_ACCOUNTS = [
@@ -44,19 +45,20 @@ export default function LoginPage() {
     <main className="flex min-h-dvh items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-7 flex items-center gap-2.5">
-          <span className="flex size-9 items-center justify-center rounded-lg bg-brand text-brand-fg">
+          <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Headphones className="size-5" aria-hidden />
           </span>
-          <div>
+          <div className="flex-1">
             <p className="font-semibold">FIT-AI Contact Centre</p>
-            <p className="text-xs text-muted">FIT Institute · Dubai</p>
+            <p className="text-xs text-muted-foreground">FIT Institute · Dubai</p>
           </div>
+          <ThemeToggle />
         </div>
 
-        <form onSubmit={submit} className="rounded-card border border-border bg-surface p-5">
+        <form onSubmit={submit} className="rounded-card border border-border bg-card p-5">
           <h1 className="text-base font-semibold">Sign in</h1>
 
-          <label className="mt-4 block text-xs font-medium text-muted">
+          <label className="mt-4 block text-xs font-medium text-muted-foreground">
             Email
             <Input
               className="mt-1"
@@ -68,7 +70,7 @@ export default function LoginPage() {
             />
           </label>
 
-          <label className="mt-3 block text-xs font-medium text-muted">
+          <label className="mt-3 block text-xs font-medium text-muted-foreground">
             Password
             <Input
               className="mt-1"
@@ -81,28 +83,28 @@ export default function LoginPage() {
           </label>
 
           {error && (
-            <p role="alert" className="mt-3 rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger">
+            <p role="alert" className="mt-3 rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
               {error}
             </p>
           )}
 
-          <Button type="submit" variant="primary" size="lg" className="mt-4 w-full" loading={busy}>
+          <Button type="submit" variant="default" size="lg" className="mt-4 w-full" loading={busy}>
             Sign in <ArrowRight className="size-4" aria-hidden />
           </Button>
         </form>
 
-        <div className="mt-4 rounded-card border border-border bg-surface-2 p-4">
-          <p className="text-xs font-semibold text-muted">Seeded accounts (password: Password123!)</p>
+        <div className="mt-4 rounded-card border border-border bg-muted p-4">
+          <p className="text-xs font-semibold text-muted-foreground">Seeded accounts (password: Password123!)</p>
           <ul className="mt-2 space-y-1.5">
             {DEMO_ACCOUNTS.map((a) => (
               <li key={a.email}>
                 <button
                   onClick={() => setEmail(a.email)}
-                  className="w-full rounded-lg px-2 py-1.5 text-left transition hover:bg-surface"
+                  className="w-full rounded-lg px-2 py-1.5 text-left transition hover:bg-card"
                 >
                   <span className="text-xs font-medium">{a.role}</span>
-                  <span className="ml-1.5 text-xs text-muted">{a.email}</span>
-                  <span className="block text-[11px] text-faint">{a.note}</span>
+                  <span className="ml-1.5 text-xs text-muted-foreground">{a.email}</span>
+                  <span className="block text-[11px] text-muted-foreground/70">{a.note}</span>
                 </button>
               </li>
             ))}

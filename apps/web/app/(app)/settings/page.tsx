@@ -35,7 +35,7 @@ import {
   Table,
   Td,
   Th,
-} from '@/components/ui';
+} from '@/components/composites';
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
@@ -119,9 +119,9 @@ export default function SettingsPage() {
     <div className="mx-auto max-w-[1400px] px-4 py-5 sm:px-6">
       <header className="mb-4">
         <h1 className="flex items-center gap-2 text-xl font-semibold">
-          <SettingsIcon className="size-5 text-brand" aria-hidden /> Settings
+          <SettingsIcon className="size-5 text-primary" aria-hidden /> Settings
         </h1>
-        <p className="mt-0.5 text-sm text-muted">Numbers, CRM connection, and active drivers.</p>
+        <p className="mt-0.5 text-sm text-muted-foreground">Numbers, CRM connection, and active drivers.</p>
       </header>
 
       {/* Active drivers — the honesty panel */}
@@ -145,7 +145,7 @@ export default function SettingsPage() {
               })
             : <Spinner />}
         </div>
-        <p className="border-t border-border px-4 py-2 text-xs leading-relaxed text-muted">
+        <p className="border-t border-border px-4 py-2 text-xs leading-relaxed text-muted-foreground">
           Amber = simulated external system, green = real. Every one of these is an env var away
           from production: <code className="text-[11px]">TELEPHONY_DRIVER</code>,{' '}
           <code className="text-[11px]">LLM_DRIVER</code>,{' '}
@@ -242,7 +242,7 @@ export default function SettingsPage() {
                     >
                       <div className="min-w-0">
                         <p className="tnum truncate text-sm font-medium">{phone(a.e164)}</p>
-                        <p className="text-[11px] text-muted">
+                        <p className="text-[11px] text-muted-foreground">
                           {a.region} · {money(a.monthlyCostUsd)}/mo · {a.capabilities.join(', ')}
                         </p>
                       </div>
@@ -256,7 +256,7 @@ export default function SettingsPage() {
                     </li>
                   ))}
                   {available.data?.length === 0 && (
-                    <li className="text-xs text-muted">No numbers match that filter.</li>
+                    <li className="text-xs text-muted-foreground">No numbers match that filter.</li>
                   )}
                 </ul>
               )}
@@ -283,11 +283,11 @@ export default function SettingsPage() {
               </div>
               <dl className="space-y-1.5 text-xs">
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted">Current roaming (assumed)</dt>
+                  <dt className="text-muted-foreground">Current roaming (assumed)</dt>
                   <dd className="tnum">{money(roaming.data.currentMonthlyRoamingUsd)}</dd>
                 </div>
                 <div className="flex justify-between gap-2">
-                  <dt className="text-muted">Platform numbers</dt>
+                  <dt className="text-muted-foreground">Platform numbers</dt>
                   <dd className="tnum">{money(roaming.data.platformNumberCostUsd)}</dd>
                 </div>
               </dl>
@@ -353,7 +353,7 @@ export default function SettingsPage() {
             )}
 
             <div className="border-t border-border">
-              <p className="px-4 py-2 text-xs font-semibold text-muted">Recent sync activity</p>
+              <p className="px-4 py-2 text-xs font-semibold text-muted-foreground">Recent sync activity</p>
               {syncLog.isLoading ? (
                 <SkeletonRows rows={5} cols={4} />
               ) : (
@@ -378,7 +378,7 @@ export default function SettingsPage() {
                               <CheckCircle2 className="size-3" aria-hidden /> ok
                             </Badge>
                           ) : r.status === 'FAILED' ? (
-                            <Badge className="bg-danger-soft text-danger">
+                            <Badge className="bg-destructive/10 text-destructive">
                               <XCircle className="size-3" aria-hidden /> failed
                             </Badge>
                           ) : (
@@ -386,11 +386,11 @@ export default function SettingsPage() {
                           )}
                         </Td>
                         <Td className="max-w-[20rem]">
-                          <span className="block truncate text-[11px] text-danger">
+                          <span className="block truncate text-[11px] text-destructive">
                             {r.error ?? ''}
                           </span>
                         </Td>
-                        <Td className="text-right text-xs whitespace-nowrap text-muted">
+                        <Td className="text-right text-xs whitespace-nowrap text-muted-foreground">
                           {dateTime(r.createdAt)}
                         </Td>
                       </tr>
@@ -403,7 +403,7 @@ export default function SettingsPage() {
         ) : null}
       </Card>
 
-      <p className="mt-4 flex items-center gap-1.5 text-xs text-faint">
+      <p className="mt-4 flex items-center gap-1.5 text-xs text-muted-foreground/70">
         <Phone className="size-3.5" aria-hidden />
         Recording-consent announcements are on by default — Dubai, India and Egypt all expect one.
       </p>

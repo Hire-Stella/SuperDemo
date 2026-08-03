@@ -24,7 +24,7 @@ import {
 } from '@fit-ai/contracts';
 import { api } from '@/lib/api';
 import { useSession, useUser } from './providers';
-import { Avatar, Badge, Button, Select, Textarea, cn } from './ui';
+import { Avatar, Badge, Button, Select, Textarea, cn } from './composites';
 import { duration, ESCALATION_LABEL, phone } from '@/lib/format';
 
 type Phase = 'idle' | 'ringing' | 'talking' | 'wrapup';
@@ -229,7 +229,7 @@ export function Softphone() {
     >
       <div
         className={cn(
-          'overflow-hidden rounded-card border bg-surface shadow-2xl',
+          'overflow-hidden rounded-card border bg-card shadow-2xl',
           phase === 'ringing' ? 'border-live' : 'border-border',
         )}
       >
@@ -239,15 +239,15 @@ export function Softphone() {
             'flex items-center gap-2.5 px-4 py-2.5',
             phase === 'ringing' && 'bg-live-soft',
             phase === 'talking' && 'bg-brand-soft',
-            phase === 'wrapup' && 'bg-surface-2',
+            phase === 'wrapup' && 'bg-muted',
           )}
         >
           {phase === 'ringing' ? (
             <PhoneIncoming className="pulse size-4 text-live" aria-hidden />
           ) : phase === 'talking' ? (
-            <Phone className="size-4 text-brand" aria-hidden />
+            <Phone className="size-4 text-primary" aria-hidden />
           ) : (
-            <Clock className="size-4 text-muted" aria-hidden />
+            <Clock className="size-4 text-muted-foreground" aria-hidden />
           )}
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold">
@@ -255,7 +255,7 @@ export function Softphone() {
               {phase === 'talking' && (onHold ? 'On hold' : 'In call')}
               {phase === 'wrapup' && 'Wrap-up'}
             </p>
-            <p className="tnum truncate text-xs text-muted">
+            <p className="tnum truncate text-xs text-muted-foreground">
               {phase === 'talking' && duration(elapsed)}
               {phase === 'ringing' && pop && `waited ${duration(pop.waitedMs)}`}
               {phase === 'wrapup' && `${wrapSecs}s to submit`}
@@ -263,7 +263,7 @@ export function Softphone() {
           </div>
           <button
             onClick={() => setExpanded((e) => !e)}
-            className="rounded p-1 hover:bg-surface"
+            className="rounded p-1 hover:bg-card"
             aria-label={expanded ? 'Collapse softphone' : 'Expand softphone'}
           >
             {expanded ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
@@ -279,11 +279,11 @@ export function Softphone() {
                 <p className="truncate font-semibold">
                   {pop?.contact?.name ?? 'Unknown caller'}
                 </p>
-                <p className="tnum text-xs text-muted">{phone(pop?.fromNumber)}</p>
+                <p className="tnum text-xs text-muted-foreground">{phone(pop?.fromNumber)}</p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {pop?.queueName && <Badge>{pop.queueName}</Badge>}
                   {pop?.contact?.courseInterest && (
-                    <Badge className="bg-brand-soft text-brand">
+                    <Badge className="bg-brand-soft text-primary">
                       {pop.contact.courseInterest}
                     </Badge>
                   )}
@@ -294,7 +294,7 @@ export function Softphone() {
                   href={pop.contact.bitrixUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs text-brand hover:underline"
+                  className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
                 >
                   Bitrix <ExternalLink className="size-3" aria-hidden />
                 </a>
@@ -310,31 +310,31 @@ export function Softphone() {
                 </div>
                 <p className="mt-1.5 text-sm leading-relaxed">{ai.summary}</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  <Badge className="bg-surface">{ESCALATION_LABEL[ai.escalationReason]}</Badge>
-                  {ai.detectedIntent && <Badge className="bg-surface">{ai.detectedIntent}</Badge>}
-                  <Badge className="bg-surface">{ai.turns} AI turns</Badge>
+                  <Badge className="bg-card">{ESCALATION_LABEL[ai.escalationReason]}</Badge>
+                  {ai.detectedIntent && <Badge className="bg-card">{ai.detectedIntent}</Badge>}
+                  <Badge className="bg-card">{ai.turns} AI turns</Badge>
                   {ai.sentiment !== null && ai.sentiment < -0.2 && (
-                    <Badge className="bg-danger-soft text-danger">Caller frustrated</Badge>
+                    <Badge className="bg-destructive/10 text-destructive">Caller frustrated</Badge>
                   )}
                 </div>
 
                 {ai.transcript.length > 0 && (
                   <details className="mt-2.5">
-                    <summary className="cursor-pointer text-xs font-medium text-muted hover:text-fg">
+                    <summary className="cursor-pointer text-xs font-medium text-muted-foreground hover:text-foreground">
                       Read the transcript so far ({ai.transcript.length} lines)
                     </summary>
-                    <div className="mt-2 max-h-48 space-y-1.5 overflow-y-auto rounded-lg bg-surface p-2.5">
+                    <div className="mt-2 max-h-48 space-y-1.5 overflow-y-auto rounded-lg bg-card p-2.5">
                       {ai.transcript.map((s) => (
                         <p key={s.id} className="text-xs leading-relaxed">
                           <span
                             className={cn(
                               'font-semibold',
-                              s.speaker === 'CALLER' ? 'text-fg' : 'text-ai',
+                              s.speaker === 'CALLER' ? 'text-foreground' : 'text-ai',
                             )}
                           >
                             {s.speaker === 'CALLER' ? 'Caller' : 'AI'}:
                           </span>{' '}
-                          <span className="text-muted">{s.text}</span>
+                          <span className="text-muted-foreground">{s.text}</span>
                         </p>
                       ))}
                     </div>
@@ -346,7 +346,7 @@ export function Softphone() {
             {/* prior contact history */}
             {pop && pop.history.length > 0 && (
               <div className="border-b border-border px-4 py-2.5">
-                <p className="flex items-center gap-1.5 text-xs font-semibold text-muted">
+                <p className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground">
                   <User className="size-3.5" aria-hidden /> Previously contacted us{' '}
                   {pop.history.length} time{pop.history.length === 1 ? '' : 's'}
                 </p>
@@ -356,8 +356,8 @@ export function Softphone() {
             {/* wrap-up form */}
             {phase === 'wrapup' && (
               <div className="space-y-2.5 border-b border-border px-4 py-3">
-                <label className="block text-xs font-medium text-muted">
-                  Disposition <span className="text-danger">*</span>
+                <label className="block text-xs font-medium text-muted-foreground">
+                  Disposition <span className="text-destructive">*</span>
                   <Select
                     className="mt-1"
                     value={disposition}
@@ -371,7 +371,7 @@ export function Softphone() {
                     ))}
                   </Select>
                 </label>
-                <label className="block text-xs font-medium text-muted">
+                <label className="block text-xs font-medium text-muted-foreground">
                   Notes
                   <Textarea
                     className="mt-1"
@@ -418,7 +418,7 @@ export function Softphone() {
 
               {phase === 'wrapup' && (
                 <Button
-                  variant="primary"
+                  variant="default"
                   size="lg"
                   className="flex-1"
                   loading={busy}
@@ -431,7 +431,7 @@ export function Softphone() {
           </div>
         )}
       </div>
-      <p className="mt-1.5 text-center text-[11px] text-faint">
+      <p className="mt-1.5 text-center text-[11px] text-muted-foreground/70">
         {user.name} · ext {user.id.slice(-4)}
       </p>
     </aside>

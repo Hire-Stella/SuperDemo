@@ -24,7 +24,7 @@ import {
   Table,
   Td,
   Th,
-} from '@/components/ui';
+} from '@/components/composites';
 
 export default function ConversationsPage() {
   const { socket } = useSession();
@@ -71,10 +71,10 @@ export default function ConversationsPage() {
     <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-6">
       <header className="mb-4">
         <h1 className="flex items-center gap-2 text-xl font-semibold">
-          <Inbox className="size-5 text-brand" aria-hidden />
+          <Inbox className="size-5 text-primary" aria-hidden />
           Unified inbox
         </h1>
-        <p className="mt-0.5 text-sm text-muted">
+        <p className="mt-0.5 text-sm text-muted-foreground">
           Every interaction, on every channel, in one place.
         </p>
       </header>
@@ -83,7 +83,7 @@ export default function ConversationsPage() {
         <div className="flex flex-wrap items-center gap-2 border-b border-border p-3">
           <div className="relative min-w-56 flex-1">
             <Search
-              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-faint"
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground/70"
               aria-hidden
             />
             <Input
@@ -145,7 +145,7 @@ export default function ConversationsPage() {
             </thead>
             <tbody className="divide-y divide-border">
               {items.map((c) => (
-                <tr key={c.id} className="transition hover:bg-surface-2">
+                <tr key={c.id} className="transition hover:bg-muted">
                   <Td>
                     <Link
                       href={`/conversations/${c.id}`}
@@ -156,7 +156,7 @@ export default function ConversationsPage() {
                         <span className="block truncate font-medium">
                           {c.contact?.name ?? 'Unknown'}
                         </span>
-                        <span className="tnum block truncate text-xs text-muted">
+                        <span className="tnum block truncate text-xs text-muted-foreground">
                           {phone(c.contact?.phoneE164)}
                         </span>
                       </span>
@@ -179,16 +179,16 @@ export default function ConversationsPage() {
                           <Sparkles className="size-3" aria-hidden /> AI resolved
                         </Badge>
                       ) : (
-                        <Badge className="bg-brand-soft text-brand">Escalated</Badge>
+                        <Badge className="bg-brand-soft text-primary">Escalated</Badge>
                       )}
                       {c.escalationReason && (
-                        <span className="text-[11px] text-muted">
+                        <span className="text-[11px] text-muted-foreground">
                           {ESCALATION_LABEL[c.escalationReason]}
                         </span>
                       )}
                     </div>
                     {c.disposition && (
-                      <span className="mt-0.5 block text-[11px] text-faint">
+                      <span className="mt-0.5 block text-[11px] text-muted-foreground/70">
                         {DISPOSITION_LABELS[c.disposition]}
                       </span>
                     )}
@@ -197,14 +197,14 @@ export default function ConversationsPage() {
                     {c.handledByName ?? <span className="text-ai">AI assistant</span>}
                   </Td>
                   <Td className="max-w-[20rem]">
-                    <span className="block truncate text-xs text-muted">
+                    <span className="block truncate text-xs text-muted-foreground">
                       {c.lastMessagePreview ?? '—'}
                     </span>
                   </Td>
                   <Td className="tnum text-right text-xs">{duration(c.durationMs)}</Td>
                   <Td className="text-right">
                     <span className="block text-xs whitespace-nowrap">{dateTime(c.startedAt)}</span>
-                    <span className="mt-0.5 flex items-center justify-end gap-1 text-[11px] text-faint">
+                    <span className="mt-0.5 flex items-center justify-end gap-1 text-[11px] text-muted-foreground/70">
                       {c.hasRecording && <span title="Recording available">♪</span>}
                       {c.crmSynced && (
                         <span title="Synced to CRM">

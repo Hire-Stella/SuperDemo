@@ -1,78 +1,216 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
 
 /*
- * Design tokens.
+ * FIT Institute theme — red and white.
  *
- * A contact-centre dashboard is looked at for eight hours straight, so the
- * palette is deliberately low-chroma with colour reserved for state that
- * matters: an AI-handled call, a queue breaching SLA, an agent on a break.
- * Every state colour is distinguishable without relying on hue alone (each has
- * a paired label or icon), because red/green as the only signal fails for
- * roughly one in twelve men.
+ * ┌──────────────────────────────────────────────────────────────────────────┐
+ * │ THE BRAND RED IS ONE TOKEN: --fit-red / --fit-red-dark below.            │
+ * │ Swap those two values and the whole app follows. If FIT send their real  │
+ * │ brand hex, that is the only edit needed.                                 │
+ * └──────────────────────────────────────────────────────────────────────────┘
+ *
+ * A red brand in an operations dashboard creates one genuine design problem:
+ * red is also the universal "something is wrong" colour. If primary buttons and
+ * critical alerts are both red, neither reads. So:
+ *
+ *   · Brand red  → identity and primary actions (logo, primary button, active nav)
+ *   · Amber      → warnings (queue waiting, SLA at risk, simulated driver)
+ *   · Deep red   → critical only (abandoned call, failed sync), always with an icon
+ *   · Green      → healthy / live / agent available
+ *   · Purple     → AI-handled, so "the AI did this" never competes with brand red
+ *
+ * That leaves state legible while the app still looks unmistakably FIT. Every
+ * state colour is paired with an icon or text label, so nothing depends on hue
+ * alone — roughly one man in twelve cannot rely on red/green.
  */
-@theme {
-  --color-bg: oklch(99% 0.002 250);
-  --color-surface: oklch(100% 0 0);
-  --color-surface-2: oklch(97.5% 0.003 250);
-  --color-border: oklch(91% 0.004 250);
-  --color-fg: oklch(21% 0.01 250);
-  --color-muted: oklch(52% 0.012 250);
-  --color-faint: oklch(68% 0.01 250);
 
-  --color-brand: oklch(52% 0.16 258);
-  --color-brand-fg: oklch(99% 0 0);
-  --color-brand-soft: oklch(95% 0.03 258);
+:root {
+  /* ── the two values to change ────────────────────────────────────────── */
+  --fit-red: oklch(0.53 0.204 26);
+  --fit-red-dark: oklch(0.7 0.185 26);
 
-  /* State */
-  --color-ai: oklch(58% 0.13 285);
-  --color-ai-soft: oklch(96% 0.025 285);
-  --color-live: oklch(62% 0.17 145);
-  --color-live-soft: oklch(96% 0.04 145);
-  --color-warn: oklch(72% 0.15 70);
-  --color-warn-soft: oklch(97% 0.04 70);
-  --color-danger: oklch(58% 0.19 25);
-  --color-danger-soft: oklch(96% 0.03 25);
+  --radius: 0.625rem;
 
-  --radius-card: 0.75rem;
-  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  /* ── shadcn tokens ──────────────────────────────────────────────────── */
+  --background: oklch(0.995 0.002 20);
+  --foreground: oklch(0.19 0.012 25);
+
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --popover: oklch(1 0 0);
+  --popover-foreground: var(--foreground);
+
+  --primary: var(--fit-red);
+  --primary-foreground: oklch(0.99 0 0);
+
+  --secondary: oklch(0.972 0.006 25);
+  --secondary-foreground: oklch(0.28 0.02 25);
+
+  --muted: oklch(0.968 0.005 25);
+  --muted-foreground: oklch(0.5 0.015 25);
+
+  --accent: oklch(0.955 0.02 25);
+  --accent-foreground: var(--fit-red);
+
+  /* Deeper and browner than the brand red so "destructive" never reads as
+     "primary". Paired with an icon everywhere it appears. */
+  --destructive: oklch(0.47 0.17 20);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  --border: oklch(0.912 0.008 25);
+  --input: oklch(0.912 0.008 25);
+  --ring: var(--fit-red);
+
+  /* ── semantic state ─────────────────────────────────────────────────── */
+  --ai: oklch(0.55 0.155 292);
+  --ai-soft: oklch(0.965 0.022 292);
+  --live: oklch(0.55 0.135 152);
+  --live-soft: oklch(0.962 0.032 152);
+  --warn: oklch(0.63 0.145 65);
+  --warn-soft: oklch(0.965 0.04 75);
+  --brand-soft: oklch(0.962 0.024 25);
+
+  /* ── charts: brand-led, then the semantic hues ──────────────────────── */
+  --chart-1: var(--fit-red);
+  --chart-2: var(--ai);
+  --chart-3: var(--live);
+  --chart-4: var(--warn);
+  --chart-5: oklch(0.55 0.09 250);
+
+  /* ── sidebar ────────────────────────────────────────────────────────── */
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--fit-red);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.962 0.024 25);
+  --sidebar-accent-foreground: var(--fit-red);
+  --sidebar-border: oklch(0.912 0.008 25);
+  --sidebar-ring: var(--fit-red);
 }
 
-@media (prefers-color-scheme: dark) {
-  @theme {
-    --color-bg: oklch(17% 0.008 255);
-    --color-surface: oklch(21% 0.01 255);
-    --color-surface-2: oklch(25% 0.011 255);
-    --color-border: oklch(31% 0.012 255);
-    --color-fg: oklch(96% 0.004 255);
-    --color-muted: oklch(70% 0.012 255);
-    --color-faint: oklch(55% 0.012 255);
-    --color-brand: oklch(66% 0.15 258);
-    --color-brand-soft: oklch(30% 0.05 258);
-    --color-ai: oklch(72% 0.13 285);
-    --color-ai-soft: oklch(29% 0.05 285);
-    --color-live: oklch(72% 0.16 145);
-    --color-live-soft: oklch(28% 0.05 145);
-    --color-warn: oklch(78% 0.14 70);
-    --color-warn-soft: oklch(30% 0.05 70);
-    --color-danger: oklch(68% 0.17 25);
-    --color-danger-soft: oklch(30% 0.06 25);
+.dark {
+  --background: oklch(0.165 0.008 25);
+  --foreground: oklch(0.965 0.004 25);
+
+  --card: oklch(0.205 0.009 25);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.205 0.009 25);
+  --popover-foreground: var(--foreground);
+
+  /* Lifted in lightness so the red still reads as red on a dark ground
+     rather than collapsing to brown. */
+  --primary: var(--fit-red-dark);
+  --primary-foreground: oklch(0.16 0.01 25);
+
+  --secondary: oklch(0.262 0.011 25);
+  --secondary-foreground: oklch(0.965 0.004 25);
+
+  --muted: oklch(0.262 0.011 25);
+  --muted-foreground: oklch(0.7 0.012 25);
+
+  --accent: oklch(0.3 0.045 25);
+  --accent-foreground: oklch(0.9 0.06 26);
+
+  --destructive: oklch(0.62 0.19 22);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: var(--fit-red-dark);
+
+  --ai: oklch(0.74 0.14 292);
+  --ai-soft: oklch(0.3 0.05 292);
+  --live: oklch(0.73 0.15 152);
+  --live-soft: oklch(0.29 0.05 152);
+  --warn: oklch(0.79 0.14 72);
+  --warn-soft: oklch(0.31 0.05 72);
+  --brand-soft: oklch(0.3 0.05 25);
+
+  --chart-1: var(--fit-red-dark);
+  --chart-2: var(--ai);
+  --chart-3: var(--live);
+  --chart-4: var(--warn);
+  --chart-5: oklch(0.7 0.1 250);
+
+  --sidebar: oklch(0.19 0.009 25);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--fit-red-dark);
+  --sidebar-primary-foreground: oklch(0.16 0.01 25);
+  --sidebar-accent: oklch(0.3 0.045 25);
+  --sidebar-accent-foreground: oklch(0.9 0.06 26);
+  --sidebar-border: oklch(1 0 0 / 12%);
+  --sidebar-ring: var(--fit-red-dark);
+}
+
+@theme inline {
+  --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Semantic state, usable as bg-ai / text-live / bg-warn-soft etc. */
+  --color-ai: var(--ai);
+  --color-ai-soft: var(--ai-soft);
+  --color-live: var(--live);
+  --color-live-soft: var(--live-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-brand-soft: var(--brand-soft);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-card: var(--radius);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
   }
 }
 
-* {
-  border-color: var(--color-border);
-}
-
-html,
-body {
-  background: var(--color-bg);
-  color: var(--color-fg);
-  font-family: var(--font-sans);
-  -webkit-font-smoothing: antialiased;
-}
-
-/* Tabular figures everywhere numbers change in place, so metric tiles and
+/* Tabular figures wherever numbers change in place, so metric tiles and call
    timers don't jitter as digits update. */
 .tnum {
   font-variant-numeric: tabular-nums;
@@ -92,12 +230,18 @@ body {
   animation: pulse-ring 1.6s ease-in-out infinite;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .pulse {
+    animation: none;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
+  background: var(--border);
   border-radius: 6px;
 }
 ::-webkit-scrollbar-track {

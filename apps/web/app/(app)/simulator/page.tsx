@@ -10,7 +10,7 @@ import type {
   SimulateCallInput,
 } from '@fit-ai/contracts';
 import { api } from '@/lib/api';
-import { Badge, Button, Card, Input, MockNotice, Select, Spinner, cn } from '@/components/ui';
+import { Badge, Button, Card, Input, MockNotice, Select, Spinner, cn } from '@/components/composites';
 
 /* ------------------------- Web Speech type shims -------------------------- */
 /* Not in lib.dom yet; declared narrowly rather than reaching for `any`.       */
@@ -250,10 +250,10 @@ export default function SimulatorPage() {
     <div className="mx-auto max-w-[1200px] px-4 py-5 sm:px-6">
       <header className="mb-4">
         <h1 className="flex items-center gap-2 text-xl font-semibold">
-          <PhoneCall className="size-5 text-brand" aria-hidden />
+          <PhoneCall className="size-5 text-primary" aria-hidden />
           Simulator
         </h1>
-        <p className="mt-0.5 text-sm text-muted">
+        <p className="mt-0.5 text-sm text-muted-foreground">
           Drive the platform without a phone carrier. Everything downstream — routing, escalation,
           transcripts, recordings, analytics, CRM sync — runs its real production path.
         </p>
@@ -292,7 +292,7 @@ export default function SimulatorPage() {
         >
           <div className="p-4">
             {supported === false && (
-              <div className="rounded-lg bg-danger-soft px-3 py-2 text-xs text-danger">
+              <div className="rounded-lg bg-destructive/10 px-3 py-2 text-xs text-destructive">
                 This browser doesn&apos;t support the Web Speech API. Use Chrome or Edge — the
                 speech layer is browser-native, which is what makes it free.
               </div>
@@ -301,7 +301,7 @@ export default function SimulatorPage() {
             {supported === null && <Spinner label="Checking browser support…" />}
 
             {supported && !callId && (
-              <p className="text-sm text-muted">
+              <p className="text-sm text-muted-foreground">
                 Press <strong>Start call</strong> and speak. Try “I want to ask about the ABA
                 certification course”, then “how much does it cost?”, then “can I speak to
                 someone?” — the last one hands you to a real agent on the softphone.
@@ -311,7 +311,7 @@ export default function SimulatorPage() {
             {callId && (
               <>
                 <div className="mb-3 flex items-center gap-2">
-                  <Badge className={listening ? 'bg-live-soft text-live' : 'bg-surface-2'}>
+                  <Badge className={listening ? 'bg-live-soft text-live' : 'bg-muted'}>
                     {listening ? (
                       <>
                         <Mic className="size-3" aria-hidden /> Listening
@@ -323,7 +323,7 @@ export default function SimulatorPage() {
                     )}
                   </Badge>
                   {escalated && (
-                    <Badge className="bg-brand-soft text-brand">Transferred to an agent</Badge>
+                    <Badge className="bg-brand-soft text-primary">Transferred to an agent</Badge>
                   )}
                   <Button
                     size="sm"
@@ -334,15 +334,15 @@ export default function SimulatorPage() {
                   </Button>
                 </div>
 
-                <div className="max-h-80 space-y-2 overflow-y-auto rounded-lg bg-surface-2 p-3">
+                <div className="max-h-80 space-y-2 overflow-y-auto rounded-lg bg-muted p-3">
                   {turns.map((t, i) => (
                     <div
                       key={i}
                       className={cn(
                         'max-w-[85%] rounded-lg px-3 py-2 text-sm',
                         t.who === 'you'
-                          ? 'ml-auto bg-brand text-brand-fg'
-                          : 'bg-surface text-fg',
+                          ? 'ml-auto bg-primary text-primary-foreground'
+                          : 'bg-card text-foreground',
                       )}
                     >
                       {t.text}
@@ -354,7 +354,7 @@ export default function SimulatorPage() {
                     </div>
                   ))}
                   {interim && (
-                    <div className="ml-auto max-w-[85%] rounded-lg bg-brand/40 px-3 py-2 text-sm text-brand-fg italic">
+                    <div className="ml-auto max-w-[85%] rounded-lg bg-primary/40 px-3 py-2 text-sm text-primary-foreground italic">
                       {interim}…
                     </div>
                   )}
@@ -376,7 +376,7 @@ export default function SimulatorPage() {
             subtitle="The caller's lines are scripted; the AI's answers are not"
           >
             <div className="space-y-3 p-4">
-              <label className="block text-xs font-medium text-muted">
+              <label className="block text-xs font-medium text-muted-foreground">
                 Scenario
                 <Select
                   className="mt-1"
@@ -393,12 +393,12 @@ export default function SimulatorPage() {
               </label>
 
               {scenarioId && (
-                <p className="rounded-lg bg-surface-2 px-3 py-2 text-xs leading-relaxed text-muted">
+                <p className="rounded-lg bg-muted px-3 py-2 text-xs leading-relaxed text-muted-foreground">
                   {scenarios.data?.find((s) => s.id === scenarioId)?.description}
                 </p>
               )}
 
-              <label className="block text-xs font-medium text-muted">
+              <label className="block text-xs font-medium text-muted-foreground">
                 Pace
                 <Select className="mt-1" value={speed} onChange={(e) => setSpeed(e.target.value)}>
                   <option value="1">Realistic (as a caller would speak)</option>
@@ -409,7 +409,7 @@ export default function SimulatorPage() {
               </label>
 
               <Button
-                variant="primary"
+                variant="default"
                 className="w-full"
                 loading={simulate.isPending}
                 onClick={() =>
@@ -423,7 +423,7 @@ export default function SimulatorPage() {
               </Button>
 
               <div className="rounded-lg border border-border p-2.5">
-                <p className="mb-1.5 text-xs font-semibold text-muted">Available scenarios</p>
+                <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Available scenarios</p>
                 <ul className="space-y-1">
                   {scenarios.data?.map((s) => (
                     <li key={s.id} className="flex items-center justify-between gap-2 text-xs">
@@ -435,7 +435,7 @@ export default function SimulatorPage() {
                       </button>
                       <Badge
                         className={
-                          s.escalates ? 'bg-brand-soft text-brand' : 'bg-ai-soft text-ai'
+                          s.escalates ? 'bg-brand-soft text-primary' : 'bg-ai-soft text-ai'
                         }
                       >
                         {s.escalates ? 'escalates' : 'AI only'}

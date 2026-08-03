@@ -21,7 +21,8 @@ import type { AgentStatus, AgentSummary } from '@fit-ai/contracts';
 import { api } from '@/lib/api';
 import { useSession } from '@/components/providers';
 import { Softphone } from '@/components/softphone';
-import { Avatar, Select, Spinner, cn } from '@/components/ui';
+import { ThemeToggle } from '@/components/theme-toggle';
+import { Avatar, Select, Spinner, cn } from '@/components/composites';
 
 const NAV = [
   { href: '/', label: 'Live ops', icon: Activity, roles: ['ADMIN', 'SUPERVISOR', 'AGENT'] },
@@ -75,14 +76,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-dvh">
       {/* sidebar */}
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-surface md:flex">
+      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-card md:flex">
         <div className="flex items-center gap-2.5 px-4 py-4">
-          <span className="flex size-8 items-center justify-center rounded-lg bg-brand text-brand-fg">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Headphones className="size-4" aria-hidden />
           </span>
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold">FIT-AI</p>
-            <p className="truncate text-[11px] text-muted">FIT Institute</p>
+            <p className="truncate text-[11px] text-muted-foreground">FIT Institute</p>
           </div>
         </div>
 
@@ -96,8 +97,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 className={cn(
                   'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition',
                   active
-                    ? 'bg-brand-soft font-medium text-brand'
-                    : 'text-muted hover:bg-surface-2 hover:text-fg',
+                    ? 'bg-brand-soft font-medium text-primary'
+                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
                 )}
               >
                 <Icon className="size-4 shrink-0" aria-hidden />
@@ -113,18 +114,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <Avatar name={user.name} color={user.avatarColor} size={30} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-medium">{user.name}</p>
-              <p className="truncate text-[11px] text-muted">
+              <p className="truncate text-[11px] text-muted-foreground">
                 {user.role.toLowerCase()} · {user.location.toLowerCase()}
               </p>
             </div>
             <button
               onClick={() => void logout()}
-              className="rounded p-1.5 text-muted transition hover:bg-surface-2 hover:text-fg"
+              className="rounded p-1.5 text-muted-foreground transition hover:bg-muted hover:text-foreground"
               aria-label="Sign out"
               title="Sign out"
             >
               <LogOut className="size-3.5" aria-hidden />
             </button>
+          </div>
+
+          <div className="mt-2.5 flex items-center justify-between gap-2">
+            <span className="text-[11px] text-muted-foreground">Theme</span>
+            <ThemeToggle />
           </div>
 
           <div className="mt-2.5">
@@ -151,14 +157,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               )}
             </Select>
             {(myStatus === 'ON_CALL' || myStatus === 'WRAPUP') && (
-              <p className="mt-1 text-[11px] text-faint">Finish the call to change status.</p>
+              <p className="mt-1 text-[11px] text-muted-foreground/70">Finish the call to change status.</p>
             )}
           </div>
         </div>
       </aside>
 
       {/* mobile nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-border bg-surface py-1.5 md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-border bg-card py-1.5 md:hidden">
         {nav.slice(0, 5).map(({ href, label, icon: Icon }) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
           return (
@@ -167,7 +173,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               href={href}
               className={cn(
                 'flex flex-col items-center gap-0.5 px-2 py-1 text-[10px]',
-                active ? 'text-brand' : 'text-muted',
+                active ? 'text-primary' : 'text-muted-foreground',
               )}
             >
               <Icon className="size-4" aria-hidden />

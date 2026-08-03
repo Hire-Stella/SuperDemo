@@ -19,22 +19,26 @@ import { BarChart3, PiggyBank } from 'lucide-react';
 import { DISPOSITION_LABELS, type AnalyticsOverview } from '@fit-ai/contracts';
 import { api, qs } from '@/lib/api';
 import { dateRange, ESCALATION_LABEL, money, pct, seconds } from '@/lib/format';
-import { Badge, Card, Metric, Select, Spinner, Table, Td, Th } from '@/components/ui';
+import { Badge, Card, Metric, Select, Spinner, Table, Td, Th } from '@/components/composites';
 
 /*
- * Chart palette.
+ * Chart palette — read from the theme, not hardcoded.
  *
- * Ordered so adjacent series stay distinguishable in greyscale as well as in
- * colour, and reused consistently: AI purple, human blue, problem amber/red —
- * the same meanings the rest of the app uses.
+ * These are CSS variable references, which SVG resolves at paint time, so the
+ * charts follow the FIT red brand and flip correctly between light and dark
+ * without a re-render or a JS colour lookup.
+ *
+ * Series meanings are kept consistent with the rest of the app: brand red for
+ * the headline series, purple for AI, green for healthy, amber/red for problems.
  */
 const C = {
-  ai: 'oklch(58% 0.13 285)',
-  brand: 'oklch(52% 0.16 258)',
-  warn: 'oklch(72% 0.15 70)',
-  danger: 'oklch(58% 0.19 25)',
-  grid: 'oklch(91% 0.004 250)',
-  muted: 'oklch(52% 0.012 250)',
+  brand: 'var(--chart-1)',
+  ai: 'var(--chart-2)',
+  live: 'var(--chart-3)',
+  warn: 'var(--chart-4)',
+  danger: 'var(--destructive)',
+  grid: 'var(--border)',
+  muted: 'var(--muted-foreground)',
 };
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -50,7 +54,7 @@ export default function AnalyticsPage() {
 
   if (query.isLoading) return <Spinner label="Crunching the numbers…" />;
   if (query.isError || !query.data) {
-    return <p className="p-6 text-sm text-danger">{(query.error as Error)?.message}</p>;
+    return <p className="p-6 text-sm text-destructive">{(query.error as Error)?.message}</p>;
   }
 
   const d = query.data;
@@ -67,10 +71,10 @@ export default function AnalyticsPage() {
       <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold">
-            <BarChart3 className="size-5 text-brand" aria-hidden />
+            <BarChart3 className="size-5 text-primary" aria-hidden />
             Analytics
           </h1>
-          <p className="mt-0.5 text-sm text-muted">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             {range.from} to {range.to} · bucketed in Asia/Dubai
           </p>
         </div>
@@ -157,6 +161,8 @@ export default function AnalyticsPage() {
                     fontSize: 12,
                     borderRadius: 8,
                     border: `1px solid ${C.grid}`,
+                    background: 'var(--popover)',
+                    color: 'var(--popover-foreground)',
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
@@ -180,8 +186,9 @@ export default function AnalyticsPage() {
                   type="monotone"
                   dataKey="abandoned"
                   name="Abandoned"
-                  stroke={C.danger}
+                  stroke={C.warn}
                   strokeWidth={1.5}
+                  strokeDasharray="4 3"
                   dot={false}
                 />
               </LineChart>
@@ -213,7 +220,15 @@ export default function AnalyticsPage() {
                   width={120}
                   stroke={C.grid}
                 />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8 }} />
+                <Tooltip
+                  contentStyle={{
+                    fontSize: 12,
+                    borderRadius: 8,
+                    border: `1px solid ${C.grid}`,
+                    background: 'var(--popover)',
+                    color: 'var(--popover-foreground)',
+                  }}
+                />
                 <Bar dataKey="count" name="Calls" radius={[0, 4, 4, 0]}>
                   {d.escalationReasons.map((r) => (
                     <Cell
@@ -229,8 +244,8 @@ export default function AnalyticsPage() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <p className="border-t border-border px-4 py-2 text-xs leading-relaxed text-muted">
-            Blue reasons are working as designed — the caller asked for a person, or the topic is
+          <p className="border-t border-border px-4 py-2 text-xs leading-relaxed text-muted-foreground">
+            Red reasons are working as designed — the caller asked for a person, or the topic is
             configured human-only. Amber reasons are fixable: they usually mean a gap in the
             knowledge base.
           </p>
@@ -249,7 +264,7 @@ export default function AnalyticsPage() {
               <tr>
                 <th className="w-10" />
                 {HOURS.map((h) => (
-                  <th key={h} className="w-8 pb-1 text-[10px] font-normal text-muted">
+                  <th key={h} className="w-8 pb-1 text-[10px] font-normal text-muted-foreground">
                     {h}
                   </th>
                 ))}
@@ -258,7 +273,7 @@ export default function AnalyticsPage() {
             <tbody>
               {WEEKDAYS.map((label, weekday) => (
                 <tr key={label}>
-                  <td className="pr-2 text-right text-[10px] text-muted">{label}</td>
+                  <td className="pr-2 text-right text-[10px] text-muted-foreground">{label}</td>
                   {HOURS.map((hour) => {
                     const calls = heat.get(`${weekday}-${hour}`) ?? 0;
                     const intensity = calls / maxHeat;
@@ -269,7 +284,7 @@ export default function AnalyticsPage() {
                           style={{
                             background:
                               calls === 0
-                                ? 'var(--color-surface-2)'
+                                ? 'var(--muted)'
                                 : `color-mix(in oklch, ${C.brand} ${Math.round(18 + intensity * 82)}%, transparent)`,
                           }}
                           title={`${label} ${hour}:00 — ${calls} call${calls === 1 ? '' : 's'}`}
@@ -281,7 +296,7 @@ export default function AnalyticsPage() {
               ))}
             </tbody>
           </table>
-          <p className="mt-2 text-xs text-muted">
+          <p className="mt-2 text-xs text-muted-foreground">
             Friday and Saturday are the UAE weekend — light traffic there is expected.
           </p>
         </div>
@@ -346,13 +361,13 @@ export default function AnalyticsPage() {
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <Card title="Most-asked-about courses" subtitle="Where the demand actually is">
           {d.topCourses.length === 0 ? (
-            <p className="p-4 text-sm text-muted">No course interest recorded in this range.</p>
+            <p className="p-4 text-sm text-muted-foreground">No course interest recorded in this range.</p>
           ) : (
             <ul className="divide-y divide-border">
               {d.topCourses.map((c) => (
                 <li key={c.course} className="flex items-center justify-between gap-3 px-4 py-2.5">
                   <span className="truncate text-sm">{c.course}</span>
-                  <Badge className="bg-brand-soft text-brand">{c.enquiries}</Badge>
+                  <Badge className="bg-brand-soft text-primary">{c.enquiries}</Badge>
                 </li>
               ))}
             </ul>
@@ -361,7 +376,7 @@ export default function AnalyticsPage() {
 
         <Card title="Call outcomes" subtitle="Agent-recorded dispositions">
           {d.dispositions.length === 0 ? (
-            <p className="p-4 text-sm text-muted">No dispositions recorded in this range.</p>
+            <p className="p-4 text-sm text-muted-foreground">No dispositions recorded in this range.</p>
           ) : (
             <ul className="divide-y divide-border">
               {d.dispositions

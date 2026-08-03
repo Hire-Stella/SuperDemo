@@ -92,6 +92,36 @@ wording for that conversation is in [NOT-IMPLEMENTED.md](NOT-IMPLEMENTED.md) §6
 
 ---
 
+## Theming
+
+The dashboard is built on **shadcn/ui** — components are owned source under
+`apps/web/components/ui/`, so they're edited directly rather than configured
+around. App-level compounds (metric tiles, the panel-style card, the simulated
+notice) live in `apps/web/components/composites.tsx`.
+
+**The FIT red is two CSS variables.** In `apps/web/app/globals.css`:
+
+```css
+--fit-red:      oklch(0.53 0.204 26);  /* light mode */
+--fit-red-dark: oklch(0.7  0.185 26);  /* dark mode — lifted so it stays red */
+```
+
+Change those and the whole app follows — buttons, active nav, charts, heatmap.
+The current values are a chosen institutional red, **not** FIT's official brand
+hex; if they send their brand guide, that's the only edit needed.
+
+A red brand in an ops dashboard has one genuine conflict: red is also the
+universal "something is wrong" colour. The palette resolves it deliberately —
+brand red for identity and primary actions, **amber** for warnings, a deeper
+red for critical only, green for healthy, purple for AI-handled. Every state
+also carries an icon or label, so nothing depends on hue alone.
+
+There's a three-way theme toggle (light / dark / system) in the sidebar footer
+and on the login page. Agents work night shifts, so dark mode is a requirement
+rather than a nicety.
+
+---
+
 ## Layout
 
 ```

@@ -16,7 +16,7 @@ import {
   Spinner,
   Textarea,
   cn,
-} from '@/components/ui';
+} from '@/components/composites';
 
 export default function AiAgentPage() {
   const queryClient = useQueryClient();
@@ -88,7 +88,7 @@ export default function AiAgentPage() {
   });
 
   if (query.isLoading) return <Spinner label="Loading assistant…" />;
-  if (!agent) return <p className="p-6 text-sm text-danger">No AI agent configured.</p>;
+  if (!agent) return <p className="p-6 text-sm text-destructive">No AI agent configured.</p>;
 
   const topScore = search.data?.[0]?.score ?? 0;
   const wouldEscalate = submitted.length > 0 && topScore < confidenceFloor;
@@ -99,7 +99,7 @@ export default function AiAgentPage() {
         <h1 className="flex items-center gap-2 text-xl font-semibold">
           <Sparkles className="size-5 text-ai" aria-hidden /> {agent.name}
         </h1>
-        <p className="mt-0.5 text-sm text-muted">
+        <p className="mt-0.5 text-sm text-muted-foreground">
           What the assistant says, and — more importantly — when it stops and fetches a human.
         </p>
       </header>
@@ -159,7 +159,7 @@ export default function AiAgentPage() {
           >
             <div className="space-y-4 p-4">
               <label className="block">
-                <span className="text-xs font-medium text-muted">
+                <span className="text-xs font-medium text-muted-foreground">
                   Knowledge-base confidence floor — {(confidenceFloor * 100).toFixed(0)}%
                 </span>
                 <input
@@ -172,16 +172,16 @@ export default function AiAgentPage() {
                     setConfidenceFloor(Number(e.target.value));
                     setDirty(true);
                   }}
-                  className="mt-1.5 w-full accent-[var(--color-brand)]"
+                  className="mt-1.5 w-full accent-[var(--primary)]"
                 />
-                <span className="mt-1 block text-[11px] leading-relaxed text-faint">
+                <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground/70">
                   Below this, the assistant says it isn&apos;t sure and hands off rather than
                   guessing. Higher = more cautious, more escalations.
                 </span>
               </label>
 
               <label className="block">
-                <span className="text-xs font-medium text-muted">
+                <span className="text-xs font-medium text-muted-foreground">
                   Escalate if sentiment drops below {sentimentFloor.toFixed(2)}
                 </span>
                 <input
@@ -194,11 +194,11 @@ export default function AiAgentPage() {
                     setSentimentFloor(Number(e.target.value));
                     setDirty(true);
                   }}
-                  className="mt-1.5 w-full accent-[var(--color-brand)]"
+                  className="mt-1.5 w-full accent-[var(--primary)]"
                 />
               </label>
 
-              <label className="block text-xs font-medium text-muted">
+              <label className="block text-xs font-medium text-muted-foreground">
                 Hard cap on AI turns
                 <Input
                   className="mt-1"
@@ -213,7 +213,7 @@ export default function AiAgentPage() {
                 />
               </label>
 
-              <label className="block text-xs font-medium text-muted">
+              <label className="block text-xs font-medium text-muted-foreground">
                 Phrases that mean “get me a person”
                 <Textarea
                   className="mt-1 text-xs"
@@ -226,7 +226,7 @@ export default function AiAgentPage() {
                 />
               </label>
 
-              <label className="block text-xs font-medium text-muted">
+              <label className="block text-xs font-medium text-muted-foreground">
                 Topics the AI must never handle alone
                 <Textarea
                   className="mt-1 text-xs"
@@ -237,14 +237,14 @@ export default function AiAgentPage() {
                     setDirty(true);
                   }}
                 />
-                <span className="mt-1 block text-[11px] leading-relaxed text-faint">
+                <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground/70">
                   Refunds, complaints, visas and attestation are here by default — these carry real
                   consequences for a student and belong with a person.
                 </span>
               </label>
 
               <Button
-                variant="primary"
+                variant="default"
                 className="w-full"
                 disabled={!dirty}
                 loading={save.isPending}
@@ -300,11 +300,11 @@ export default function AiAgentPage() {
                       <li key={r.chunkId} className="rounded-lg border border-border p-2.5">
                         <div className="flex items-center justify-between gap-2">
                           <span className="truncate text-xs font-medium">{r.docTitle}</span>
-                          <Badge className={i === 0 ? 'bg-brand-soft text-brand' : undefined}>
+                          <Badge className={i === 0 ? 'bg-brand-soft text-primary' : undefined}>
                             {(r.score * 100).toFixed(0)}%
                           </Badge>
                         </div>
-                        <p className="mt-1 line-clamp-3 text-[11px] leading-relaxed text-muted">
+                        <p className="mt-1 line-clamp-3 text-[11px] leading-relaxed text-muted-foreground">
                           {r.content}
                         </p>
                       </li>
@@ -312,7 +312,7 @@ export default function AiAgentPage() {
                   </ul>
 
                   {search.data.length === 0 && (
-                    <p className="mt-2 text-xs text-muted">
+                    <p className="mt-2 text-xs text-muted-foreground">
                       Nothing retrieved — the assistant would hand this straight to a human.
                     </p>
                   )}

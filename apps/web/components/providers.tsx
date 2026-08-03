@@ -11,7 +11,9 @@ import {
   type ReactNode,
 } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Toaster, toast } from 'sonner';
+import { toast } from 'sonner';
+import { ThemeProvider } from 'next-themes';
+import { Toaster } from '@/components/ui/sonner';
 import { useRouter } from 'next/navigation';
 import type { LoginOutput, SessionUser } from '@fit-ai/contracts';
 import { api, setAccessToken } from '@/lib/api';
@@ -152,11 +154,20 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <SessionProvider>
-        {children}
-        <Toaster position="bottom-right" richColors closeButton />
-      </SessionProvider>
-    </QueryClientProvider>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      // Theme changes shouldn't animate every colour on the page at once.
+      disableTransitionOnChange
+    >
+      <QueryClientProvider client={queryClient}>
+        <SessionProvider>
+          {children}
+          {/* shadcn's Toaster reads the active theme, so toasts match. */}
+          <Toaster position="bottom-right" richColors closeButton />
+        </SessionProvider>
+      </QueryClientProvider>
+    </ThemeProvider>
   );
 }

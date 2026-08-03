@@ -36,7 +36,7 @@ import {
   Spinner,
   Textarea,
   cn,
-} from '@/components/ui';
+} from '@/components/composites';
 
 export default function ConversationDetailPage({
   params,
@@ -153,7 +153,7 @@ export default function ConversationDetailPage({
   if (query.isError || !c) {
     return (
       <div className="p-6">
-        <p className="text-sm text-danger">
+        <p className="text-sm text-destructive">
           Could not load this conversation: {(query.error as Error)?.message}
         </p>
       </div>
@@ -167,7 +167,7 @@ export default function ConversationDetailPage({
     <div className="mx-auto max-w-[1400px] px-4 py-5 sm:px-6">
       <Link
         href="/conversations"
-        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted hover:text-fg"
+        className="mb-3 inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" aria-hidden /> Back to inbox
       </Link>
@@ -178,7 +178,7 @@ export default function ConversationDetailPage({
           <Avatar name={c.contact?.name ?? 'Unknown'} size={44} />
           <div>
             <h1 className="text-lg font-semibold">{c.contact?.name ?? 'Unknown contact'}</h1>
-            <p className="tnum text-sm text-muted">{phone(c.contact?.phoneE164)}</p>
+            <p className="tnum text-sm text-muted-foreground">{phone(c.contact?.phoneE164)}</p>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               <Badge>{CHANNEL_LABEL[c.channel]}</Badge>
               {c.aiContained ? (
@@ -186,7 +186,7 @@ export default function ConversationDetailPage({
                   <Sparkles className="size-3" aria-hidden /> AI resolved
                 </Badge>
               ) : (
-                <Badge className="bg-brand-soft text-brand">
+                <Badge className="bg-brand-soft text-primary">
                   Escalated to {c.handledByName ?? 'an agent'}
                 </Badge>
               )}
@@ -196,14 +196,14 @@ export default function ConversationDetailPage({
                   <CheckCircle2 className="size-3" aria-hidden /> In CRM
                 </Badge>
               ) : (
-                <Badge className="bg-surface-2 text-muted">
+                <Badge className="bg-muted text-muted-foreground">
                   <XCircle className="size-3" aria-hidden /> Not yet in CRM
                 </Badge>
               )}
             </div>
           </div>
         </div>
-        <div className="text-right text-xs text-muted">
+        <div className="text-right text-xs text-muted-foreground">
           <p>{dateTime(c.startedAt)}</p>
           <p className="tnum mt-0.5">Duration {duration(c.durationMs)}</p>
           {c.contact?.bitrixUrl && (
@@ -211,7 +211,7 @@ export default function ConversationDetailPage({
               href={c.contact.bitrixUrl}
               target="_blank"
               rel="noreferrer"
-              className="mt-1 inline-flex items-center gap-1 text-brand hover:underline"
+              className="mt-1 inline-flex items-center gap-1 text-primary hover:underline"
             >
               Open in Bitrix24 <ExternalLink className="size-3" aria-hidden />
             </a>
@@ -226,7 +226,7 @@ export default function ConversationDetailPage({
             <Card title="Recording" subtitle="Click any transcript line to jump to that moment">
               <div className="flex items-center gap-3 p-4">
                 <Button
-                  variant="primary"
+                  variant="default"
                   onClick={() => {
                     const el = audio.current;
                     if (!el) return;
@@ -246,9 +246,9 @@ export default function ConversationDetailPage({
                 <div className="min-w-0 flex-1">
                   {/* Progress against the transcript, with the escalation moment
                       marked — a supervisor usually wants exactly that point. */}
-                  <div className="relative h-2 overflow-hidden rounded-full bg-surface-2">
+                  <div className="relative h-2 overflow-hidden rounded-full bg-muted">
                     <div
-                      className="absolute inset-y-0 left-0 bg-brand transition-[width] duration-200"
+                      className="absolute inset-y-0 left-0 bg-primary transition-[width] duration-200"
                       style={{
                         width: `${Math.min(100, (positionMs / Math.max(1, c.recording.durationMs)) * 100)}%`,
                       }}
@@ -269,7 +269,7 @@ export default function ConversationDetailPage({
                       />
                     )}
                   </div>
-                  <p className="tnum mt-1 text-xs text-muted">
+                  <p className="tnum mt-1 text-xs text-muted-foreground">
                     {duration(positionMs)} / {duration(c.recording.durationMs)}
                     {c.call?.escalatedAt && (
                       <span className="ml-2 text-warn">▏handoff</span>
@@ -307,10 +307,10 @@ export default function ConversationDetailPage({
                       disabled={m.audioOffsetMs === null || !c.recording}
                       className={cn(
                         'max-w-[80%] rounded-lg px-3 py-2 text-left text-sm',
-                        isCaller && 'bg-surface-2',
+                        isCaller && 'bg-muted',
                         isAi && 'bg-ai-soft',
-                        m.role === 'HUMAN_AGENT' && 'bg-brand text-brand-fg',
-                        m.role === 'SYSTEM' && 'bg-surface-2 text-muted italic',
+                        m.role === 'HUMAN_AGENT' && 'bg-primary text-primary-foreground',
+                        m.role === 'SYSTEM' && 'bg-muted text-muted-foreground italic',
                         m.audioOffsetMs !== null && c.recording && 'cursor-pointer hover:opacity-80',
                       )}
                     >
@@ -339,7 +339,7 @@ export default function ConversationDetailPage({
                 }}
               >
                 {!c.handledByName && (
-                  <Button type="button" variant="primary" loading={claim.isPending} onClick={() => claim.mutate()}>
+                  <Button type="button" variant="default" loading={claim.isPending} onClick={() => claim.mutate()}>
                     Take over
                   </Button>
                 )}
@@ -348,7 +348,7 @@ export default function ConversationDetailPage({
                   onChange={(e) => setReply(e.target.value)}
                   placeholder="Reply to the customer…"
                 />
-                <Button type="submit" variant="primary" loading={sendReply.isPending} disabled={!reply.trim()}>
+                <Button type="submit" variant="default" loading={sendReply.isPending} disabled={!reply.trim()}>
                   <Send className="size-4" aria-hidden />
                 </Button>
               </form>
@@ -363,23 +363,23 @@ export default function ConversationDetailPage({
               <dl className="space-y-2.5 p-4 text-sm">
                 {c.aiSession.summary && (
                   <div>
-                    <dt className="text-xs font-medium text-muted">Summary</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Summary</dt>
                     <dd className="mt-0.5 leading-relaxed">{c.aiSession.summary}</dd>
                   </div>
                 )}
                 <div className="grid grid-cols-2 gap-2.5">
                   <div>
-                    <dt className="text-xs font-medium text-muted">Intent</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Intent</dt>
                     <dd className="mt-0.5 text-xs">
                       {c.aiSession.detectedIntent?.replace(/_/g, ' ') ?? '—'}
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-medium text-muted">Course</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Course</dt>
                     <dd className="mt-0.5 text-xs">{c.aiSession.courseOfInterest ?? '—'}</dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-medium text-muted">Handoff</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Handoff</dt>
                     <dd className="mt-0.5 text-xs">
                       {c.aiSession.escalationReason
                         ? ESCALATION_LABEL[c.aiSession.escalationReason]
@@ -387,14 +387,14 @@ export default function ConversationDetailPage({
                     </dd>
                   </div>
                   <div>
-                    <dt className="text-xs font-medium text-muted">Avg latency</dt>
+                    <dt className="text-xs font-medium text-muted-foreground">Avg latency</dt>
                     <dd className="tnum mt-0.5 text-xs">
                       {c.aiSession.avgLatencyMs ? `${c.aiSession.avgLatencyMs}ms` : '—'}
                     </dd>
                   </div>
                 </div>
                 <div className="border-t border-border pt-2.5">
-                  <dt className="text-xs font-medium text-muted">Drivers used</dt>
+                  <dt className="text-xs font-medium text-muted-foreground">Drivers used</dt>
                   <dd className="mt-1 flex flex-wrap gap-1">
                     <Badge>stt: {c.aiSession.driverStt}</Badge>
                     <Badge>llm: {c.aiSession.driverLlm}</Badge>
@@ -420,34 +420,34 @@ export default function ConversationDetailPage({
                   .filter(([, at]) => at)
                   .map(([label, at]) => (
                     <li key={label} className="flex justify-between gap-2">
-                      <span className="text-muted">{label}</span>
+                      <span className="text-muted-foreground">{label}</span>
                       <span className="tnum">{time(at)}</span>
                     </li>
                   ))}
                 <li className="flex justify-between gap-2 border-t border-border pt-2">
-                  <span className="text-muted">Queue wait</span>
+                  <span className="text-muted-foreground">Queue wait</span>
                   <span className="tnum">{duration(c.call.queueWaitMs)}</span>
                 </li>
                 <li className="flex justify-between gap-2">
-                  <span className="text-muted">AI talk time</span>
+                  <span className="text-muted-foreground">AI talk time</span>
                   <span className="tnum">{duration(c.call.aiTalkMs)}</span>
                 </li>
                 <li className="flex justify-between gap-2">
-                  <span className="text-muted">Agent talk time</span>
+                  <span className="text-muted-foreground">Agent talk time</span>
                   <span className="tnum">{duration(c.call.agentTalkMs)}</span>
                 </li>
               </ul>
 
               {c.call.participants && c.call.participants.length > 0 && (
                 <div className="border-t border-border p-4">
-                  <p className="mb-2 text-xs font-medium text-muted">Who was on the call</p>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">Who was on the call</p>
                   <ul className="space-y-1.5">
                     {c.call.participants.map((p) => (
                       <li key={p.id} className="flex items-center gap-2 text-xs">
                         {p.kind === 'AI_AGENT' ? (
                           <Sparkles className="size-3 text-ai" aria-hidden />
                         ) : (
-                          <User className="size-3 text-muted" aria-hidden />
+                          <User className="size-3 text-muted-foreground" aria-hidden />
                         )}
                         <span>
                           {p.kind === 'CALLER'
@@ -456,7 +456,7 @@ export default function ConversationDetailPage({
                               ? 'AI assistant'
                               : (p.userName ?? 'Agent')}
                         </span>
-                        <span className="tnum ml-auto text-faint">{time(p.joinedAt)}</span>
+                        <span className="tnum ml-auto text-muted-foreground/70">{time(p.joinedAt)}</span>
                       </li>
                     ))}
                   </ul>
@@ -467,7 +467,7 @@ export default function ConversationDetailPage({
 
           <Card title="Outcome" subtitle="Disposition feeds the analytics breakdown">
             <div className="space-y-2.5 p-4">
-              <label className="block text-xs font-medium text-muted">
+              <label className="block text-xs font-medium text-muted-foreground">
                 Disposition
                 <Select
                   className="mt-1"
@@ -485,7 +485,7 @@ export default function ConversationDetailPage({
                   ))}
                 </Select>
               </label>
-              <label className="block text-xs font-medium text-muted">
+              <label className="block text-xs font-medium text-muted-foreground">
                 Notes
                 <Textarea
                   className="mt-1"
@@ -498,7 +498,7 @@ export default function ConversationDetailPage({
                 />
               </label>
               <Button
-                variant="primary"
+                variant="default"
                 className="w-full"
                 disabled={!dirty}
                 loading={save.isPending}
@@ -507,7 +507,7 @@ export default function ConversationDetailPage({
                 Save
               </Button>
               {user.role === 'AGENT' && (
-                <p className="text-[11px] text-faint">
+                <p className="text-[11px] text-muted-foreground/70">
                   Notes are visible to supervisors and are pushed to the Bitrix24 timeline.
                 </p>
               )}

@@ -8,6 +8,15 @@ import { ZodBody } from '../shared/zod.pipe';
 
 export const REFRESH_COOKIE = 'fitai_rt';
 
+/**
+ * Cookie path must include the global route prefix.
+ *
+ * main.ts sets `setGlobalPrefix('api')`, so the endpoint is `/api/auth/refresh`,
+ * not `/auth/refresh`. A cookie scoped to `/auth` is never sent to `/api/auth/*`
+ * — which silently broke session restore on every page reload.
+ */
+const REFRESH_COOKIE_PATH = '/api/auth';
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly auth: AuthService) {}
@@ -22,7 +31,7 @@ export class AuthController {
       httpOnly: true,
       sameSite: 'strict',
       secure: process.env.NODE_ENV === 'production',
-      path: '/auth',
+      path: REFRESH_COOKIE_PATH,
       maxAge: 30 * 864e5,
     });
   }
@@ -74,7 +83,7 @@ export class AuthController {
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
     const token = this.readRefreshCookie(req);
     if (token) await this.auth.revokeRefreshToken(token);
-    res.clearCookie(REFRESH_COOKIE, { path: '/auth' });
+    res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
   }
 
   @Get('me')

@@ -6,7 +6,7 @@ import { BookOpen } from 'lucide-react';
 import type { KnowledgeDocDto } from '@fit-ai/contracts';
 import { api } from '@/lib/api';
 import { dateTime } from '@/lib/format';
-import { Badge, Button, Card, MockNotice, SkeletonRows, Table, Td, Th } from '@/components/ui';
+import { Badge, Button, Card, MockNotice, SkeletonRows, Table, Td, Th } from '@/components/composites';
 
 export default function KnowledgePage() {
   const query = useQuery({
@@ -24,9 +24,9 @@ export default function KnowledgePage() {
       <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold">
-            <BookOpen className="size-5 text-brand" aria-hidden /> Knowledge base
+            <BookOpen className="size-5 text-primary" aria-hidden /> Knowledge base
           </h1>
-          <p className="mt-0.5 text-sm text-muted">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Everything the assistant is allowed to say. It answers from these documents and nothing
             else — which is why it cannot invent a fee.
           </p>
@@ -66,11 +66,11 @@ export default function KnowledgePage() {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {docs.map((d) => (
-                    <tr key={d.id} className="transition hover:bg-surface-2">
+                    <tr key={d.id} className="transition hover:bg-muted">
                       <Td className="font-medium">{d.title}</Td>
                       <Td><Badge className="text-[10px]">{d.source}</Badge></Td>
                       <Td className="tnum text-right text-xs">{d.chunkCount}</Td>
-                      <Td className="text-right text-xs text-muted">{dateTime(d.updatedAt)}</Td>
+                      <Td className="text-right text-xs text-muted-foreground">{dateTime(d.updatedAt)}</Td>
                     </tr>
                   ))}
                 </tbody>

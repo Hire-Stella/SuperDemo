@@ -40,7 +40,7 @@ import {
   Td,
   Th,
   cn,
-} from '@/components/ui';
+} from '@/components/composites';
 
 /** Ticks once a second so live durations count up without refetching. */
 function useNow(active: boolean): number {
@@ -116,17 +116,17 @@ export default function LiveOpsPage() {
       <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold">
-            <Activity className="size-5 text-brand" aria-hidden />
+            <Activity className="size-5 text-primary" aria-hidden />
             Live operations
           </h1>
-          <p className="mt-0.5 text-sm text-muted">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'},{' '}
             {user.name.split(' ')[0]}. Everything happening right now, across all channels.
           </p>
         </div>
         {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
           <Link href="/simulator">
-            <Button variant="primary">
+            <Button variant="default">
               <PhoneCall className="size-4" aria-hidden /> Simulate a call
             </Button>
           </Link>
@@ -251,7 +251,7 @@ export default function LiveOpsPage() {
                   const style = CALL_STATE_STYLE[c.state];
                   const elapsed = now - new Date(c.startedAt).getTime();
                   return (
-                    <tr key={c.callId} className="transition hover:bg-surface-2">
+                    <tr key={c.callId} className="transition hover:bg-muted">
                       <Td>
                         <Link
                           href={`/conversations/${c.conversationId}`}
@@ -262,7 +262,7 @@ export default function LiveOpsPage() {
                             <span className="block truncate font-medium">
                               {c.contactName ?? 'Unknown caller'}
                             </span>
-                            <span className="tnum block truncate text-xs text-muted">
+                            <span className="tnum block truncate text-xs text-muted-foreground">
                               {phone(c.fromNumber)}
                             </span>
                           </span>
@@ -284,17 +284,17 @@ export default function LiveOpsPage() {
                         {c.detectedIntent ? (
                           <span className="text-xs">{c.detectedIntent.replace(/_/g, ' ')}</span>
                         ) : (
-                          <span className="text-xs text-faint">listening…</span>
+                          <span className="text-xs text-muted-foreground/70">listening…</span>
                         )}
                         {c.lastUtterance && (
-                          <span className="mt-0.5 block truncate text-xs text-muted">
+                          <span className="mt-0.5 block truncate text-xs text-muted-foreground">
                             “{c.lastUtterance}”
                           </span>
                         )}
                       </Td>
                       <Td className="text-xs">
                         {c.agentName ?? c.queueName ?? (
-                          <span className="text-faint">—</span>
+                          <span className="text-muted-foreground/70">—</span>
                         )}
                       </Td>
                       <Td className="tnum text-right text-sm">{duration(elapsed)}</Td>
@@ -321,19 +321,19 @@ export default function LiveOpsPage() {
                       <Badge
                         className={
                           q.live.waiting === 0
-                            ? 'bg-surface-2 text-muted'
+                            ? 'bg-muted text-muted-foreground'
                             : breaching
-                              ? 'bg-danger-soft text-danger'
+                              ? 'bg-destructive/10 text-destructive'
                               : 'bg-warn-soft text-warn'
                         }
                       >
                         {q.live.waiting} waiting
                       </Badge>
                     </div>
-                    <p className="mt-0.5 text-xs text-muted">
+                    <p className="mt-0.5 text-xs text-muted-foreground">
                       {q.live.agentsAvailable} available · {q.live.agentsOnCall} on a call
                       {q.live.longestWaitMs > 0 && (
-                        <span className={breaching ? 'text-danger' : undefined}>
+                        <span className={breaching ? 'text-destructive' : undefined}>
                           {' '}
                           · longest {duration(q.live.longestWaitMs)}
                         </span>
@@ -370,12 +370,12 @@ export default function LiveOpsPage() {
                     <p className="flex items-center gap-1.5 text-xs">
                       <span className={cn('size-1.5 rounded-full', style.dot)} aria-hidden />
                       <span className={style.text}>{style.label}</span>
-                      <span className="text-faint">· {a.location.toLowerCase()}</span>
+                      <span className="text-muted-foreground/70">· {a.location.toLowerCase()}</span>
                     </p>
                   </div>
                   <div className="text-right">
                     <p className="tnum text-sm font-semibold">{a.today.callsHandled}</p>
-                    <p className="text-[11px] text-faint">today</p>
+                    <p className="text-[11px] text-muted-foreground/70">today</p>
                   </div>
                 </div>
               );

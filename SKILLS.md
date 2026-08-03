@@ -15,8 +15,9 @@ came out differently in practice, and the reasons matter more than the plan did:
 |---|---|---|
 | Fastify adapter | **Express adapter** | Fastify + socket.io + Nest 11 has sharp edges, and at 12 agents the throughput difference is irrelevant. Chose the boring path that provably works over the theoretically faster one. |
 | pgvector | **`Float[]` + in-process BM25/IDF ranking** | The vendored Postgres can't build extensions. At 34 chunks the scan is sub-millisecond, and calibrated retrieval mattered far more than the storage mechanism — see the confidence note below. |
-| shadcn/ui via CLI | **hand-written Radix-free primitives** in `components/ui.tsx` | The CLI wants network + interactive prompts. The dozen primitives actually used are ~300 lines and carry no dependency. Radix can be added later without changing call sites. |
+| shadcn/ui via CLI | **shadcn/ui, installed via the CLI** into `components/ui/*` | As planned. Primitives are owned source — `button.tsx` was extended in place with `danger`/`live` variants and a `loading` prop rather than wrapped. App-level compounds (Metric, Panel-style Card, MockNotice) sit in `components/composites.tsx` on top. |
 | wavesurfer.js waveform | **progress bar with the handoff marked** | Real waveform rendering needs decoded audio; the useful part for a supervisor is *where the AI handed off*, which this shows. wavesurfer is a drop-in upgrade. |
+| shadcn Radix `Select` everywhere | **native `<select>` styled with shadcn tokens** | Selects here live in dense table rows and the docked softphone. Native gives real keyboard behaviour, the OS picker on mobile, and no portal fighting the softphone's z-index. `components/ui/select.tsx` is installed for anywhere the richer picker is worth it. |
 | casl | **role guard + `@Roles()`** | Three roles and coarse rules. casl's cost is justified by row-level abilities, which single-tenant doesn't have yet. |
 | nestjs-zod | **own `ZodValidationPipe`** (~35 lines) | Same outcome, one fewer dependency, and it reuses `@fit-ai/contracts` verbatim. |
 | nestjs-pino / terminus | **Nest logger + plain `/ready`** | `/ready` checks Postgres and Redis and reports active drivers, which is what a deploy gate needs. Structured logging is worth adding before production. |
@@ -77,7 +78,7 @@ courses FIT doesn't teach.
 |---|---|---|---|
 | Framework | **Next.js 15** App Router, React 19 | Server Components for shells; Client Components for the realtime surfaces | v1 |
 | Styling | **Tailwind v4** | New engine, CSS-first config, no `tailwind.config.js` sprawl | v1 |
-| Components | **shadcn/ui** (Radix) | Source-in-repo, not a dependency — we restyle for hirestella branding without fighting a theme API. Radix gives real a11y | v1 |
+| Components | **shadcn/ui** | Source-in-repo, not a dependency — extended in place for the call-control variants, and the whole app re-themes from CSS variables | v1 |
 | Server state | **TanStack Query v5** | Socket events patch/invalidate the cache — zero polling anywhere in the app | v1 |
 | Local state | **Zustand** | Only for the softphone state machine. Deliberately no global store | v1 |
 | Tables | **TanStack Table v8** | Headless: server-side sort/filter/paginate on 100k+ conversations | v1 |
@@ -87,7 +88,7 @@ courses FIT doesn't teach.
 | Icons | **lucide-react** | Matches shadcn | v1 |
 | Dates / tz | **date-fns** + `date-fns-tz` | Dubai / Kolkata / Cairo are all in play — tz is a correctness issue, not cosmetic | v1 |
 | Toasts | **sonner** | Incoming-call and sync-failure surfacing | v1 |
-| Theme | **next-themes** | Dark mode for agents on night shift | v1 |
+| Theme | **next-themes** + 3-way toggle (light / dark / system) | Dark mode for agents on night shift. The whole palette derives from two CSS variables (`--fit-red`, `--fit-red-dark`) so FIT's real brand hex is a one-line change | v1 |
 | Tables→CSV | **papaparse** | Supervisors will ask to export reports on the call | v1 |
 | Virtualisation | **@tanstack/react-virtual** | Long transcripts and the conversation list | v1 |
 

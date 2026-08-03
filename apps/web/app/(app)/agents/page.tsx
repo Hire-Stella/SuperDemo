@@ -6,7 +6,7 @@ import { Users } from 'lucide-react';
 import type { AgentScorecard, AgentSummary } from '@fit-ai/contracts';
 import { api, qs } from '@/lib/api';
 import { AGENT_STATUS_STYLE, dateRange, pct, seconds } from '@/lib/format';
-import { Avatar, Badge, Card, Select, SkeletonRows, Table, Td, Th, cn } from '@/components/ui';
+import { Avatar, Badge, Card, Select, SkeletonRows, Table, Td, Th, cn } from '@/components/composites';
 
 export default function AgentsPage() {
   const [days, setDays] = useState('7');
@@ -30,9 +30,9 @@ export default function AgentsPage() {
       <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-semibold">
-            <Users className="size-5 text-brand" aria-hidden /> Agents
+            <Users className="size-5 text-primary" aria-hidden /> Agents
           </h1>
-          <p className="mt-0.5 text-sm text-muted">
+          <p className="mt-0.5 text-sm text-muted-foreground">
             Productivity comes from the append-only state log, not the current status — so numbers
             don&apos;t shift when someone toggles availability.
           </p>
@@ -66,13 +66,13 @@ export default function AgentsPage() {
                 const style = AGENT_STATUS_STYLE[a.status];
                 const s = byId.get(a.id);
                 return (
-                  <tr key={a.id} className="transition hover:bg-surface-2">
+                  <tr key={a.id} className="transition hover:bg-muted">
                     <Td>
                       <div className="flex items-center gap-2.5">
                         <Avatar name={a.name} color={a.avatarColor} size={28} />
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{a.name}</p>
-                          <p className="truncate text-xs text-muted">
+                          <p className="truncate text-xs text-muted-foreground">
                             {a.location.toLowerCase()} · {a.role.toLowerCase()}
                             {a.extension ? ` · ext ${a.extension}` : ''}
                           </p>
@@ -106,7 +106,7 @@ export default function AgentsPage() {
                       {s?.dispositionsMissing ? (
                         <span className="text-warn">{s.dispositionsMissing}</span>
                       ) : (
-                        <span className="text-faint">0</span>
+                        <span className="text-muted-foreground/70">0</span>
                       )}
                     </Td>
                   </tr>
