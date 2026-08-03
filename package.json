@@ -1,0 +1,34 @@
+{
+  "name": "fit-ai",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.17.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "services:up": "node scripts/services.mjs up",
+    "services:down": "node scripts/services.mjs down",
+    "services:status": "node scripts/services.mjs status",
+    "services:reset": "node scripts/services.mjs reset",
+    "db:generate": "pnpm --filter @fit-ai/db generate",
+    "db:migrate": "pnpm --filter @fit-ai/db migrate",
+    "db:push": "pnpm --filter @fit-ai/db push",
+    "db:seed": "pnpm --filter @fit-ai/db seed",
+    "db:studio": "pnpm --filter @fit-ai/db studio",
+    "db:reset": "pnpm --filter @fit-ai/db reset",
+    "setup": "pnpm install && pnpm services:up && pnpm db:generate && pnpm db:push && pnpm db:seed",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\""
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "embedded-postgres": "17.10.0-beta.17",
+    "pg": "^8.13.1",
+    "prettier": "^3.4.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2"
+  }
+}

@@ -1,0 +1,105 @@
+@import 'tailwindcss';
+
+/*
+ * Design tokens.
+ *
+ * A contact-centre dashboard is looked at for eight hours straight, so the
+ * palette is deliberately low-chroma with colour reserved for state that
+ * matters: an AI-handled call, a queue breaching SLA, an agent on a break.
+ * Every state colour is distinguishable without relying on hue alone (each has
+ * a paired label or icon), because red/green as the only signal fails for
+ * roughly one in twelve men.
+ */
+@theme {
+  --color-bg: oklch(99% 0.002 250);
+  --color-surface: oklch(100% 0 0);
+  --color-surface-2: oklch(97.5% 0.003 250);
+  --color-border: oklch(91% 0.004 250);
+  --color-fg: oklch(21% 0.01 250);
+  --color-muted: oklch(52% 0.012 250);
+  --color-faint: oklch(68% 0.01 250);
+
+  --color-brand: oklch(52% 0.16 258);
+  --color-brand-fg: oklch(99% 0 0);
+  --color-brand-soft: oklch(95% 0.03 258);
+
+  /* State */
+  --color-ai: oklch(58% 0.13 285);
+  --color-ai-soft: oklch(96% 0.025 285);
+  --color-live: oklch(62% 0.17 145);
+  --color-live-soft: oklch(96% 0.04 145);
+  --color-warn: oklch(72% 0.15 70);
+  --color-warn-soft: oklch(97% 0.04 70);
+  --color-danger: oklch(58% 0.19 25);
+  --color-danger-soft: oklch(96% 0.03 25);
+
+  --radius-card: 0.75rem;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  @theme {
+    --color-bg: oklch(17% 0.008 255);
+    --color-surface: oklch(21% 0.01 255);
+    --color-surface-2: oklch(25% 0.011 255);
+    --color-border: oklch(31% 0.012 255);
+    --color-fg: oklch(96% 0.004 255);
+    --color-muted: oklch(70% 0.012 255);
+    --color-faint: oklch(55% 0.012 255);
+    --color-brand: oklch(66% 0.15 258);
+    --color-brand-soft: oklch(30% 0.05 258);
+    --color-ai: oklch(72% 0.13 285);
+    --color-ai-soft: oklch(29% 0.05 285);
+    --color-live: oklch(72% 0.16 145);
+    --color-live-soft: oklch(28% 0.05 145);
+    --color-warn: oklch(78% 0.14 70);
+    --color-warn-soft: oklch(30% 0.05 70);
+    --color-danger: oklch(68% 0.17 25);
+    --color-danger-soft: oklch(30% 0.06 25);
+  }
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular figures everywhere numbers change in place, so metric tiles and
+   timers don't jitter as digits update. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* A live call is the one thing on screen that must catch the eye. */
+@keyframes pulse-ring {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.pulse {
+  animation: pulse-ring 1.6s ease-in-out infinite;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

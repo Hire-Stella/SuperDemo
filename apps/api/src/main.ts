@@ -1,0 +1,56 @@
+import 'reflect-metadata';
+import { Logger, ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import { parseApiEnv } from '@fit-ai/contracts';
+import { AppModule } from './app.module';
+
+async function bootstrap(): Promise<void> {
+  // Parse before Nest boots so a bad .env fails with a readable message rather
+  // than a stack trace from three layers down.
+  const env = parseApiEnv(process.env);
+
+  const app = await NestFactory.create(AppModule, {
+    logger:
+      env.NODE_ENV === 'production'
+        ? ['error', 'warn', 'log']
+        : ['error', 'warn', 'log', 'debug'],
+  });
+
+  app.setGlobalPrefix('api', { exclude: ['health', 'ready'] });
+
+  app.use(
+    helmet({
+      // The dashboard is served from a different origin in dev, and recordings
+      // stream as blobs — CSP is enforced at the web app, not here.
+      contentSecurityPolicy: false,
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+    }),
+  );
+  app.use(cookieParser());
+
+  app.enableCors({
+    origin: [env.WEB_ORIGIN],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  });
+
+  app.useGlobalPipes(
+    new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: false }),
+  );
+
+  // Drain in-flight calls rather than dropping them on redeploy.
+  app.enableShutdownHooks();
+
+  await app.listen(env.API_PORT);
+
+  const log = new Logger('Bootstrap');
+  log.log(`API listening on http://localhost:${env.API_PORT}/api`);
+  log.log(
+    `drivers → telephony=${env.TELEPHONY_DRIVER} messaging=${env.MESSAGING_DRIVER} ` +
+      `llm=${env.LLM_DRIVER} crm=${env.CRM_DRIVER} storage=${env.STORAGE_DRIVER}`,
+  );
+}
+
+void bootstrap();

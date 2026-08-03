@@ -1,0 +1,23 @@
+node_modules/
+dist/
+.next/
+out/
+.turbo/
+*.tsbuildinfo
+
+# Local service data: embedded Postgres cluster, Redis dump, logs
+.data/
+
+# Recordings written by the local storage driver
+.storage/
+
+.env
+.env.local
+.env.*.local
+!.env.example
+
+.DS_Store
+*.log
+coverage/
+playwright-report/
+test-results/

@@ -1,0 +1,651 @@
+// FIT-AI — single-tenant contact centre schema.
+//
+// Design notes worth defending in review:
+//  * CallParticipant, not Call.agentId — the AI→human handoff IS the product,
+//    so the schema represents both legs. Multi-party conference comes free.
+//  * Conversation sits above Call — WhatsApp and web chat are new `channel`
+//    values with zero migration. That is what "unified dashboard" means.
+//  * AgentStateEvent is append-only — occupancy and adherence reports are
+//    unreliable if derived from mutable current-state rows.
+//  * OutboxEvent — Bitrix will be down sometimes. The outbox makes "recorded
+//    locally but missing in CRM" impossible rather than merely unlikely.
+//  * providerCallId is unique — carriers and simulators both redeliver events.
+//    Idempotency is enforced by the database, not by application `if`s.
+//
+// embedding is Float[] rather than pgvector: the local Postgres is vendored via
+// `embedded-postgres` (no extension build toolchain). At a few hundred FIT
+// course chunks, in-process cosine is sub-millisecond. See NOT-IMPLEMENTED.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/* ============================== enums ==================================== */
+
+enum Role {
+  AGENT
+  SUPERVISOR
+  ADMIN
+}
+
+enum Location {
+  DUBAI
+  INDIA
+  EGYPT
+}
+
+enum Skill {
+  MANAGEMENT
+  EDUCATION
+  FINANCE
+  LANGUAGE
+  GENERAL
+}
+
+enum AgentStatus {
+  AVAILABLE
+  ON_CALL
+  WRAPUP
+  BUSY
+  BREAK
+  OFFLINE
+}
+
+enum Channel {
+  VOICE
+  WHATSAPP
+  WEBCHAT
+}
+
+enum Direction {
+  INBOUND
+  OUTBOUND
+}
+
+enum ConversationStatus {
+  ACTIVE
+  WAITING
+  CLOSED
+}
+
+enum CallState {
+  RINGING
+  AI_HANDLING
+  ESCALATING
+  QUEUED
+  AGENT_RINGING
+  AGENT_TALKING
+  WRAPUP
+  COMPLETED
+}
+
+enum ParticipantKind {
+  CALLER
+  AI_AGENT
+  HUMAN_AGENT
+}
+
+enum MessageRole {
+  CALLER
+  AI
+  HUMAN_AGENT
+  SYSTEM
+}
+
+enum EscalationReason {
+  CALLER_REQUESTED
+  LOW_CONFIDENCE
+  OUT_OF_SCOPE
+  NEGATIVE_SENTIMENT
+  MAX_TURNS
+  HUMAN_ONLY_INTENT
+}
+
+enum HangupCause {
+  CALLER_HANGUP
+  AGENT_HANGUP
+  AI_RESOLVED
+  ABANDONED_IN_QUEUE
+  NO_AGENT_AVAILABLE
+  SYSTEM_ERROR
+}
+
+enum Disposition {
+  ENROLMENT_INTEREST
+  INFO_PROVIDED
+  CALLBACK_REQUESTED
+  FEE_ENQUIRY
+  EXISTING_STUDENT_SUPPORT
+  NOT_INTERESTED
+  WRONG_NUMBER
+  SPAM
+}
+
+enum RoutingStrategy {
+  LONGEST_IDLE
+  ROUND_ROBIN
+  SKILL_WEIGHTED
+}
+
+enum SyncDirection {
+  OUTBOUND_TO_BITRIX
+  INBOUND_FROM_BITRIX
+}
+
+enum SyncStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+enum NumberStatus {
+  AVAILABLE
+  ASSIGNED
+  RELEASED
+}
+
+/* ========================= people & presence ============================= */
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String
+  passwordHash String
+  role         Role     @default(AGENT)
+  location     Location
+  timezone     String
+  skills       Skill[]
+  extension    String?  @unique
+  avatarColor  String   @default("#2563eb")
+  /// Bitrix24 user id, so calls land on the right CRM user's timeline.
+  bitrixUserId String?
+  isActive     Boolean  @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  presence         AgentState?
+  stateEvents      AgentStateEvent[]
+  callParticipants CallParticipant[]
+  conversations    Conversation[]
+  refreshTokens    RefreshToken[]
+  queues           QueueMembership[]
+  messages         Message[]
+  auditLogs        AuditLog[]
+
+  @@index([role, isActive])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  /// SHA-256 of the token. Never store the token itself.
+  tokenHash String   @unique
+  /// Set when rotated. A second use of a revoked token means theft → revoke all.
+  revokedAt DateTime?
+  expiresAt DateTime
+  userAgent String?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+}
+
+/// Current state — one row per agent, cheap to read for the live board.
+model AgentState {
+  userId        String      @id
+  status        AgentStatus @default(OFFLINE)
+  since         DateTime    @default(now())
+  reason        String?
+  currentCallId String?
+  /// Last websocket heartbeat; a stale value flips the agent OFFLINE.
+  lastSeenAt    DateTime    @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+/// Append-only. Every transition. Source of truth for occupancy & adherence.
+model AgentStateEvent {
+  id       BigInt      @id @default(autoincrement())
+  userId   String
+  from     AgentStatus?
+  to       AgentStatus
+  at       DateTime    @default(now())
+  reason   String?
+  /// Duration spent in the *previous* state, denormalised so reports don't
+  /// need window functions over the whole table.
+  prevMs   Int?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, at])
+  @@index([at])
+}
+
+/* ================================ contacts =============================== */
+
+model Contact {
+  id             String    @id @default(cuid())
+  phoneE164      String?   @unique
+  name           String?
+  email          String?
+  courseInterest String?
+  /// "lead" | "contact" — Bitrix distinguishes them and the API paths differ.
+  bitrixEntity   String?
+  bitrixId       String?
+  bitrixSyncedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  conversations Conversation[]
+
+  @@index([bitrixEntity, bitrixId])
+  @@index([name])
+}
+
+/* ============================== conversations ============================ */
+
+model Conversation {
+  id          String             @id @default(cuid())
+  channel     Channel
+  direction   Direction          @default(INBOUND)
+  status      ConversationStatus @default(ACTIVE)
+  contactId   String?
+  queueId     String?
+  /// Human agent who ultimately handled it. Null when AI-contained.
+  handledById String?
+  startedAt   DateTime           @default(now())
+  endedAt     DateTime?
+  disposition Disposition?
+  notes       String?
+  tags        String[]
+  /// True when no human ever joined — the containment KPI.
+  aiContained Boolean            @default(false)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  contact   Contact?  @relation(fields: [contactId], references: [id])
+  queue     Queue?    @relation(fields: [queueId], references: [id])
+  handledBy User?     @relation(fields: [handledById], references: [id])
+  call      Call?
+  messages  Message[]
+  aiSession AiSession?
+
+  @@index([channel, startedAt(sort: Desc)])
+  @@index([status, channel])
+  @@index([startedAt(sort: Desc)])
+  @@index([handledById, startedAt(sort: Desc)])
+  @@index([queueId, startedAt(sort: Desc)])
+}
+
+model Call {
+  id             String    @id @default(cuid())
+  conversationId String    @unique
+  /// Provider's id. Unique → redelivered carrier events are no-ops.
+  providerCallId String    @unique
+  driver         String
+  mediaSessionId String?
+  fromNumber     String
+  toNumber       String
+  state          CallState @default(RINGING)
+
+  ringingAt       DateTime  @default(now())
+  aiAnsweredAt    DateTime?
+  escalatedAt     DateTime?
+  queuedAt        DateTime?
+  agentRingingAt  DateTime?
+  agentAnsweredAt DateTime?
+  wrapupStartedAt DateTime?
+  endedAt         DateTime?
+
+  hangupCause      HangupCause?
+  escalationReason EscalationReason?
+  onHold           Boolean           @default(false)
+
+  /// Derived once at completion so analytics never recompute from timestamps.
+  queueWaitMs Int?
+  aiTalkMs    Int?
+  agentTalkMs Int?
+  holdMs      Int?
+  wrapMs      Int?
+  totalMs     Int?
+
+  /// How many agents were offered this call before someone took it.
+  offerCount Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversation Conversation        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  participants CallParticipant[]
+  recording    Recording?
+  segments     TranscriptSegment[]
+
+  @@index([state, ringingAt(sort: Desc)])
+  @@index([ringingAt(sort: Desc)])
+}
+
+/// One call, multiple participants over time. Models the handoff explicitly.
+model CallParticipant {
+  id       String          @id @default(cuid())
+  callId   String
+  kind     ParticipantKind
+  userId   String?
+  joinedAt DateTime        @default(now())
+  leftAt   DateTime?
+
+  call Call  @relation(fields: [callId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id])
+
+  @@index([callId])
+  @@index([userId, joinedAt(sort: Desc)])
+}
+
+/// Unified turn record — an AI voice turn and a WhatsApp message share a shape.
+model Message {
+  id             String      @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  text           String
+  /// Set for voice turns; aligns the transcript to the waveform playhead.
+  audioOffsetMs  Int?
+  confidence     Float?
+  authorId       String?
+  /// Provider id for outbound chat, so delivery receipts can be matched.
+  providerMessageId String? @unique
+  createdAt      DateTime    @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  author       User?        @relation(fields: [authorId], references: [id])
+
+  @@index([conversationId, createdAt])
+}
+
+/* ============================== media & AI =============================== */
+
+model Recording {
+  id         String    @id @default(cuid())
+  callId     String    @unique
+  storageKey String
+  durationMs Int
+  mimeType   String    @default("audio/webm")
+  sizeBytes  Int
+  /// Retention sweep deletes rows past this.
+  expiresAt  DateTime?
+  createdAt  DateTime  @default(now())
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+model TranscriptSegment {
+  id         BigInt          @id @default(autoincrement())
+  callId     String
+  speaker    ParticipantKind
+  startMs    Int
+  endMs      Int
+  text       String
+  confidence Float?
+
+  call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
+
+  @@index([callId, startMs])
+}
+
+model AiSession {
+  id             String @id @default(cuid())
+  conversationId String @unique
+  aiAgentId      String
+
+  /// Audit which drivers actually ran — matters when comparing mock vs real.
+  driverStt String
+  driverLlm String
+  driverTts String
+
+  turns            Int               @default(0)
+  escalated        Boolean           @default(false)
+  escalationReason EscalationReason?
+  escalationDetail String?
+  detectedIntent   String?
+  courseOfInterest String?
+  sentiment        Float?
+  summary          String?
+  avgLatencyMs     Int?
+  costUsd          Decimal?          @db.Decimal(10, 6)
+  inputTokens      Int               @default(0)
+  outputTokens     Int               @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  aiAgent      AiAgent      @relation(fields: [aiAgentId], references: [id])
+
+  @@index([aiAgentId, createdAt(sort: Desc)])
+}
+
+model AiAgent {
+  id           String  @id @default(cuid())
+  name         String
+  greeting     String
+  systemPrompt String
+  voice        String  @default("en-GB")
+  language     String  @default("en")
+  /// EscalationRules, validated by zod on write.
+  escalationRules Json
+  defaultQueueId  String?
+  isActive        Boolean @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  sessions AiSession[]
+  numbers  PhoneNumber[]
+  queue    Queue?        @relation(fields: [defaultQueueId], references: [id])
+}
+
+model KnowledgeDoc {
+  id        String   @id @default(cuid())
+  title     String
+  category  Skill    @default(GENERAL)
+  source    String   @default("manual")
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  chunks KnowledgeChunk[]
+
+  @@index([category])
+}
+
+model KnowledgeChunk {
+  id      String @id @default(cuid())
+  docId   String
+  ordinal Int
+  content String
+  /// Bag-of-words vector over a fixed vocabulary. Float[] not pgvector — see
+  /// the header note. Cosine is computed in-process.
+  embedding Float[]
+  /// Lowercased keyword set, so the scripted brain can do exact-term boosting.
+  keywords  String[]
+
+  doc KnowledgeDoc @relation(fields: [docId], references: [id], onDelete: Cascade)
+
+  @@unique([docId, ordinal])
+  @@index([docId])
+}
+
+/* ================================ routing ================================ */
+
+model Queue {
+  id            String          @id @default(cuid())
+  name          String          @unique
+  requiredSkill Skill
+  slaSeconds    Int             @default(20)
+  strategy      RoutingStrategy @default(LONGEST_IDLE)
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  memberships   QueueMembership[]
+  conversations Conversation[]
+  numbers       PhoneNumber[]
+  aiAgents      AiAgent[]
+}
+
+model QueueMembership {
+  queueId  String
+  userId   String
+  /// Higher wins under SKILL_WEIGHTED routing.
+  priority Int    @default(1)
+
+  queue Queue @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([queueId, userId])
+  @@index([userId])
+}
+
+/* =========================== number inventory ============================ */
+
+/// Mocked DID stock in v1 — demonstrates virtual numbers replacing SIM cards.
+/// Real provisioning needs a TDRA-licensed UAE carrier.
+model PhoneNumber {
+  id              String       @id @default(cuid())
+  e164            String       @unique
+  label           String?
+  country         String       @default("AE")
+  region          String?
+  provider        String       @default("mock")
+  monthlyCostUsd  Decimal      @db.Decimal(8, 2) @default(0)
+  status          NumberStatus @default(AVAILABLE)
+  inboundQueueId  String?
+  aiAgentId       String?
+  recordingEnabled Boolean     @default(true)
+  purchasedAt     DateTime?
+  releasedAt      DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  inboundQueue Queue?   @relation(fields: [inboundQueueId], references: [id])
+  aiAgent      AiAgent? @relation(fields: [aiAgentId], references: [id])
+
+  @@index([status])
+}
+
+/* ========================= integration plumbing ========================== */
+
+/// Transactional outbox. Domain writes and event publication commit together,
+/// then the worker drains. No dual-write bugs, no lost CRM pushes.
+model OutboxEvent {
+  id          BigInt    @id @default(autoincrement())
+  aggregate   String
+  aggregateId String
+  type        String
+  payload     Json
+  publishedAt DateTime?
+  attempts    Int       @default(0)
+  lastError   String?
+  /// Exponential backoff target; the drainer skips rows until this passes.
+  nextAttemptAt DateTime @default(now())
+  createdAt   DateTime  @default(now())
+
+  @@index([publishedAt, nextAttemptAt])
+  @@index([aggregate, aggregateId])
+}
+
+model CrmSyncLog {
+  id         BigInt        @id @default(autoincrement())
+  direction  SyncDirection
+  method     String
+  entityType String
+  localId    String?
+  bitrixId   String?
+  status     SyncStatus    @default(PENDING)
+  request    Json
+  response   Json?
+  error      String?
+  attempts   Int           @default(0)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([status, id])
+  @@index([localId])
+  @@index([createdAt(sort: Desc)])
+}
+
+/// Dedupe table for inbound provider webhooks (Bitrix, Meta). Unique event id
+/// means a retried delivery can't double-process.
+model ProcessedWebhook {
+  id          String   @id
+  source      String
+  processedAt DateTime @default(now())
+
+  @@index([source, processedAt])
+}
+
+/* =============================== analytics =============================== */
+
+/// Pre-aggregated so /analytics never scans Call. Rolled up incrementally on
+/// call completion and reconciled nightly.
+model CallMetricsDaily {
+  day     DateTime
+  queueId String   @default("")
+  agentId String   @default("")
+
+  calls             Int    @default(0)
+  aiContained       Int    @default(0)
+  escalated         Int    @default(0)
+  abandoned         Int    @default(0)
+  answeredWithinSla Int    @default(0)
+  talkMsTotal       BigInt @default(0)
+  handleMsTotal     BigInt @default(0)
+  queueWaitMsTotal  BigInt @default(0)
+  wrapMsTotal       BigInt @default(0)
+  answeredCount     Int    @default(0)
+
+  @@id([day, queueId, agentId])
+  @@index([day])
+}
+
+model AuditLog {
+  id       BigInt   @id @default(autoincrement())
+  actorId  String?
+  action   String
+  target   String
+  metadata Json?
+  ip       String?
+  at       DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id])
+
+  @@index([at(sort: Desc)])
+  @@index([actorId, at(sort: Desc)])
+}
+
+/// Single-row settings table. Simpler than scattering config across env vars
+/// the client's admin needs to edit at runtime.
+model Setting {
+  id                    String   @id @default("singleton")
+  instituteName         String   @default("FIT Institute")
+  instituteTimezone     String   @default("Asia/Dubai")
+  recordingConsentText  String   @default("This call may be recorded for quality and training purposes.")
+  recordingConsentOn    Boolean  @default(true)
+  recordingRetentionDays Int     @default(365)
+  wrapupSeconds         Int      @default(20)
+  agentRingTimeoutSec   Int      @default(20)
+  /// Used for the cost-saving figure on the analytics page.
+  agentHourlyCostUsd    Decimal  @db.Decimal(8, 2) @default(12.00)
+  bitrixPortalUrl       String?
+  updatedAt             DateTime @updatedAt
+}
