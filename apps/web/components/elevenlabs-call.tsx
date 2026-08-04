@@ -66,7 +66,18 @@ function ElevenLabsCallInner() {
     onMessage: ({ message, source }) => {
       setTurns((t) => [...t, { who: source === 'user' ? 'caller' : 'ai', text: message }]);
     },
-    onError: (message) => toast.error(`ElevenLabs: ${String(message)}`),
+    // `String(err)` on the SDK's error object yields "[object Object]" or a bare
+    // "{}", which is how a real config rejection showed up as "Unknown error".
+    // Dig out whatever detail is actually present before falling back.
+    onError: (message, context) => {
+      const detail =
+        typeof message === 'string'
+          ? message
+          : ((message as { message?: string })?.message ??
+            JSON.stringify(message ?? context ?? {}));
+      console.error('[elevenlabs]', { message, context });
+      toast.error(`ElevenLabs: ${detail || 'connection failed'}`);
+    },
   });
 
   /**
@@ -121,11 +132,16 @@ function ElevenLabsCallInner() {
       setCallId(session.callId);
 
       // startSession is synchronous in v1 — status changes arrive via callbacks.
+      //
+      // Nothing is overridden here on purpose. The agent is configured entirely
+      // in the ElevenLabs dashboard, and it declares no dynamic variables and
+      // no permitted overrides — sending `fit_call_id` anyway is what produced
+      // "Server error: Unknown error {}". Our call is tracked by `callId` in
+      // component state, which the escalate client tool closes over, so the
+      // session needs no custom payload at all.
       conversation.startSession({
         conversationToken: session.conversationToken,
         connectionType: 'webrtc',
-        // This is what ties each bridge turn back to our call record.
-        dynamicVariables: session.dynamicVariables,
       });
     } catch (error) {
       const msg = (error as Error).message;
@@ -170,8 +186,10 @@ function ElevenLabsCallInner() {
       <div className="space-y-3 p-4">
         <MockNotice>
           This is a browser call, not a phone call — ElevenLabs does not sell phone numbers, so a
-          dialable line needs Twilio or a TDRA-licensed UAE SIP trunk. Everything else is the
-          production path: their speech and turn-taking, our knowledge base, our escalation policy.
+          dialable line needs Twilio or a TDRA-licensed UAE SIP trunk. The agent, voice, prompt and
+          knowledge base are configured on ElevenLabs (<strong>FIT AI Inbound</strong>), which is
+          what keeps the responses as fast as their own playground. The handoff to a human, the
+          call record, routing and the CRM write are ours.
         </MockNotice>
 
         {!live && (

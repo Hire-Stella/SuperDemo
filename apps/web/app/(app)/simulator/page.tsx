@@ -277,8 +277,8 @@ export default function SimulatorPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* ---------------------- live browser call ---------------------- */}
         <Card
-          title="Talk to the AI — browser speech (free fallback)"
-          subtitle="Web Speech API: no API key, no cost, but robotic and no barge-in"
+          title="Fallback — browser speech (only if ElevenLabs quota runs out)"
+          subtitle="Web Speech API: free and unmetered, but robotic and no barge-in. Not the demo path."
           action={
             callId ? (
               <Button variant="danger" size="sm" onClick={() => void endCall()}>
@@ -292,7 +292,10 @@ export default function SimulatorPage() {
                 disabled={supported === false}
                 onClick={() => startCall.mutate()}
               >
-                <PhoneCall className="size-3.5" aria-hidden /> Start call
+                {/* Deliberately NOT "Start call" — the ElevenLabs card above uses
+                    that label, and two identical buttons meant the slow Web
+                    Speech path got started by mistake during a demo. */}
+                <PhoneCall className="size-3.5" aria-hidden /> Start fallback call
               </Button>
             )
           }
