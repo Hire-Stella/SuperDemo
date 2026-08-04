@@ -340,6 +340,7 @@ async function main() {
   const DAYS = 45;
   let totalCalls = 0;
   let totalWhatsApp = 0;
+  let totalOutbound = 0;
 
   for (let d = DAYS; d >= 1; d--) {
     const dayStart = new Date();
@@ -411,6 +412,61 @@ async function main() {
           });
         }
         totalWhatsApp++;
+        continue;
+      }
+
+      /* --------------------- outbound follow-up calls ----------------------
+         The client asked for outbound as well as inbound, so an inbox with
+         nothing outbound in it is not a unified inbox. These are the realistic
+         case: an advisor calling an earlier enquiry back. Always human-handled
+         and never AI-contained — FIT have no outbound AI campaign yet, and
+         seeding one would overstate what exists (see NOT-IMPLEMENTED.md).      */
+      if (chance(0.12)) {
+        const agent = pick(agentUsers);
+        const connected = chance(0.62); // the rest ring out or hit voicemail
+        const talkMs = connected ? int(60_000, 300_000) : int(8000, 25_000);
+        const endedAt = new Date(startedAt.getTime() + talkMs);
+
+        const conv = await prisma.conversation.create({
+          data: {
+            channel: 'VOICE',
+            direction: 'OUTBOUND',
+            status: 'CLOSED',
+            contactId: contact.id,
+            queueId: queue.id,
+            handledById: agent.id,
+            startedAt,
+            endedAt,
+            aiContained: false,
+            // No NO_ANSWER in the Disposition enum, and inventing one would be
+            // wrong: a call nobody picked up genuinely has no outcome to record.
+            // These are the rows the "missing disposition" report should flag.
+            disposition: connected
+              ? pick(['ENROLMENT_INTEREST', 'INFO_PROVIDED', 'CALLBACK_REQUESTED'] as const)
+              : null,
+          },
+        });
+
+        if (connected) {
+          const lines: [string, 'HUMAN_AGENT' | 'CALLER'][] = [
+            [`Hello, this is ${agent.name} calling from FIT Institute — following up on your enquiry.`, 'HUMAN_AGENT'],
+            ['Yes, thank you for calling back.', 'CALLER'],
+            ['Would you like me to hold a seat for the next intake?', 'HUMAN_AGENT'],
+          ];
+          let offset = 0;
+          for (const [text, role] of lines) {
+            await prisma.message.create({
+              data: {
+                conversationId: conv.id,
+                role,
+                text,
+                createdAt: new Date(startedAt.getTime() + offset),
+              },
+            });
+            offset += int(12_000, 30_000);
+          }
+        }
+        totalOutbound++;
         continue;
       }
 
@@ -719,7 +775,7 @@ async function main() {
   console.log(
     `\n✓ seeded\n` +
       `  ${users.length} users · ${queues.length} queues · ${chunkCount} KB chunks\n` +
-      `  ${totalCalls} voice calls · ${totalWhatsApp} WhatsApp conversations over ${DAYS} days\n` +
+      `  ${totalCalls} inbound voice · ${totalOutbound} outbound voice · ${totalWhatsApp} WhatsApp over ${DAYS} days\n` +
       `\n  Sign in with any address above, password: Password123!\n` +
       `  Admin: layla@fitiedu.com · Supervisor: omar@fitiedu.com · Agent: mariam@fitiedu.com\n`,
   );

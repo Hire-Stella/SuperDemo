@@ -118,6 +118,7 @@ export class ReportsService {
     const header = [
       'Started (Asia/Dubai)',
       'Channel',
+      'Direction',
       'Contact',
       'Phone',
       'Course interest',
@@ -135,6 +136,7 @@ export class ReportsService {
     const body = rows.map((c) => [
       c.startedAt.toLocaleString('en-GB', { timeZone: 'Asia/Dubai' }),
       c.channel,
+      c.direction,
       c.contact?.name ?? '',
       c.contact?.phoneE164 ?? '',
       c.contact?.courseInterest ?? '',

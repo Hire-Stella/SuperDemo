@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Inbox, Search, Sparkles, MessageCircle, Phone, CheckCircle2, Download } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, CheckCircle2, Download, Inbox, MessageCircle, Phone, Search, Sparkles } from 'lucide-react';
 import {
   DISPOSITION_LABELS,
   type Channel,
@@ -33,6 +33,7 @@ export default function ConversationsPage() {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [channel, setChannel] = useState<Channel | ''>('');
+  const [direction, setDirection] = useState<'' | 'INBOUND' | 'OUTBOUND'>('');
   const [contained, setContained] = useState<'' | 'true' | 'false'>('');
 
   // Debounce so typing doesn't fire a query per keystroke.
@@ -42,13 +43,14 @@ export default function ConversationsPage() {
   }, [search]);
 
   const query = useQuery({
-    queryKey: ['conversations', debounced, channel, contained],
+    queryKey: ['conversations', debounced, channel, direction, contained],
     queryFn: () =>
       api.get<{ items: ConversationListItem[]; nextCursor: string | null }>(
         `/conversations${qs({
           limit: 50,
           search: debounced || undefined,
           channel: channel || undefined,
+          direction: direction || undefined,
           aiContained: contained || undefined,
         })}`,
       ),
@@ -105,6 +107,16 @@ export default function ConversationsPage() {
             <option value="WHATSAPP">WhatsApp</option>
             <option value="WEBCHAT">Web chat</option>
           </Select>
+          <Select
+            className="w-auto"
+            value={direction}
+            onChange={(e) => setDirection(e.target.value as '' | 'INBOUND' | 'OUTBOUND')}
+            aria-label="Filter by direction"
+          >
+            <option value="">Inbound + outbound</option>
+            <option value="INBOUND">Inbound only</option>
+            <option value="OUTBOUND">Outbound only</option>
+          </Select>
           <Button
             onClick={() =>
               void api
@@ -112,6 +124,7 @@ export default function ConversationsPage() {
                   `/reports/conversations.csv${qs({
                     search: debounced || undefined,
                     channel: channel || undefined,
+                    direction: direction || undefined,
                     aiContained: contained || undefined,
                   })}`,
                 )
@@ -186,6 +199,20 @@ export default function ConversationsPage() {
                       )}
                       {CHANNEL_LABEL[c.channel]}
                     </Badge>
+                    {/* Direction is shown on every row, not only when filtered:
+                        "unified" has to be legible at a glance, and an outbound
+                        follow-up reads very differently from an inbound enquiry. */}
+                    <span
+                      className="ml-1.5 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground"
+                      title={c.direction === 'OUTBOUND' ? 'Outbound — we called them' : 'Inbound — they called us'}
+                    >
+                      {c.direction === 'OUTBOUND' ? (
+                        <ArrowUpRight className="size-3" aria-hidden />
+                      ) : (
+                        <ArrowDownLeft className="size-3" aria-hidden />
+                      )}
+                      {c.direction === 'OUTBOUND' ? 'Out' : 'In'}
+                    </span>
                   </Td>
                   <Td>
                     <div className="flex flex-wrap items-center gap-1.5">

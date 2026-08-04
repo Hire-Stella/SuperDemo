@@ -239,6 +239,8 @@ export type ConversationDetail = z.infer<typeof ConversationDetail>;
 
 export const ListConversationsQuery = Pagination.extend({
   channel: Channel.optional(),
+  /** Inbound vs outbound. The inbox is unified across both; this narrows it. */
+  direction: Direction.optional(),
   status: ConversationStatus.optional(),
   disposition: Disposition.optional(),
   queueId: z.string().optional(),

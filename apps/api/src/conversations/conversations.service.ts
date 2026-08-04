@@ -39,6 +39,7 @@ export class ConversationsService {
   ): Promise<{ items: ConversationListItem[]; nextCursor: string | null }> {
     const where: Prisma.ConversationWhereInput = {
       ...(query.channel ? { channel: query.channel } : {}),
+      ...(query.direction ? { direction: query.direction } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.disposition ? { disposition: query.disposition } : {}),
       ...(query.queueId ? { queueId: query.queueId } : {}),
