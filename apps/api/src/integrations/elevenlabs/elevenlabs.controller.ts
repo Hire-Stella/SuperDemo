@@ -233,6 +233,33 @@ export class ElevenLabsController {
     };
   }
 
+  /**
+   * `escalate_to_advisor` for a browser call, invoked as an ElevenLabs *client*
+   * tool — the browser runs the handler and calls this.
+   *
+   * Why this exists alongside `tools/escalate`: a client tool means the handoff
+   * needs no inbound reachability, so the screen-pop works without a public
+   * tunnel. But a client tool runs in untrusted JS, so it must NOT carry
+   * `ELEVENLABS_BRIDGE_SECRET` — shipping that to the browser would hand any
+   * visitor the key to the bridge. This route is guarded by the ordinary staff
+   * session JWT instead, which the dashboard already holds.
+   *
+   * Idempotent, same as the webhook variant.
+   */
+  @Post('browser/escalate')
+  @HttpCode(200)
+  async escalateFromBrowser(@Body() body: { callId?: string }) {
+    if (!body.callId) return { success: false, message: 'No call id supplied' };
+
+    const outcome = await this.telephony.escalateNow(body.callId);
+    return {
+      success: outcome.escalated,
+      message: outcome.escalated
+        ? `Transferring you to ${outcome.queueName ?? 'an advisor'} now.`
+        : 'This call has already been handed to an advisor.',
+    };
+  }
+
   /* ========================= the custom-LLM bridge ======================== */
 
   /**

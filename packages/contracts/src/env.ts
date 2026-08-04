@@ -73,8 +73,20 @@ export const ApiEnv = z
      * ElevenLabs side. Required whenever the ElevenLabs driver is active.
      */
     ELEVENLABS_BRIDGE_SECRET: optionalStr,
-    /** Voice used for synthesis and for the Agent's TTS. */
-    ELEVENLABS_VOICE_ID: z.string().default('21m00Tcm4TlvDq8ikWAM'),
+    /**
+     * Voice for the standalone TTS driver only (`TTS_DRIVER=elevenlabs`), i.e.
+     * when *we* call their synthesis API directly.
+     *
+     * Deliberately NOT applied to the Agent. The Agent's voice, greeting and
+     * turn-taking are owned by the ElevenLabs dashboard — one place to change
+     * them, and no drift between a value here and what the caller actually
+     * hears. See `createAgent`.
+     *
+     * Default is Jessica, a *premade* voice. That matters on the free tier:
+     * library/professional voices return 402 "Free users cannot use library
+     * voices via the API", so a library default would fail at synthesis time.
+     */
+    ELEVENLABS_VOICE_ID: z.string().default('cgSgspJ2msm6clMCkdW9'),
     ELEVENLABS_MODEL_ID: z.string().default('eleven_flash_v2_5'),
     /**
      * Where an escalated call is transferred. Optional: without a licensed UAE

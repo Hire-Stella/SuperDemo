@@ -1,7 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ConversationProvider, useConversation } from '@elevenlabs/react';
+import {
+  ConversationProvider,
+  useConversation,
+  useConversationClientTool,
+} from '@elevenlabs/react';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Mic, PhoneCall, PhoneOff, Sparkles, Volume2 } from 'lucide-react';
@@ -64,6 +68,39 @@ function ElevenLabsCallInner() {
     },
     onError: (message) => toast.error(`ElevenLabs: ${String(message)}`),
   });
+
+  /**
+   * `escalate_to_advisor` as a *client* tool.
+   *
+   * The agent calls this the moment the caller asks for a person. Running it
+   * here rather than as a webhook is what lets the handoff work with no public
+   * tunnel: the browser already has a session and can reach our API directly,
+   * so ElevenLabs never needs inbound access to us.
+   *
+   * The string returned is what the agent says next, so it has to read as
+   * speech, not as an API response.
+   */
+  useConversationClientTool<{ escalate_to_advisor: () => Promise<string> }>(
+    'escalate_to_advisor',
+    async () => {
+      if (!callId) return 'I could not reach the advisor queue just now.';
+      try {
+        const res = await api.post<{ success: boolean; message: string }>(
+          '/elevenlabs/browser/escalate',
+          { callId },
+        );
+        setTurns((t) => [
+          ...t,
+          { who: 'ai', text: `[handing over] ${res.message}` },
+        ]);
+        // Make the waiting agent's softphone light up without a refresh.
+        void queryClient.invalidateQueries({ queryKey: ['liveops'] });
+        return res.message;
+      } catch {
+        return 'I could not reach the advisor queue just now.';
+      }
+    },
+  );
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });

@@ -127,7 +127,16 @@ export class ElevenLabsService {
   /* ------------------------------- agents -------------------------------- */
 
   /**
-   * Create (or report) the Agent that owns the voice loop.
+   * Create the Agent that owns the voice loop.
+   *
+   * Only needed to bootstrap a workspace from nothing. If the Agent already
+   * exists — set `ELEVENLABS_AGENT_ID` and configure it in the ElevenLabs
+   * dashboard — do not call this: it creates a *second* Agent rather than
+   * updating the first.
+   *
+   * Split of ownership:
+   *   dashboard → voice, greeting, turn-taking, barge-in, language
+   *   here      → the custom-LLM bridge and the escalate tool, i.e. the brain
    *
    * Deliberately thin on prompt/knowledge: those live on our side. The Agent's
    * only job is media plus routing every turn to our bridge.
@@ -175,10 +184,10 @@ export class ElevenLabsService {
             },
             language: 'en',
           },
-          tts: {
-            voice_id: this.env.ELEVENLABS_VOICE_ID,
-            model_id: this.env.ELEVENLABS_MODEL_ID,
-          },
+          // No `tts` block on purpose. Voice, model and turn-taking are owned
+          // by the ElevenLabs dashboard, so they are configured in exactly one
+          // place. Sending them from here would silently overwrite whatever
+          // was chosen there on the next setup call.
         },
         platform_settings: {
           workspace_overrides: {
