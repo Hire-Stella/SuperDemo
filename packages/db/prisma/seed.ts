@@ -523,19 +523,77 @@ async function main() {
         },
       });
 
-      // Recordings on most calls; transcripts kept short for seed weight.
-      if (!abandons && chance(0.85)) {
-        await prisma.recording.create({
-          data: {
-            callId: call.id,
-            storageKey: `seed/recordings/${call.id}.webm`,
-            durationMs: totalMs,
-            mimeType: 'audio/webm',
-            sizeBytes: Math.floor(totalMs / 1000) * 4000,
-            expiresAt: new Date(endedAt.getTime() + 365 * 864e5),
-          },
+      /* --- transcript + messages ---------------------------------------
+         Historical calls need a readable transcript: a supervisor clicking a
+         past call must see the conversation, not an empty panel. Caller lines
+         come from the scenario; the AI side is a short plausible reply per turn
+         rather than live retrieval, which would mean 600 KB lookups at seed
+         time. Real calls build their transcript turn-by-turn for real. */
+      const AI_REPLIES = [
+        `Thank you for calling ${INSTITUTE.name}. How can I help you today?`,
+        'Of course — let me check that for you.',
+        `That programme runs over several weeks, with both weekday evening and weekend groups.`,
+        'The admissions team confirms the exact current fee and any instalment plan when you register.',
+        'Is there anything else I can help you with?',
+      ];
+
+      let cursor = 1200;
+      const turnsToSeed = scenario.turns.slice(0, aiTurns);
+
+      // Greeting first, as the live path does.
+      await prisma.message.create({
+        data: {
+          conversationId: conv.id,
+          role: 'AI',
+          text: AI_REPLIES[0]!,
+          audioOffsetMs: 0,
+          createdAt: startedAt,
+        },
+      });
+      await prisma.transcriptSegment.create({
+        data: { callId: call.id, speaker: 'AI_AGENT', startMs: 0, endMs: 1100, text: AI_REPLIES[0]! },
+      });
+
+      for (const [ti, turn] of turnsToSeed.entries()) {
+        const callerStart = cursor;
+        const callerEnd = callerStart + Math.max(900, turn.text.split(/\s+/).length * 400);
+        const reply = AI_REPLIES[(ti % (AI_REPLIES.length - 1)) + 1]!;
+        const aiEnd = callerEnd + Math.max(1200, reply.split(/\s+/).length * 380);
+
+        await prisma.message.createMany({
+          data: [
+            {
+              conversationId: conv.id,
+              role: 'CALLER',
+              text: turn.text,
+              audioOffsetMs: callerStart,
+              confidence: 0.94,
+              createdAt: new Date(startedAt.getTime() + callerStart),
+            },
+            {
+              conversationId: conv.id,
+              role: 'AI',
+              text: reply,
+              audioOffsetMs: callerEnd,
+              createdAt: new Date(startedAt.getTime() + callerEnd),
+            },
+          ],
         });
+        await prisma.transcriptSegment.createMany({
+          data: [
+            { callId: call.id, speaker: 'CALLER', startMs: callerStart, endMs: callerEnd, text: turn.text, confidence: 0.94 },
+            { callId: call.id, speaker: 'AI_AGENT', startMs: callerEnd, endMs: aiEnd, text: reply },
+          ],
+        });
+        cursor = aiEnd + 700;
       }
+
+      // Deliberately no Recording rows.
+      //
+      // Historical seed calls are simulated — there is no audio, and inventing a
+      // row pointed at a file that doesn't exist gave the UI a play button that
+      // 404s. A visibly absent recording is honest; a dead player is not.
+      // Real audio arrives on browser and ElevenLabs calls, which do capture it.
 
       if (chance(0.4)) {
         await prisma.crmSyncLog.create({

@@ -15,11 +15,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { BarChart3, PiggyBank } from 'lucide-react';
+import { BarChart3, Download, PiggyBank } from 'lucide-react';
 import { DISPOSITION_LABELS, type AnalyticsOverview } from '@fit-ai/contracts';
 import { api, qs } from '@/lib/api';
 import { dateRange, ESCALATION_LABEL, money, pct, seconds } from '@/lib/format';
-import { Badge, Card, Metric, Select, Spinner, Table, Td, Th } from '@/components/composites';
+import { Badge, Button, Card, Metric, Select, Spinner, Table, Td, Th } from '@/components/composites';
 
 /*
  * Chart palette — read from the theme, not hardcoded.
@@ -78,11 +78,19 @@ export default function AnalyticsPage() {
             {range.from} to {range.to} · bucketed in Asia/Dubai
           </p>
         </div>
-        <Select className="w-auto" value={days} onChange={(e) => setDays(e.target.value)}>
-          <option value="7">Last 7 days</option>
-          <option value="30">Last 30 days</option>
-          <option value="60">Last 60 days</option>
-        </Select>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => void api.download(`/reports/analytics.csv${qs(range)}`).catch(() => undefined)}>
+            <Download className="size-4" aria-hidden /> Report CSV
+          </Button>
+          <Button onClick={() => void api.download(`/reports/agents.csv${qs(range)}`).catch(() => undefined)}>
+            <Download className="size-4" aria-hidden /> Agents CSV
+          </Button>
+          <Select className="w-auto" value={days} onChange={(e) => setDays(e.target.value)}>
+            <option value="7">Last 7 days</option>
+            <option value="30">Last 30 days</option>
+            <option value="60">Last 60 days</option>
+          </Select>
+        </div>
       </header>
 
       {/* headline */}

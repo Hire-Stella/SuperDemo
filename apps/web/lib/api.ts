@@ -112,6 +112,31 @@ export const api = {
   /** Multipart upload (recording capture from the browser call). */
   upload: <T>(path: string, form: FormData) =>
     request<T>(path, { method: 'POST', body: form }),
+  /**
+   * Download a file the browser can't fetch with a plain link.
+   *
+   * Exports are behind the bearer token, so an <a href> would 401. Fetch it,
+   * then hand the blob to a synthetic anchor.
+   */
+  download: async (path: string): Promise<void> => {
+    const headers = new Headers();
+    if (accessToken) headers.set('authorization', `Bearer ${accessToken}`);
+    const res = await fetch(`${BASE}/api${path}`, { headers, credentials: 'include' });
+    if (!res.ok) throw await readError(res);
+
+    // Honour the server's filename rather than inventing one.
+    const disposition = res.headers.get('content-disposition') ?? '';
+    const match = /filename="?([^";]+)"?/.exec(disposition);
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = match?.[1] ?? 'download';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  },
+
   /** Absolute URL, for media the browser fetches directly. */
   absolute: (path: string) => `${BASE}/api${path}`,
   baseUrl: BASE,

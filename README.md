@@ -174,6 +174,29 @@ wording for that conversation is in [NOT-IMPLEMENTED.md](NOT-IMPLEMENTED.md) §6
 
 ---
 
+## Transcripts, summaries and reports
+
+Every completed call produces a transcript and an AI summary — including
+AI-contained calls, which is most of the traffic.
+
+| Artefact | Where | Export |
+|---|---|---|
+| Turn-by-turn transcript | conversation detail, timestamped, click-to-seek against the recording | **Transcript** button → `.txt` |
+| AI summary + intent + course + handoff reason | conversation detail, the screen-pop, and the Bitrix timeline | in the transcript file |
+| Call log | inbox, filterable by channel / containment / search | **Export CSV** → honours the active filters |
+| Management report | analytics | **Report CSV** → headline, cost-avoided, daily, by queue, by location, handoff reasons, dispositions, top courses |
+| Agent productivity | analytics | **Agents CSV** → handled, talk time, AHT, wrap, occupancy, adherence, missing dispositions |
+
+Recordings only exist where there is genuinely audio: browser and ElevenLabs
+calls capture it, simulated calls have no media path and the UI says so rather
+than showing a dead player.
+
+CSV exports guard against spreadsheet formula injection — a contact whose name
+begins `=`, `+`, `-` or `@` is quoted as text, because Excel would otherwise
+execute it when a supervisor opens the file.
+
+---
+
 ## Theming
 
 The dashboard is built on **shadcn/ui** — components are owned source under

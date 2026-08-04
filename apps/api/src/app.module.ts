@@ -28,6 +28,7 @@ import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { CrmSyncModule } from './crm/crm-sync.module';
 import { AdminModule } from './admin/admin.module';
 import { MediaModule } from './media/media.module';
+import { ReportsModule } from './reports/reports.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -61,6 +62,7 @@ import { HealthController } from './health.controller';
     CrmSyncModule,
     AdminModule,
     MediaModule,
+    ReportsModule,
   ],
   controllers: [HealthController, ElevenLabsController],
   providers: [

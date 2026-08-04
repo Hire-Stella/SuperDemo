@@ -867,6 +867,32 @@ export class CallsService implements TelephonySink, OnModuleInit {
     const endedAt = new Date();
     const humanJoined = call.participants.some((p) => p.kind === 'HUMAN_AGENT');
 
+    // Every completed call gets a summary, not just escalated ones. Escalation
+    // already generated one (the screen-pop needs it before an agent answers);
+    // AI-contained calls had none at all, which meant ~44% of traffic reached
+    // the Bitrix timeline with an empty description and showed nothing useful in
+    // the inbox.
+    const session = call.conversation.aiSession;
+    if (session && !session.summary) {
+      try {
+        const history = await this.conversationHistory(call.conversationId);
+        if (history.length > 0) {
+          const summary = await this.ai.summarise(history);
+          await this.prisma.aiSession.update({
+            where: { id: session.id },
+            data: {
+              summary: summary.summary,
+              detectedIntent: session.detectedIntent ?? summary.detectedIntent,
+              courseOfInterest: session.courseOfInterest ?? summary.courseOfInterest,
+            },
+          });
+        }
+      } catch (error) {
+        // A summary is valuable but not worth failing call completion over.
+        this.log.warn(`summary generation failed for call ${callId}: ${String(error)}`);
+      }
+    }
+
     const aiStart = call.aiAnsweredAt?.getTime() ?? call.ringingAt.getTime();
     const aiEnd = call.escalatedAt?.getTime() ?? endedAt.getTime();
     const aiTalkMs = Math.max(0, aiEnd - aiStart);

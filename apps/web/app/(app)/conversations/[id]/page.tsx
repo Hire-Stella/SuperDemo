@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Pause,
   Play,
+  Download,
   Send,
   Sparkles,
   User,
@@ -222,6 +223,17 @@ export default function ConversationDetailPage({
       <div className="grid gap-4 lg:grid-cols-3">
         {/* transcript + recording */}
         <div className="space-y-4 lg:col-span-2">
+          {!c.recording && c.channel === 'VOICE' && (
+            <Card title="Recording">
+              <p className="p-4 text-sm text-muted-foreground">
+                No audio for this call. It was handled by the{' '}
+                <strong>{c.call?.driver ?? 'simulated'}</strong> driver, which has no media path —
+                the transcript below is complete. Calls placed through the browser or ElevenLabs do
+                capture audio.
+              </p>
+            </Card>
+          )}
+
           {c.recording && (
             <Card title="Recording" subtitle="Click any transcript line to jump to that moment">
               <div className="flex items-center gap-3 p-4">
@@ -289,6 +301,18 @@ export default function ConversationDetailPage({
           <Card
             title={c.channel === 'VOICE' ? 'Transcript' : 'Conversation'}
             subtitle={`${c.messageCount} turn${c.messageCount === 1 ? '' : 's'}`}
+            action={
+              <Button
+                size="sm"
+                onClick={() =>
+                  void api
+                    .download(`/reports/transcript/${id}`)
+                    .catch((e) => toast.error((e as Error).message))
+                }
+              >
+                <Download className="size-3.5" aria-hidden /> Transcript
+              </Button>
+            }
           >
             <div className="max-h-[32rem] space-y-2.5 overflow-y-auto p-4">
               {c.messages.map((m) => {

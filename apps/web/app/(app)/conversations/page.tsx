@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Inbox, Search, Sparkles, MessageCircle, Phone, CheckCircle2 } from 'lucide-react';
+import { Inbox, Search, Sparkles, MessageCircle, Phone, CheckCircle2, Download } from 'lucide-react';
 import {
   DISPOSITION_LABELS,
   type Channel,
@@ -105,6 +105,21 @@ export default function ConversationsPage() {
             <option value="WHATSAPP">WhatsApp</option>
             <option value="WEBCHAT">Web chat</option>
           </Select>
+          <Button
+            onClick={() =>
+              void api
+                .download(
+                  `/reports/conversations.csv${qs({
+                    search: debounced || undefined,
+                    channel: channel || undefined,
+                    aiContained: contained || undefined,
+                  })}`,
+                )
+                .catch(() => undefined)
+            }
+          >
+            <Download className="size-4" aria-hidden /> Export CSV
+          </Button>
           <Select
             className="w-auto"
             value={contained}

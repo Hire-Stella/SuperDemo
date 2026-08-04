@@ -39,6 +39,10 @@ async function bootstrap(): Promise<void> {
     origin: [env.WEB_ORIGIN],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    // content-disposition is not a CORS-safelisted response header, so without
+    // this the dashboard cannot read the server-chosen filename and every export
+    // silently downloads as "download.csv".
+    exposedHeaders: ['content-disposition'],
   });
 
   app.useGlobalPipes(
