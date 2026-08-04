@@ -76,7 +76,16 @@ function ElevenLabsCallInner() {
           : ((message as { message?: string })?.message ??
             JSON.stringify(message ?? context ?? {}));
       console.error('[elevenlabs]', { message, context });
-      toast.error(`ElevenLabs: ${detail || 'connection failed'}`);
+
+      // An empty error object plus DataChannel teardown is what quota
+      // exhaustion looks like from inside the SDK — it never names the cause,
+      // so say it here rather than showing the user a bare "{}".
+      const opaque = !detail || detail === '{}' || /unknown error/i.test(detail);
+      toast.error(
+        opaque
+          ? 'Call ended by ElevenLabs. The usual cause is an exhausted character quota — check the plan, or use “Start fallback call”.'
+          : `ElevenLabs: ${detail}`,
+      );
     },
   });
 

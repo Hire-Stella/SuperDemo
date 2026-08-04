@@ -214,6 +214,19 @@ export class ElevenLabsController {
       );
     }
 
+    // Pre-flight the quota. Without this the call opens and then dies with an
+    // unattributable "Unknown error {}" plus DataChannel errors — the worst
+    // failure to hit in front of a client, because it reads as our platform
+    // being broken rather than a billing limit.
+    const quota = await this.service.getRemainingCharacters();
+    if (quota && quota.left <= 0) {
+      throw new ForbiddenException(
+        `ElevenLabs character quota is exhausted (${quota.used}/${quota.limit}). ` +
+          `Voice calls cannot run until the plan is upgraded or the quota resets. ` +
+          `Use “Start fallback call” for a free browser-speech call in the meantime.`,
+      );
+    }
+
     const { callId, greeting } = await this.telephony.registerInbound({
       providerCallId: `elweb-${randomUUID()}`,
       fromNumber: body.fromNumber ?? '+971500000000',

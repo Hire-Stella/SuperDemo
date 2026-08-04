@@ -267,6 +267,33 @@ export class ElevenLabsService {
     );
   }
 
+  /**
+   * Remaining character budget, or null if it can't be read.
+   *
+   * Worth a round-trip before every call because running out mid-conversation
+   * fails *illegibly*: ElevenLabs still mints a token and still opens the
+   * WebRTC session, then kills it server-side, and the SDK surfaces that as
+   * `Server error: Unknown error {}` plus `Unknown DataChannel error on
+   * lossy/reliable`. Nothing in that names the actual cause. Observed shape of
+   * the collapse as the budget ran out: 144s ok, 160s ok, 77s failed, 17s
+   * failed, 2s failed.
+   */
+  async getRemainingCharacters(): Promise<{ used: number; limit: number; left: number } | null> {
+    try {
+      const s = await this.call<{ character_count: number; character_limit: number }>(
+        '/v1/user/subscription',
+      );
+      return {
+        used: s.character_count,
+        limit: s.character_limit,
+        left: s.character_limit - s.character_count,
+      };
+    } catch {
+      // Never block a call because the quota probe itself failed.
+      return null;
+    }
+  }
+
   /* -------------------------------- TTS ---------------------------------- */
 
   /**
