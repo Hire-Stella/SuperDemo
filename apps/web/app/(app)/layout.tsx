@@ -74,9 +74,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const nav = NAV.filter((n) => (n.roles as readonly string[]).includes(user.role));
 
   return (
-    <div className="flex min-h-dvh">
-      {/* sidebar */}
-      <aside className="hidden w-56 shrink-0 flex-col border-r border-border bg-card md:flex">
+    // h-dvh + overflow-hidden, not min-h-dvh: the shell is exactly the viewport
+    // and only <main> scrolls. With min-h-dvh a long page grew the flex row, so
+    // the sidebar scrolled away with the content and nav was lost.
+    <div className="flex h-dvh overflow-hidden">
+      {/* sidebar — pinned; never scrolls with the page */}
+      <aside className="hidden h-dvh w-56 shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex">
         <div className="flex items-center gap-2.5 px-4 py-4">
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <Headphones className="size-4" aria-hidden />
@@ -87,7 +90,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
-        <nav className="flex-1 space-y-0.5 px-2 py-2">
+        {/* min-h-0 lets this shrink inside the flex column so the identity block
+            below stays pinned; the links scroll internally only if they must. */}
+        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-2">
           {nav.map(({ href, label, icon: Icon }) => {
             const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
             return (
@@ -183,7 +188,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         })}
       </nav>
 
-      <main className="min-w-0 flex-1 pb-16 md:pb-0">{children}</main>
+      {/* the only scroll container */}
+      <main className="min-w-0 flex-1 overflow-y-auto pb-16 md:pb-0">{children}</main>
 
       {/* Docked so an agent can browse while on a call. */}
       <Softphone />

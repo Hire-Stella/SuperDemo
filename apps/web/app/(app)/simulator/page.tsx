@@ -12,6 +12,7 @@ import type {
 import { api } from '@/lib/api';
 import { Badge, Button, Card, Input, MockNotice, Select, Spinner, cn } from '@/components/composites';
 import { ElevenLabsCall } from '@/components/elevenlabs-call';
+import { WhatsAppMock } from '@/components/whatsapp-mock';
 
 /* ------------------------- Web Speech type shims -------------------------- */
 /* Not in lib.dom yet; declared narrowly rather than reaching for `any`.       */
@@ -457,16 +458,13 @@ export default function SimulatorPage() {
             </div>
           </Card>
 
+          <WhatsAppMock />
+
           <Card
-            title="WhatsApp"
-            subtitle="Same brain, same escalation, same inbox — mocked transport"
+            title="WhatsApp — canned scenarios"
+            subtitle="Scripted multi-turn threads, for when you want a known outcome"
           >
             <div className="space-y-2 p-4">
-              <MockNotice>
-                Their number <strong>+971 4 570 9603</strong> is on the WhatsApp Business app.
-                Moving it to the Cloud API needs Meta verification and takes it out of the consumer
-                app — days to weeks of Meta&apos;s process, not engineering.
-              </MockNotice>
               <div className="flex flex-wrap gap-2">
                 {waScenarios.data?.map((s) => (
                   <Button

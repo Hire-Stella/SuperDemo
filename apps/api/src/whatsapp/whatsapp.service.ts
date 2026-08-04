@@ -371,11 +371,20 @@ export class WhatsAppService implements MessagingSink {
   }
 
   /** Free-form inbound message, for the simulator's manual input. */
+  /**
+   * Inject one inbound message and report what the AI did with it.
+   *
+   * Returning the reply — rather than just `{ ok: true }` — is what lets the
+   * handset mock render the customer's side of the thread. The reply is read
+   * back from the persisted messages instead of being plumbed out of the
+   * pipeline, so what the mock shows is exactly what was stored and what the
+   * staff inbox will render. No second source of truth.
+   */
   async simulateMessage(params: {
     fromNumber: string;
     fromName?: string;
     text: string;
-  }): Promise<void> {
+  }): Promise<{ conversationId: string | null; reply: string | null; escalated: boolean }> {
     await this.onInboundMessage({
       providerMessageId: `wamid.sim.${randomUUID()}`,
       channel: 'WHATSAPP',
@@ -384,6 +393,36 @@ export class WhatsAppService implements MessagingSink {
       text: params.text,
       receivedAt: new Date(),
     });
+
+    const contact = await this.prisma.contact.findUnique({
+      where: { phoneE164: params.fromNumber },
+      select: { id: true },
+    });
+    if (!contact) return { conversationId: null, reply: null, escalated: false };
+
+    const conv = await this.prisma.conversation.findFirst({
+      where: { contactId: contact.id, channel: 'WHATSAPP' },
+      orderBy: { startedAt: 'desc' },
+      select: {
+        id: true,
+        status: true,
+        queueId: true,
+        messages: {
+          where: { role: 'AI' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { text: true },
+        },
+      },
+    });
+    if (!conv) return { conversationId: null, reply: null, escalated: false };
+
+    return {
+      conversationId: conv.id,
+      reply: conv.messages[0]?.text ?? null,
+      // A queued or waiting chat is one a human now owns.
+      escalated: conv.status === 'WAITING' || conv.queueId !== null,
+    };
   }
 
   /* ------------------------------- helpers -------------------------------- */

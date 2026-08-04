@@ -70,7 +70,7 @@ export class WhatsAppController {
   @Post('simulate/message')
   @HttpCode(202)
   async simulateMessage(@ZodBody(SimulateWhatsAppInput) body: SimulateWhatsAppInput) {
-    await this.whatsapp.simulateMessage(body);
-    return { ok: true };
+    // Returns the AI's reply so the handset mock can render the customer's side.
+    return this.whatsapp.simulateMessage(body);
   }
 }
