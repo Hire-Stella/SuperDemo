@@ -208,14 +208,19 @@ export function Softphone() {
       setOnHold((h) => !h);
     }, 'Could not change hold');
 
-  const submitWrapup = () =>
-    act(async () => {
-      if (!disposition) {
-        toast.error('Choose a disposition before finishing');
-        throw new Error('disposition required');
-      }
+  const submitWrapup = () => {
+    // Guard outside `act`: throwing inside it was reported through the generic
+    // "Could not save wrap-up" handler, so a missing disposition surfaced as a
+    // save failure — two toasts, and the misleading one on top. This is
+    // validation, not a failed request, so it never reaches the error path.
+    if (!disposition) {
+      toast.error('Choose a disposition before finishing');
+      return;
+    }
+    return act(async () => {
       await api.post('/calls/wrapup', { callId, disposition, notes: notes || undefined });
     }, 'Could not save wrap-up');
+  };
 
   if (phase === 'idle') return null;
 
@@ -422,9 +427,12 @@ export function Softphone() {
                   size="lg"
                   className="flex-1"
                   loading={busy}
+                  // Prevent rather than warn: the disposition is mandatory, so
+                  // the action stays unavailable until one is chosen.
+                  disabled={!disposition}
                   onClick={submitWrapup}
                 >
-                  Finish and go available
+                  {disposition ? 'Finish and go available' : 'Choose a disposition'}
                 </Button>
               )}
             </div>
