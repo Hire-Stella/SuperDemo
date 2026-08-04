@@ -29,18 +29,33 @@ export class ScriptedBrain implements LlmProvider {
 
   /* --------------------------- intent detection --------------------------- */
 
+  /**
+   * Order is significant: `detectIntent` returns the FIRST match.
+   *
+   * The human-only intents are listed first on purpose. They are the specific
+   * ones, and the general enquiry patterns are broad enough to swallow them:
+   *   - `accreditation_enquiry` matched "attest", shadowing `attestation`, so
+   *     "I need the certificate attested for MOH" was answered with generic KHDA
+   *     text at 0.50 confidence instead of being handed to a human.
+   *   - `enrolment_process` matches "registration", shadowing `refund` for
+   *     "cancel my registration".
+   * Both are cases where answering confidently is worse than escalating, so the
+   * intents the institute reserves for humans get first refusal on every turn.
+   */
   private static readonly INTENT_PATTERNS: { intent: string; patterns: RegExp[] }[] = [
-    { intent: 'fee_enquiry', patterns: [/\b(fee|fees|cost|costs|price|pricing|how much|charge|payment|instal?ment|discount)\b/i] },
-    { intent: 'schedule_enquiry', patterns: [/\b(timing|timings|schedule|when|start|starts|evening|weekend|saturday|morning|duration|how long)\b/i] },
-    { intent: 'enrolment_process', patterns: [/\b(enrol|enroll|register|registration|apply|admission|document|documents|join|sign up)\b/i] },
-    { intent: 'location_enquiry', patterns: [/\b(where|located|location|address|parking|metro|directions|office)\b/i] },
-    { intent: 'accreditation_enquiry', patterns: [/\b(accredit|khda|recognis|recogniz|valid|certificate|certification|attest)\b/i] },
-    { intent: 'course_details', patterns: [/\b(course|diploma|programme|program|certification|training|syllabus|module|content)\b/i] },
+    // ---- human-only: must win over the general patterns below ----
     { intent: 'refund', patterns: [/\b(refund|money back|cancel my|withdraw|defer)\b/i] },
     { intent: 'complaint', patterns: [/\b(complain|complaint|terrible|awful|unacceptable|manager|escalate)\b/i] },
     { intent: 'visa', patterns: [/\b(visa|residency|resident permit|sponsor|immigration|emirates id application)\b/i] },
     { intent: 'attestation', patterns: [/\b(attest|attestation|equivalency|moh|dha|embassy)\b/i] },
     { intent: 'corporate_pricing', patterns: [/\b(company|corporate|our team|our staff|group|bulk|employees|invoice)\b/i] },
+    // ---- general enquiries the AI is allowed to answer ----
+    { intent: 'fee_enquiry', patterns: [/\b(fee|fees|cost|costs|price|pricing|how much|charge|payment|instal?ment|discount)\b/i] },
+    { intent: 'schedule_enquiry', patterns: [/\b(timing|timings|schedule|when|start|starts|evening|weekend|saturday|morning|duration|how long)\b/i] },
+    { intent: 'enrolment_process', patterns: [/\b(enrol|enroll|register|registration|apply|admission|document|documents|join|sign up)\b/i] },
+    { intent: 'location_enquiry', patterns: [/\b(where|located|location|address|parking|metro|directions|office)\b/i] },
+    { intent: 'accreditation_enquiry', patterns: [/\b(accredit|khda|recognis|recogniz|valid|certificate|certification)\b/i] },
+    { intent: 'course_details', patterns: [/\b(course|diploma|programme|program|certification|training|syllabus|module|content)\b/i] },
   ];
 
   private detectIntent(text: string): string | null {

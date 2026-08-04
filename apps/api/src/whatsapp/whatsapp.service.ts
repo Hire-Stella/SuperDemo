@@ -187,7 +187,14 @@ export class WhatsAppService implements MessagingSink {
       text: result.reply,
       conversationId,
     });
-    await this.recordMessage(conversationId, 'AI', result.reply, sent.providerMessageId);
+    await this.recordMessage(
+      conversationId,
+      'AI',
+      result.reply,
+      sent.providerMessageId,
+      undefined,
+      result.brain.confidence,
+    );
 
     if (result.escalation.escalate) {
       await this.escalate(conversationId, result);
@@ -398,9 +405,25 @@ export class WhatsAppService implements MessagingSink {
     text: string,
     providerMessageId?: string,
     authorId?: string,
+    /**
+     * Retrieval confidence for AI turns.
+     *
+     * This used to be dropped on the floor — persisted as nothing and broadcast
+     * as a hardcoded null — so every chat answer looked equally certain. That
+     * hid exactly the case worth seeing: an answer that cleared the escalation
+     * floor only narrowly. Voice already stored it; chat now matches.
+     */
+    confidence?: number | null,
   ): Promise<void> {
     const message = await this.prisma.message.create({
-      data: { conversationId, role, text, providerMessageId, authorId },
+      data: {
+        conversationId,
+        role,
+        text,
+        providerMessageId,
+        authorId,
+        confidence: confidence ?? null,
+      },
       include: { author: { select: { name: true } } },
     });
 
@@ -411,7 +434,7 @@ export class WhatsAppService implements MessagingSink {
         role: message.role,
         text: message.text,
         audioOffsetMs: null,
-        confidence: null,
+        confidence: message.confidence,
         createdAt: message.createdAt,
         authorName: message.author?.name ?? null,
       },
