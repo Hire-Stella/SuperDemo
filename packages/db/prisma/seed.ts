@@ -504,6 +504,34 @@ async function main() {
           },
         });
 
+        /* An outbound call is still an AI session, so it needs one — otherwise
+           it has a transcript but no summary, no intent, no cost, and nothing
+           for the screen-pop to show. Unanswered attempts get a session too:
+           "we dialled and nobody picked up" is the outcome, and omitting it
+           would quietly drop those calls out of the AI cost reporting. */
+        await prisma.aiSession.create({
+          data: {
+            conversationId: conv.id,
+            aiAgentId: aiAgent.id,
+            driverStt: 'web-speech',
+            driverLlm: 'scripted',
+            driverTts: 'web-speech',
+            turns: answered ? (escalates ? 3 : 2) : 0,
+            escalated: escalates,
+            escalationReason: escalates ? 'CALLER_REQUESTED' : null,
+            detectedIntent: answered ? 'outbound_follow_up' : null,
+            courseOfInterest: contact.courseInterest,
+            sentiment: answered ? Number((rnd() * 1.2 - 0.3).toFixed(2)) : null,
+            summary: answered
+              ? `Outbound ${campaign.name.toLowerCase()} for ${contact.courseInterest ?? 'their enquiry'}. ` +
+                (escalates
+                  ? 'Contact asked to speak to an advisor; transferred.'
+                  : 'Handled by the assistant; no advisor needed.')
+              : `Outbound ${campaign.name.toLowerCase()} — no answer. Worth retrying.`,
+            avgLatencyMs: answered ? int(380, 900) : null,
+          },
+        });
+
         if (answered) {
           const lines: [string, 'AI' | 'CALLER' | 'HUMAN_AGENT'][] = [
             [campaign.opener, 'AI'],
