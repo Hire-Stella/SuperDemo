@@ -53,7 +53,7 @@ None of these would have been caught by a mocked dashboard.
 | **Conversation brain** | Turn loop, KB retrieval, escalation rules, session accounting | `scripted` driver: keyword + embedding match over the FIT course KB. Deterministic and safe, but cannot handle genuinely novel phrasing | Swap `LLM_DRIVER=claude` (defaults to `claude-opus-5`, structured output at low effort). Interface is unchanged |
 | **Recordings storage** | Upload, signed URLs, retention sweep, audit | Local disk in dev | Point `STORAGE_DRIVER=r2` at Cloudflare R2 |
 | **UAE number provisioning** | Inventory, purchase, routing to a queue + AI agent, release, roaming-saving estimate | The catalogue is fictional. Numbers use reserved/unassigned test ranges and cannot receive real calls | Contract a TDRA-licensed UAE carrier and implement `NumberProvisioningProvider` against their API |
-| **Outbound calls** | — | Not built at all. Only inbound is in v1 scope | Implement `TelephonyProvider.dial()` + a campaign module |
+| **Outbound calls** | — | **Historical data only.** The inbox, analytics and exports carry outbound AI calls and the direction filter works, so the reporting side is real. There is no live dialer: the call engine has `registerInbound` with no outbound sibling, and `TelephonyProvider.dial()` throws | Implement `dial()` + a campaign/pacing module. Needs a carrier with outbound termination |
 
 **The important nuance for the demo:** the dashboard, transcripts, recordings, analytics and the Bitrix24 timeline entries are all produced by production code. Only the carrier and the speech providers are substituted. Nothing in the UI is a screenshot or hardcoded fixture.
 
@@ -121,4 +121,14 @@ None of these would have been caught by a mocked dashboard.
 
 **Say, when asked about phone numbers:** *"The platform is carrier-agnostic — it connects to any TDRA-licensed UAE trunk. Your Dubai number stays with your licensed operator; your India and Egypt agents log in through the browser with no SIM and no roaming charges. We'll confirm the trunk provider with you as step one of the rollout."*
 
-**Do not say:** that WhatsApp is ready, that outbound campaigns exist today, that we can issue UAE virtual numbers ourselves, or that this is running on a live phone line.
+**Do not say:** that WhatsApp is ready, that outbound campaigns run today, that we can issue UAE virtual numbers ourselves, or that this is running on a live phone line.
+
+**On outbound specifically.** Outbound is AI-first by design and the inbox, analytics
+and exports already carry outbound AI calls — but that is *seeded history*, not a
+working dialer. What is safe to say: "outbound is AI-led in the same way inbound is,
+the reporting for it is built, and the dialer needs the carrier before it can run."
+What is not safe: implying you could start a campaign on Tuesday. The five outbound
+campaigns modelled — enquiry follow-up, intake reminder, incomplete enrolment,
+certificate ready — are all follow-ups to people who already contacted FIT, never
+cold calls, which is also what keeps them defensible under UAE consent rules. Worth
+saying out loud, because it is a question their marketing side will ask.

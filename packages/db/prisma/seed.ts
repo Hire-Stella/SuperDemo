@@ -76,6 +76,47 @@ const QUEUES = [
 
 /* ------------------------------- caller pool ------------------------------ */
 
+/* --------------------------- outbound AI campaigns ------------------------ */
+/**
+ * The outbound work an institute actually has, and none of it cold-calling:
+ * every one of these is a follow-up to someone who already made contact, which
+ * is also what keeps it defensible under UAE marketing-consent rules.
+ */
+const OUTBOUND_CAMPAIGNS = [
+  {
+    name: 'Enquiry follow-up',
+    opener:
+      'Hello, this is the FIT Institute assistant calling about the course enquiry you made with us. Is now a good time?',
+    replies: ['Yes, go ahead.', 'Sure, briefly.', 'I was still deciding, actually.'],
+    followUp:
+      'The next intake still has seats. Would you like me to talk you through the schedule and what you need to enrol?',
+  },
+  {
+    name: 'Intake reminder',
+    opener:
+      'Hello, the FIT Institute assistant here — your course starts next week and I wanted to confirm you are still joining.',
+    replies: ['Yes, I will be there.', 'What time does it start?', 'I might need to defer.'],
+    followUp:
+      'Noted. Classes run at our JLT centre — shall I send the joining details on WhatsApp as well?',
+  },
+  {
+    name: 'Incomplete enrolment',
+    opener:
+      'Hello, this is the FIT Institute assistant. Your enrolment is nearly complete — a couple of documents are still outstanding.',
+    replies: ['Which ones?', 'I thought I sent everything.', 'Can I bring them in person?'],
+    followUp:
+      'I can list exactly what is missing and how to send it. Would that help?',
+  },
+  {
+    name: 'Certificate ready',
+    opener:
+      'Hello, the FIT Institute assistant calling — your certificate is ready for collection at our JLT centre.',
+    replies: ['That is good news.', 'Can it be couriered?', 'What are the opening hours?'],
+    followUp:
+      'Reception is open Sunday to Thursday. Would you like me to check the courier option for you?',
+  },
+] as const;
+
 const FIRST = ['Ahmed','Fatima','Priya','Rajesh','Sara','Mohammed','Aisha','Karan','Layla','Omar','Nadia','James','Chen','Ivan','Marie','Yusuf','Zahra','Deepak','Hana','Tariq','Sofia','Bilal','Meera','Khalid'];
 const LAST  = ['Al Mansouri','Nair','Kumar','Ibrahim','Siddiqui','Rahman','Mehta','Hassan','Khalil','Whitfield','Wei','Petrov','Dubois','Farouk','Sharma','Ahmadi','Bakr','Iqbal','Menon','Haddad','Saleh','Roy','Aziz','Fernandes'];
 
@@ -415,17 +456,28 @@ async function main() {
         continue;
       }
 
-      /* --------------------- outbound follow-up calls ----------------------
-         The client asked for outbound as well as inbound, so an inbox with
-         nothing outbound in it is not a unified inbox. These are the realistic
-         case: an advisor calling an earlier enquiry back. Always human-handled
-         and never AI-contained — FIT have no outbound AI campaign yet, and
-         seeding one would overstate what exists (see NOT-IMPLEMENTED.md).      */
+      /* ------------------------ outbound AI campaigns ------------------------
+         Outbound is AI-first, same as inbound: the assistant places the call,
+         opens the conversation, and hands to a human only when the contact asks
+         for one or goes past what it can answer. That is the whole commercial
+         argument — 12 agents cannot dial a follow-up list, an assistant can.
+
+         Containment is modelled lower than inbound (~55% vs ~76%): an outbound
+         contact did not choose to call, so they interrupt, ask for a person, and
+         push into fees and dates far more readily than someone who dialled in.
+         Overstating outbound containment would be the easiest number to get
+         wrong in a proposal.                                                   */
       if (chance(0.12)) {
-        const agent = pick(agentUsers);
-        const connected = chance(0.62); // the rest ring out or hit voicemail
-        const talkMs = connected ? int(60_000, 300_000) : int(8000, 25_000);
-        const endedAt = new Date(startedAt.getTime() + talkMs);
+        const campaign = pick(OUTBOUND_CAMPAIGNS);
+        const answered = chance(0.62); // the rest ring out or hit voicemail
+        const escalates = answered && chance(0.45);
+        const handler = escalates
+          ? pick(agentUsers.filter((u) => (u.skills as string[]).includes(skill)) ?? agentUsers)
+          : null;
+
+        const aiTalkMs = answered ? int(25_000, 90_000) : int(6000, 14_000);
+        const agentTalkMs = escalates ? int(70_000, 300_000) : 0;
+        const endedAt = new Date(startedAt.getTime() + aiTalkMs + agentTalkMs);
 
         const conv = await prisma.conversation.create({
           data: {
@@ -433,26 +485,38 @@ async function main() {
             direction: 'OUTBOUND',
             status: 'CLOSED',
             contactId: contact.id,
-            queueId: queue.id,
-            handledById: agent.id,
+            queueId: escalates ? queue.id : null,
+            handledById: handler?.id ?? null,
             startedAt,
             endedAt,
-            aiContained: false,
+            // Answered and never passed to a human = the AI handled it alone.
+            // escalationReason lives on Call, not Conversation — the handoff
+            // reason is a property of the call leg, not the thread.
+            aiContained: answered && !escalates,
             // No NO_ANSWER in the Disposition enum, and inventing one would be
             // wrong: a call nobody picked up genuinely has no outcome to record.
             // These are the rows the "missing disposition" report should flag.
-            disposition: connected
-              ? pick(['ENROLMENT_INTEREST', 'INFO_PROVIDED', 'CALLBACK_REQUESTED'] as const)
+            disposition: answered
+              ? escalates
+                ? pick(['ENROLMENT_INTEREST', 'CALLBACK_REQUESTED'] as const)
+                : pick(['INFO_PROVIDED', 'NOT_INTERESTED', 'ENROLMENT_INTEREST'] as const)
               : null,
           },
         });
 
-        if (connected) {
-          const lines: [string, 'HUMAN_AGENT' | 'CALLER'][] = [
-            [`Hello, this is ${agent.name} calling from FIT Institute — following up on your enquiry.`, 'HUMAN_AGENT'],
-            ['Yes, thank you for calling back.', 'CALLER'],
-            ['Would you like me to hold a seat for the next intake?', 'HUMAN_AGENT'],
+        if (answered) {
+          const lines: [string, 'AI' | 'CALLER' | 'HUMAN_AGENT'][] = [
+            [campaign.opener, 'AI'],
+            [pick(campaign.replies), 'CALLER'],
+            [campaign.followUp, 'AI'],
           ];
+          if (escalates) {
+            lines.push(
+              ['Can I speak to someone about it?', 'CALLER'],
+              ['Of course — putting you through to an advisor now.', 'AI'],
+              [`Hello, ${handler!.name} here — I can help with that.`, 'HUMAN_AGENT'],
+            );
+          }
           let offset = 0;
           for (const [text, role] of lines) {
             await prisma.message.create({
@@ -460,10 +524,11 @@ async function main() {
                 conversationId: conv.id,
                 role,
                 text,
+                confidence: role === 'AI' ? Number((0.55 + rnd() * 0.4).toFixed(4)) : null,
                 createdAt: new Date(startedAt.getTime() + offset),
               },
             });
-            offset += int(12_000, 30_000);
+            offset += int(9000, 24_000);
           }
         }
         totalOutbound++;
