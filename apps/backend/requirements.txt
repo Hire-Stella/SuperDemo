@@ -1,0 +1,6 @@
+google-genai
+qdrant-client
+python-dotenv
+fastapi
+uvicorn
+twilio

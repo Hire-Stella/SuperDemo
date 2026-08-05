@@ -12,6 +12,12 @@ out/
 # Recordings written by the local storage driver
 .storage/
 
+# Python (apps/backend prototype scripts)
+.venv/
+__pycache__/
+qdrant_data/
+.gradio/
+
 .env
 .env.local
 .env.*.local
