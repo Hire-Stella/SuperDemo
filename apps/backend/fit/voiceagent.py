@@ -114,7 +114,8 @@ async def process_audio_turn(websocket: WebSocket, stream_sid: str,
 
     # ---------- 2. RAG ----------
     history.append({"role": "user", "text": user_text})
-    reply_text = generate_reply(history)
+    result = generate_reply(history)
+    reply_text = result["text"]
     history.append({"role": "assistant", "text": reply_text})
 
     print(f"Agent reply: {reply_text}")

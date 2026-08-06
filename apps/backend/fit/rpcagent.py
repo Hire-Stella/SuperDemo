@@ -1,18 +1,32 @@
+import json
 import time
+from typing import Literal
 
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types as genai_types
+from pydantic import BaseModel
 
 from knowledge_data import PRICING_NOTE
 from rag import ensure_ingested, retrieve
 
 load_dotenv()
 
+# Browser TTS (SpeechSynthesisUtterance) has no real emotional delivery --
+# just rate/pitch/volume knobs. Having Gemini tag each reply with one of
+# these lets the frontend nudge those knobs so the voice isn't flat for
+# every single reply. See voice_browser.py's TONE_PRESETS for the mapping.
+TONES = ["friendly", "excited", "apologetic", "calm_informative"]
+
+class AgentReply(BaseModel):
+    reply: str
+    tone: Literal["friendly", "excited", "apologetic", "calm_informative"]
+
 # ============================================================
 # 1. RAG reply generation
 # ============================================================
 
-def generate_reply(history: list[dict]) -> str:
+def generate_reply(history: list[dict]) -> dict:
     """
     Retrieves FIT Institute course/FAQ context from the local Qdrant
     knowledge base and grounds the reply in it.
@@ -26,6 +40,10 @@ def generate_reply(history: list[dict]) -> str:
     input". Confirmed by extensive isolated repro; plain strings/dicts for
     conversation history removes the corruption entirely. `history` here is a
     plain list of {"role": "user"|"assistant", "text": str} dicts.
+
+    Returns {"text": reply, "tone": one of TONES} -- the model tags its own
+    emotional tone alongside the reply so the frontend can vary browser TTS
+    pitch/rate instead of speaking every line in the same flat delivery.
     """
     latest_user_text = next(
         (turn["text"] for turn in reversed(history) if turn["role"] == "user"),
@@ -52,10 +70,26 @@ def generate_reply(history: list[dict]) -> str:
     Conversation so far:
     {transcript}
 
-    Respond as Assistant with only your reply text, no prefix.
+    Respond with a JSON object with exactly two fields:
+    "reply": your reply as Assistant, text only, no prefix.
+    "tone": one of {TONES} -- whichever best matches how this specific reply should sound out loud.
     """
-    response = generate_content_with_retries(model="gemini-3.5-flash", contents=prompt)
-    return response.text or ""
+    response = generate_content_with_retries(
+        model="gemini-3.5-flash",
+        contents=prompt,
+        config=genai_types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=AgentReply,
+        ),
+    )
+    try:
+        data = json.loads(response.text or "{}")
+        reply_text = data.get("reply", "") or ""
+        tone = data.get("tone") if data.get("tone") in TONES else "friendly"
+    except json.JSONDecodeError:
+        reply_text = response.text or ""
+        tone = "friendly"
+    return {"text": reply_text, "tone": tone}
 
 # Conversation memory (simple in-memory for demo)
 conversation_history = []
@@ -88,16 +122,17 @@ def generate_content_with_retries(retries: int = 3, **kwargs):
 # 3. Text Handler (RAG in, RAG out)
 # ============================================================
 
-def text_handler(user_text: str) -> str:
+def text_handler(user_text: str) -> dict:
     """
-    Runs one turn of the RAG pipeline on plain text and returns the reply as
-    plain text. Shared by the browser voice pipeline, the Twilio pipeline
-    (voiceagent.py), and text-only mode.
+    Runs one turn of the RAG pipeline on plain text, returns {"text": ..., "tone": ...}.
+    Used by the browser voice pipeline and text-only mode. voiceagent.py's
+    Twilio pipeline calls generate_reply() directly instead, since it keeps
+    its own per-call history rather than this module-level conversation_history.
     """
     conversation_history.append({"role": "user", "text": user_text})
-    reply_text = generate_reply(conversation_history)
-    conversation_history.append({"role": "assistant", "text": reply_text})
-    return reply_text
+    result = generate_reply(conversation_history)
+    conversation_history.append({"role": "assistant", "text": result["text"]})
+    return result
 
 def run_text_chat():
     """Interactive text in, text out -- no audio pipeline involved."""
@@ -108,7 +143,8 @@ def run_text_chat():
             break
         if not user_text:
             continue
-        print(f"Bot: {text_handler(user_text)}\n")
+        result = text_handler(user_text)
+        print(f"Bot [{result['tone']}]: {result['text']}\n")
 
 if __name__ == "__main__":
     run_text_chat()
