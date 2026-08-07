@@ -15,26 +15,81 @@ input, and optionally exposed to the internet via ngrok.
   (`lampatron/qdrant_data/`, gitignored, rebuilt automatically on first run).
   A similarity `score_threshold` skips injecting irrelevant chunks for casual
   messages like "hi".
-- **Reply generation** (`lampatron/rpcagent.py`) — a Gemini chat model
-  (`gemini-3.5-flash`) grounded in retrieved context, with a conversational
-  persona ("Stella") instructed to ask follow-up questions, build on earlier
-  turns, and handle small talk naturally rather than reading back facts. Each
-  reply is returned as structured JSON (`{"reply": ..., "tone": ...}`,
-  schema-validated via pydantic) so the frontend can vary speech delivery
-  instead of sounding flat on every line.
+- **Reply generation** (`lampatron/rpcagent.py`) — `Qwen/Qwen3.6-35B-A3B` via
+  [DeepInfra](https://deepinfra.com/)'s OpenAI-compatible endpoint, grounded
+  in retrieved context, with a conversational persona ("Stella") instructed
+  to ask follow-up questions, build on earlier turns, and handle small talk
+  naturally rather than reading back facts. Each reply is returned as
+  structured JSON (`{"reply": ..., "tone": ...}`, via OpenAI's strict
+  `response_format` JSON schema mode) so the frontend can vary speech
+  delivery instead of sounding flat on every line. Chosen over
+  `gemini-3.5-flash` primarily to cut cost (DeepInfra is meaningfully
+  cheaper per reply). Gemini is being phased out of Lampatron entirely and
+  for now is scoped to embeddings/retrieval only (`embedding_client` in
+  `rpcagent.py`) -- reply generation and the phone channel's audio
+  transcription (now Whisper, see below) no longer touch it at all.
+  - **No fallback if Qwen is slow/fails**: there used to be a short-timeout,
+    fall-back-to-Gemini safety net here, but it was deliberately removed to
+    keep Gemini embeddings-only per the current direction -- a slow or
+    failed Qwen call now just fails the request instead of degrading to
+    Gemini. DeepInfra's shared inference for this model showed real tail
+    latency in testing (occasional 100+ second replies, not just the fixed
+    ~20-30s "thinking mode" tax below), so this is a real known risk for
+    WhatsApp/phone (Twilio's webhook has roughly a 15s timeout) until
+    something else covers it.
+  - **Critical config**: Qwen3.6 runs a hidden reasoning pass by default --
+    300-450+ extra completion tokens and 20-30+ seconds per reply, confirmed
+    by direct timing against this exact endpoint before this was found. That
+    latency would silently break WhatsApp (Twilio's webhook has roughly a
+    15s timeout) and phone calls (20-30s of dead air per turn). Fixed via
+    `extra_body={"chat_template_kwargs": {"enable_thinking": False}}` on the
+    completion call -- note the nesting: a flat `enable_thinking` kwarg (the
+    parameter name most Qwen3 docs mention) did *not* work on this
+    deployment, only the `chat_template_kwargs`-nested form did. With it,
+    replies run 0.5-6s, in line with the old Gemini latency.
 - **Browser UI** (`lampatron/voice_browser.py`) — a FastAPI page (port 7862)
-  with a chat-bubble interface, a mic button (browser `SpeechRecognition` for
-  STT), a text input fallback, a voice picker (browser `speechSynthesis`
-  voices, defaulting to a female-sounding voice via a name-based heuristic --
-  the Web Speech API has no real gender field), and tone-to-pitch/rate mapping
-  for less monotonous playback. All STT/TTS runs client-side in the browser --
-  no Gemini audio calls, no per-request cost for voice.
+  with a chat-bubble interface, a mic button, a text input fallback, and
+  tone-to-pitch/rate mapping for less monotonous playback. Both voice
+  directions now run server-side, locally, with no API cost (see below).
+  - **Voice input** (`lampatron/whisper_stt.py`, `/stt-stream` WebSocket) —
+    the mic button records audio via `MediaRecorder` and streams it live over
+    a WebSocket for transcription by
+    [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (the `base`
+    model, CPU/int8), instead of the browser's own `SpeechRecognition`.
+    Genuinely multilingual (English/Arabic/Tagalog, auto-detected from the
+    audio itself, no language hint needed) and works in any browser that can
+    record audio -- not just Chrome/Edge. The model (~145MB) auto-downloads
+    from Hugging Face Hub on first run, then stays cached.
+    - **Live captions**: Whisper has no true incremental decode, so "live"
+      means periodically re-transcribing the whole buffer received so far
+      (roughly every 1 second of audio) and streaming that back as a growing
+      caption bubble, finalized into the actual message once you stop.
+      Transcription runs via `asyncio.to_thread` so it doesn't block the
+      WebSocket from receiving new chunks while a partial is computing --
+      without that, partials and the final result would arrive in a bunched
+      burst instead of visibly spaced out. Auto-stops after ~1.2s of silence
+      (a simple volume check, not a real VAD model) -- clicking the mic
+      again also stops it early.
+  - **English voice output** (`lampatron/kokoro_tts.py`, `/tts` route) —
+    synthesized server-side by [Kokoro](https://github.com/hexgrad/kokoro), an
+    82M-parameter open-source TTS model that runs locally. Voice is fixed to
+    `af_heart` (a higher, more consistent quality than most OS/browser
+    voices). The model (~340MB) auto-downloads from Hugging Face Hub on first
+    run, then stays cached. If synthesis fails for any reason, the frontend
+    falls back to browser `speechSynthesis` automatically.
+  - **Arabic/Tagalog voice output** — still the browser's own
+    `speechSynthesis` voices, since Kokoro has no voices for those languages.
+    Defaults to a female-sounding voice via a name-based heuristic (the Web
+    Speech API has no real gender field), quality depends entirely on what
+    the visitor's OS/browser has installed.
   - **Languages**: Stella replies in English, Arabic, or Tagalog, auto-detected
     per message (each reply is tagged with the language it's written in); the
-    frontend switches `SpeechRecognition`/`speechSynthesis` to match
-    automatically. A dropdown lets you override manually.
+    frontend switches the TTS engine to match automatically. The language
+    dropdown is now display-only (shows what was detected) since Whisper no
+    longer needs a manual hint for voice input.
   - **Barge-in**: clicking the mic while Stella is still talking immediately
-    cancels the current speech and starts listening, instead of talking over
+    stops whichever voice is currently playing (Kokoro's `<audio>` element or
+    browser `speechSynthesis`) and starts recording, instead of talking over
     you.
 - **Public tunnel** (`lampatron/ngrok_tunnel.py`) — a standalone script that
   exposes the already-running server on port 7862 via ngrok, independent of
@@ -62,7 +117,16 @@ port 7861, sharing the same `.venv` and `.env` but otherwise fully independent
 ```
 GOOGLE_API_KEY=...
 NGROK_TOKEN=...
+DEEPINFRA_API_KEY=...
 ```
+
+`pip install -r requirements.txt` now also pulls in Kokoro's dependencies
+(`torch`, `transformers`, `misaki` for English text-to-phoneme conversion)
+and faster-whisper's (`ctranslate2`, `av`) -- a noticeably heavier install
+than the rest of the stack, though the two share most of their dependencies
+already. The first time `voice_browser.py` starts afterward, it downloads
+Kokoro's ~340MB model file and Whisper's ~145MB `base` model from Hugging
+Face Hub; subsequent starts use the cached copies and are fast.
 
 ## Running it
 
@@ -138,12 +202,32 @@ you've configured a reserved domain in your ngrok dashboard.
 
 - Conversation history is per-session/per-sender but in-memory only -- it's
   lost on every app restart, and there's no way to look up past conversations.
-- `/chat` and `/whatsapp-webhook` have no authentication or rate limiting --
-  every message is a billed Gemini API call.
-- Browser TTS/STT quality depends entirely on the visitor's own browser/OS
-  (Chrome/Edge recommended; Web Speech API isn't supported in Firefox/Safari).
-  The "default female voice" is a name-based guess, not a guarantee -- it
-  only works if the OS/browser has a voice matching one of the known names.
+- `/chat`, `/tts`, `/stt-stream`, and `/whatsapp-webhook` have no
+  authentication or rate limiting -- every message is a billed DeepInfra
+  call (reply generation) plus a billed Gemini call (embeddings), and every
+  voice turn also costs local CPU time twice (transcribe via Whisper,
+  synthesize via Kokoro for English replies).
+- Reply generation now depends on DeepInfra's uptime/pricing in addition to
+  Gemini's and Twilio's -- a third external vendor in the critical path for
+  every single message, not just voice/WhatsApp.
+- `/tts` and `/stt-stream` run on the same machine serving `/chat`, one
+  request at a time (no GPU, no queue) -- fine for a single demo user, but
+  concurrent visitors would start queuing behind each other's
+  transcription/synthesis. Live captions make this worse, not better: since
+  Whisper re-transcribes the whole growing buffer every ~2 seconds instead
+  of once per utterance, a single voice turn now costs several Whisper
+  calls, not one.
+- Voice *input* now works in any browser that supports `MediaRecorder`
+  (Chrome, Edge, Firefox, and Safari), not just Chrome/Edge like the old
+  browser `SpeechRecognition` did. For Arabic/Tagalog voice *output*
+  specifically, the "default female voice" is a name-based guess against
+  browser voices, not a guarantee -- it only works if the OS/browser has a
+  voice matching one of the known names.
+- `whisper_stt.py` always writes the uploaded recording to a `.webm`-suffixed
+  temp file regardless of what the browser actually recorded -- PyAV
+  generally detects the real container from its contents rather than the
+  extension, but an unusual browser/codec combination could still fail to
+  decode.
 - The free ngrok tier shows a one-time "click to visit" interstitial to new
   browser visitors, and the public URL changes every time the tunnel restarts
   (unless a reserved domain is configured).

@@ -4,3 +4,7 @@ python-dotenv
 fastapi
 uvicorn
 twilio
+kokoro
+soundfile
+faster-whisper
+openai
