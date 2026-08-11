@@ -8,3 +8,4 @@ kokoro
 soundfile
 faster-whisper
 openai
+nvidia-cublas-cu12

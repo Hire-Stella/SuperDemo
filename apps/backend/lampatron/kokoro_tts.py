@@ -12,11 +12,13 @@ import numpy as np
 import soundfile as sf
 from kokoro import KPipeline
 
-# "a" = American English. Constructing this triggers a one-time ~340MB model
-# download from Hugging Face Hub on first run (cached under ~/.cache/huggingface
-# afterward) -- the first /tts request (or server startup, since this runs at
-# import time) will be slow purely from that download, not from synthesis itself.
-_pipeline = KPipeline(lang_code="a")
+# "a" = American English. Runs on GPU (verified: torch reinstalled as a CUDA
+# build for this machine's RTX 5080). Constructing this triggers a one-time
+# ~340MB model download from Hugging Face Hub on first run (cached under
+# ~/.cache/huggingface afterward) -- the first /tts request (or server
+# startup, since this runs at import time) will be slow purely from that
+# download, not from synthesis itself.
+_pipeline = KPipeline(lang_code="a", device="cuda")
 
 # One of Kokoro's higher-quality American English voices, picked to match the
 # "default female voice" preference already applied to browser TTS elsewhere.
@@ -24,13 +26,20 @@ DEFAULT_VOICE = "af_heart"
 SAMPLE_RATE = 24000
 
 
-def _synthesize_array(text: str, speed: float, voice: str) -> np.ndarray:
+def _to_numpy(audio):
     # Kokoro yields torch.Tensor chunks, not numpy arrays -- np.concatenate
     # happens to convert them, but only when there's more than one chunk, so
     # short text (a single chunk) would otherwise leak a raw Tensor with no
-    # .astype()/WAV-writable interface. Converting explicitly here avoids
-    # that being conditional on how many chunks a given sentence produces.
-    chunks = [np.asarray(audio) for _, _, audio in _pipeline(text, voice=voice, speed=speed)]
+    # .astype()/WAV-writable interface. Now that the pipeline runs on CUDA,
+    # those tensors live on the GPU too -- numpy can't convert a CUDA tensor
+    # directly, so it has to move to CPU first.
+    if hasattr(audio, "detach"):
+        return audio.detach().cpu().numpy()
+    return np.asarray(audio)
+
+
+def _synthesize_array(text: str, speed: float, voice: str) -> np.ndarray:
+    chunks = [_to_numpy(audio) for _, _, audio in _pipeline(text, voice=voice, speed=speed)]
     return np.concatenate(chunks) if len(chunks) > 1 else chunks[0]
 
 

@@ -551,6 +551,7 @@ PAGE = """
     });
 
     let recording = false;
+    let startingUp = false; // true from the first click until startRecording() finishes setup
     let mediaRecorder = null;
     let sttSocket = null;
     let captionRow = null; // the in-progress "user" bubble being live-updated
@@ -602,6 +603,9 @@ PAGE = """
     }
 
     async function startRecording() {
+      if (recording || startingUp) return;
+      startingUp = true;
+
       // Barge-in: if the assistant is still talking, cut it off immediately
       // instead of letting it keep playing over your next question. Covers
       // both playback paths -- speechSynthesis (ar/tl) and Kokoro's <audio>
@@ -620,6 +624,7 @@ PAGE = """
       try {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       } catch (err) {
+        startingUp = false;
         addBubble("system", "Microphone access failed: " + err.message);
         return;
       }
@@ -653,6 +658,7 @@ PAGE = """
         sttSocket.onerror = () => resolve();
       });
       if (!opened) {
+        startingUp = false;
         stream.getTracks().forEach((track) => track.stop());
         addBubble("system", "Couldn't reach the transcription service.");
         return;
@@ -690,6 +696,7 @@ PAGE = """
       mediaRecorder.start(500);
 
       recording = true;
+      startingUp = false;
       micBtn.classList.add("listening");
       statusText.textContent = "Listening... (click mic to stop early)";
 
@@ -732,11 +739,16 @@ PAGE = """
 
     micBtn.addEventListener("click", () => {
       if (!micSupported) return;
-      if (!recording) {
-        startRecording();
-      } else {
+      if (recording) {
         stopRecording();
+      } else if (!startingUp) {
+        startRecording();
       }
+      // else: a click landed while startup (mic permission / socket
+      // connect) was still in flight -- ignored rather than firing a
+      // second startRecording(), which used to race and corrupt the
+      // shared mediaRecorder/sttSocket state (the bug behind STT
+      // "randomly" not triggering).
     });
   </script>
 </body>

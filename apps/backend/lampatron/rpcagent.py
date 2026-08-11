@@ -1,10 +1,11 @@
 import json
-import os
 import time
+from typing import Literal
 
 from dotenv import load_dotenv
 from google import genai
-from openai import OpenAI
+from google.genai import types as genai_types
+from pydantic import BaseModel
 
 from knowledge_data import COMPANY, PRICING_NOTE
 from rag import ensure_ingested, retrieve
@@ -22,31 +23,21 @@ TONES = ["friendly", "excited", "apologetic", "calm_informative"]
 # in -- no manual language picker needed for it to keep working turn to turn.
 LANGUAGES = {"en": "en-US", "ar": "ar-AE", "tl": "fil-PH"}
 
-# Qwen3.6 (via DeepInfra's OpenAI-compatible endpoint) handles all reply
-# generation/reasoning -- Gemini is intentionally scoped to embeddings only
-# right now (see embedding_client below) and is being phased out entirely.
-# A plain dict rather than a pydantic-generated schema because DeepInfra's
-# strict JSON schema mode requires "additionalProperties": false, which
-# pydantic's auto-generated schema doesn't set by default -- verified
-# against the live endpoint before wiring this in.
-QWEN_MODEL = "Qwen/Qwen3.6-35B-A3B"
-AGENT_REPLY_SCHEMA = {
-    "type": "json_schema",
-    "json_schema": {
-        "name": "AgentReply",
-        "schema": {
-            "type": "object",
-            "properties": {
-                "reply": {"type": "string"},
-                "tone": {"type": "string", "enum": TONES},
-                "language": {"type": "string", "enum": list(LANGUAGES)},
-            },
-            "required": ["reply", "tone", "language"],
-            "additionalProperties": False,
-        },
-        "strict": True,
-    },
-}
+# Gemini 3.5 Flash handles all reply generation/reasoning -- switched from
+# Qwen3.6 via DeepInfra's shared inference pool, which showed real tail
+# latency (occasional 100+ second replies from cross-customer contention,
+# on top of a 20-30s "thinking mode" tax) even with priority-tier billing.
+# Matches the pattern already established in fit/rpcagent.py: a pydantic
+# response schema via GenerateContentConfig rather than a raw JSON-schema
+# dict, since Gemini's structured output (unlike DeepInfra's strict mode)
+# doesn't require "additionalProperties": false.
+GEMINI_MODEL = "gemini-3.5-flash"
+
+
+class AgentReply(BaseModel):
+    reply: str
+    tone: Literal["friendly", "excited", "apologetic", "calm_informative"]
+    language: Literal["en", "ar", "tl"]
 
 # ============================================================
 # 1. RAG reply generation
@@ -123,43 +114,21 @@ def generate_reply(history: list[dict]) -> dict:
     "language": one of {list(LANGUAGES)} -- "en" for English, "ar" for Arabic, "tl" for Tagalog --
     whichever language your "reply" above is actually written in.
     """
-    response = generate_chat_completion_with_retries(
-        retries=1,
-        model=QWEN_MODEL,
-        messages=[{"role": "user", "content": prompt}],
-        temperature=0.8,
-        response_format=AGENT_REPLY_SCHEMA,
-        # Qwen3.6 runs a hidden reasoning pass by default -- 300-450+ extra
-        # completion tokens and 20-30s per reply, confirmed via direct timing
-        # against this exact endpoint. This turns that off: verified this
-        # specific nesting (not a flat "enable_thinking" kwarg) is what
-        # actually works here.
-        #
-        # service_tier="priority": DeepInfra's shared pool for this model
-        # was seen returning "Model busy (engine_overloaded)" 429s and, even
-        # when it did respond, 100+ second replies -- confirmed this wasn't
-        # our account's own rate limit (DeepInfra's default is 200 concurrent
-        # requests per model; nowhere close) but genuine contention across
-        # all of DeepInfra's customers for this model. Priority requests get
-        # front-of-queue scheduling and stay served even while standard-tier
-        # traffic is 429ing under load. Billed at 1.5x, only when priority is
-        # actually delivered -- verified this model supports it (the
-        # response echoes service_tier="priority" back, confirmed directly
-        # before wiring this in) rather than silently falling back to
-        # "default" the way unsupported models do.
-        extra_body={
-            "chat_template_kwargs": {"enable_thinking": False},
-            "service_tier": "priority",
-        },
+    response = generate_content_with_retries(
+        model=GEMINI_MODEL,
+        contents=prompt,
+        config=genai_types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=AgentReply,
+        ),
     )
-    content = response.choices[0].message.content
     try:
-        data = json.loads(content or "{}")
+        data = json.loads(response.text or "{}")
         reply_text = data.get("reply", "") or ""
         tone = data.get("tone") if data.get("tone") in TONES else "friendly"
         language = data.get("language") if data.get("language") in LANGUAGES else "en"
     except json.JSONDecodeError:
-        reply_text = content or ""
+        reply_text = response.text or ""
         tone = "friendly"
         language = "en"
     return {"text": reply_text, "tone": tone, "language": language}
@@ -168,42 +137,25 @@ def generate_reply(history: list[dict]) -> dict:
 conversation_history = []
 
 # ============================================================
-# 2. Model clients -- Gemini (embeddings only, being phased out entirely)
-#    and DeepInfra/Qwen (reply generation, see generate_reply() above)
+# 2. Gemini clients
 # ============================================================
 
+# Two separate clients: embed_content() followed by generate_content() on the
+# SAME client instance reliably breaks the generate_content call ("Request
+# has empty input") -- confirmed in fit/rpcagent.py, kept as the same
+# precaution here even though Lampatron's TTS is local (Kokoro), not Gemini.
+genai_client = genai.Client()
 embedding_client = genai.Client()
 
 # Populate the local Qdrant knowledge base on first run; no-op afterwards.
 ensure_ingested(embedding_client)
 
-# No Gemini fallback for reply generation anymore (Gemini is embeddings-only
-# for now, see embedding_client above). DeepInfra's shared inference for this
-# model showed real tail latency in testing (occasional 100+ second replies
-# on top of the ~20-30s "thinking mode" tax already handled below) --
-# reproduced live: a /chat request hung for 30+ seconds with zero response,
-# which is what "stuck at loading" in the UI actually was. Without a
-# fallback, a 20s timeout can't make Qwen faster, but it turns an unbounded
-# hang into a request that fails predictably -- the frontend at least shows
-# an error instead of spinning forever. WhatsApp/phone can still hit
-# Twilio's ~15s webhook timeout before this 20s cutoff even fires.
-deepinfra_client = OpenAI(
-    api_key=os.environ["DEEPINFRA_API_KEY"],
-    base_url="https://api.deepinfra.com/v1/openai",
-    timeout=20.0,
-    # The openai SDK retries timeouts internally by default (max_retries=2),
-    # underneath our own retry wrapper below -- confirmed by direct timing:
-    # with that default, a single "timed out" call actually took ~51s (three
-    # attempts x ~20s), not the 20s the timeout value implied. This disables
-    # that so our own retries=1 in generate_reply() is the only retry layer,
-    # and the 20s timeout means what it says.
-    max_retries=0,
-)
-
-def generate_chat_completion_with_retries(retries: int = 3, **kwargs):
+def generate_content_with_retries(retries: int = 3, **kwargs):
+    # Gemini calls occasionally come back with a spurious error (empty-input,
+    # 503 high demand); retrying the same request has reliably succeeded.
     for attempt in range(retries):
         try:
-            return deepinfra_client.chat.completions.create(**kwargs)
+            return genai_client.models.generate_content(**kwargs)
         except Exception:
             if attempt == retries - 1:
                 raise

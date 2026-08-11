@@ -54,12 +54,18 @@ input, and optionally exposed to the internet via ngrok.
   - **Voice input** (`lampatron/whisper_stt.py`, `/stt-stream` WebSocket) —
     the mic button records audio via `MediaRecorder` and streams it live over
     a WebSocket for transcription by
-    [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (the `base`
-    model, CPU/int8), instead of the browser's own `SpeechRecognition`.
-    Genuinely multilingual (English/Arabic/Tagalog, auto-detected from the
-    audio itself, no language hint needed) and works in any browser that can
-    record audio -- not just Chrome/Edge. The model (~145MB) auto-downloads
-    from Hugging Face Hub on first run, then stays cached.
+    [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (`large-v3`,
+    running on GPU -- this machine has an RTX 5080; see "GPU acceleration"
+    below), instead of the browser's own `SpeechRecognition`. Genuinely
+    multilingual (English/Arabic/Tagalog, auto-detected from the audio
+    itself, no language hint needed) and works in any browser that can
+    record audio -- not just Chrome/Edge. `large-v3` was chosen over the
+    smaller default specifically because Whisper's accuracy gap between
+    model sizes widens disproportionately for lower-resource languages, so
+    it helps Arabic/Tagalog more than it helps English -- the official
+    distilled checkpoints (`distil-large-v3`, much faster) were ruled out
+    since they're English-only. The model (~3GB) auto-downloads from
+    Hugging Face Hub on first run, then stays cached.
     - **Live captions**: Whisper has no true incremental decode, so "live"
       means periodically re-transcribing the whole buffer received so far
       (roughly every 1 second of audio) and streaming that back as a growing
@@ -70,13 +76,47 @@ input, and optionally exposed to the internet via ngrok.
       burst instead of visibly spaced out. Auto-stops after ~1.2s of silence
       (a simple volume check, not a real VAD model) -- clicking the mic
       again also stops it early.
+      - **Known tradeoff**: `large-v3`'s better accuracy comes at the cost
+        of live-caption responsiveness specifically, since each partial
+        re-transcribes the whole growing buffer -- measured at ~1.1-1.8s per
+        call on this GPU, versus ~0.2-0.7s for the smaller `base` model used
+        before. The first partial now lands around 4s into an utterance
+        instead of ~1.5s, and the caption visibly lags behind speech rather
+        than tracking it closely. The final transcript and the phone
+        pipeline (single transcription per turn, not repeated) aren't
+        affected the same way.
   - **English voice output** (`lampatron/kokoro_tts.py`, `/tts` route) —
     synthesized server-side by [Kokoro](https://github.com/hexgrad/kokoro), an
-    82M-parameter open-source TTS model that runs locally. Voice is fixed to
-    `af_heart` (a higher, more consistent quality than most OS/browser
-    voices). The model (~340MB) auto-downloads from Hugging Face Hub on first
-    run, then stays cached. If synthesis fails for any reason, the frontend
-    falls back to browser `speechSynthesis` automatically.
+    82M-parameter open-source TTS model that runs locally on GPU. Voice is
+    fixed to `af_heart` (a higher, more consistent quality than most
+    OS/browser voices). The model (~340MB) auto-downloads from Hugging Face
+    Hub on first run, then stays cached. If synthesis fails for any reason,
+    the frontend falls back to browser `speechSynthesis` automatically.
+  - **GPU acceleration**: both Kokoro and Whisper run on this machine's RTX
+    5080 (`device="cuda"`) instead of CPU -- roughly 10-15x faster warm
+    (Kokoro: ~2.5-3s → ~70-200ms; Whisper `base`: ~1-2s → ~0.2-0.7s, before
+    the `large-v3` upgrade above). Getting this working needed two fixes
+    beyond just `pip install`:
+    - The venv's `torch` was a CPU-only build (`2.13.0+cpu`) despite the GPU
+      being present -- reinstalled from PyTorch's `cu130` wheel index
+      (`pip install --index-url https://download.pytorch.org/whl/cu130
+      --force-reinstall --no-deps torch==2.13.0`; `--force-reinstall` was
+      necessary since pip otherwise sees a matching version number and skips
+      it without checking which build variant is actually installed).
+    - CTranslate2 (faster-whisper's backend, separate from PyTorch) needs
+      its own `nvidia-cublas-cu12` runtime, and that pip package doesn't add
+      its DLL to Windows' search path by itself -- `whisper_stt.py`
+      prepends it to `PATH` at import time. Deliberately does *not* also add
+      `nvidia-cudnn-cu12`: that conflicted with PyTorch's own bundled cuDNN
+      in the same process, breaking Kokoro with
+      `CUDNN_STATUS_SUBLIBRARY_VERSION_MISMATCH` -- CTranslate2 only ever
+      needed cuBLAS, not cuDNN.
+    - First inference after a server (re)start is much slower than
+      "warm" (~30s+ for Whisper on this GPU) -- one-time CUDA kernel
+      compilation, more pronounced on this specific GPU generation (RTX
+      50-series/Blackwell) since it's new enough that prebuilt kernels for
+      it aren't always available, forcing a JIT compile on first use.
+      Subsequent requests hit the fast, cached-kernel path.
   - **Arabic/Tagalog voice output** — still the browser's own
     `speechSynthesis` voices, since Kokoro has no voices for those languages.
     Defaults to a female-sounding voice via a name-based heuristic (the Web
@@ -125,8 +165,27 @@ DEEPINFRA_API_KEY=...
 and faster-whisper's (`ctranslate2`, `av`) -- a noticeably heavier install
 than the rest of the stack, though the two share most of their dependencies
 already. The first time `voice_browser.py` starts afterward, it downloads
-Kokoro's ~340MB model file and Whisper's ~145MB `base` model from Hugging
-Face Hub; subsequent starts use the cached copies and are fast.
+Kokoro's ~340MB model file and Whisper's ~3GB `large-v3` model from Hugging
+Face Hub; subsequent starts use the cached copies and are fast (aside from
+the GPU kernel warm-up below).
+
+**GPU (optional but strongly recommended if available)**: `pip install`
+alone gives you the CPU-only `torch` build, which works but is 10-15x
+slower for Kokoro/Whisper. To actually use a GPU, separately reinstall the
+CUDA build matching your card (this machine used an RTX 5080, which needed
+the `cu130` wheel index):
+```powershell
+pip install --index-url https://download.pytorch.org/whl/cu130 --force-reinstall --no-deps torch==2.13.0
+```
+`--force-reinstall` is required -- pip sees the CPU build's version number
+already matches and skips the install otherwise, without checking which
+build variant is actually present. Use whichever `cuXXX` index tag matches
+your GPU/driver; very new GPU generations may need a newer tag than your
+first guess. `nvidia-cublas-cu12` (in `requirements.txt`) covers
+faster-whisper's separate CUDA runtime need. The very first inference after
+a server (re)start will be much slower than normal (one-time CUDA kernel
+compilation -- more pronounced on brand-new GPU generations); every request
+after that hits the fast, cached-kernel path.
 
 ## Running it
 
