@@ -22,8 +22,18 @@ import {
   SCENARIOS,
 } from '../src/data/index';
 import { chunk, embed, keywordsOf } from '../src/embedding';
+import { withOrg } from '../src/tenant';
 
-const prisma = new PrismaClient();
+/** Unscoped: resets, the Organization row itself, and the superadmin. */
+const rawPrisma = new PrismaClient();
+
+/**
+ * Rebound to an org-pinned client as soon as the tenant exists, so the ~40
+ * creates below stay exactly as they were written — the extension supplies
+ * every orgId. Reassignment rather than a second name: this is what keeps the
+ * seed readable as a description of one contact centre.
+ */
+let prisma = rawPrisma;
 
 /* ----------------------------- deterministic RNG -------------------------- */
 
@@ -130,42 +140,78 @@ function makeCallerNumber(): string {
 async function main() {
   console.log('▸ resetting');
   // Order matters: children before parents.
-  await prisma.$transaction([
-    prisma.transcriptSegment.deleteMany(),
-    prisma.recording.deleteMany(),
-    prisma.callParticipant.deleteMany(),
-    prisma.call.deleteMany(),
-    prisma.message.deleteMany(),
-    prisma.aiSession.deleteMany(),
-    prisma.conversation.deleteMany(),
-    prisma.knowledgeChunk.deleteMany(),
-    prisma.knowledgeDoc.deleteMany(),
-    prisma.phoneNumber.deleteMany(),
-    prisma.aiAgent.deleteMany(),
-    prisma.queueMembership.deleteMany(),
-    prisma.queue.deleteMany(),
-    prisma.agentStateEvent.deleteMany(),
-    prisma.agentState.deleteMany(),
-    prisma.refreshToken.deleteMany(),
-    prisma.auditLog.deleteMany(),
-    prisma.contact.deleteMany(),
-    prisma.user.deleteMany(),
-    prisma.callMetricsDaily.deleteMany(),
-    prisma.crmSyncLog.deleteMany(),
-    prisma.outboxEvent.deleteMany(),
-    prisma.processedWebhook.deleteMany(),
+  await rawPrisma.$transaction([
+    rawPrisma.transcriptSegment.deleteMany(),
+    rawPrisma.recording.deleteMany(),
+    rawPrisma.callParticipant.deleteMany(),
+    rawPrisma.call.deleteMany(),
+    rawPrisma.message.deleteMany(),
+    rawPrisma.aiSession.deleteMany(),
+    rawPrisma.conversation.deleteMany(),
+    rawPrisma.knowledgeChunk.deleteMany(),
+    rawPrisma.knowledgeDoc.deleteMany(),
+    rawPrisma.phoneNumber.deleteMany(),
+    rawPrisma.aiAgent.deleteMany(),
+    rawPrisma.queueMembership.deleteMany(),
+    rawPrisma.queue.deleteMany(),
+    rawPrisma.agentStateEvent.deleteMany(),
+    rawPrisma.agentState.deleteMany(),
+    rawPrisma.refreshToken.deleteMany(),
+    rawPrisma.auditLog.deleteMany(),
+    rawPrisma.contact.deleteMany(),
+    rawPrisma.user.deleteMany(),
+    rawPrisma.callMetricsDaily.deleteMany(),
+    rawPrisma.crmSyncLog.deleteMany(),
+    rawPrisma.outboxEvent.deleteMany(),
+    rawPrisma.processedWebhook.deleteMany(),
+    rawPrisma.setting.deleteMany(),
+    // After users: User.orgId references Organization without a cascade.
+    rawPrisma.organization.deleteMany(),
   ]);
 
+  /* ------------------------------ the platform ---------------------------- */
+  // One superadmin, belonging to no centre. This is the account that creates
+  // the others, so it has to exist before any tenant does.
+  console.log('▸ platform operator');
+  const platformPasswordHash = await argon2.hash('Password123!', { type: argon2.argon2id });
+  await rawPrisma.user.create({
+    data: {
+      orgId: null,
+      email: 'super@hirestella.com',
+      name: 'HireStella Operator',
+      passwordHash: platformPasswordHash,
+      role: 'SUPERADMIN',
+      location: 'DUBAI',
+      timezone: 'Asia/Dubai',
+      skills: ['GENERAL'],
+      avatarColor: '#0f172a',
+    },
+  });
+
+  /* ------------------------------ tenant #1 ------------------------------- */
+  console.log(`▸ organisation: ${INSTITUTE.name}`);
+  const org = await rawPrisma.organization.create({
+    data: {
+      name: INSTITUTE.name,
+      slug: 'fit-ai',
+      industry: 'EDUCATION',
+      timezone: INSTITUTE.timezone,
+    },
+  });
+
+  // Everything from here on belongs to that org, without saying so 40 times.
+  prisma = withOrg(rawPrisma, org.id);
+
   /* -------------------------------- settings ------------------------------ */
-  await prisma.setting.upsert({
-    where: { id: 'singleton' },
-    create: {
-      id: 'singleton',
+  await prisma.setting.create({
+    data: {
+      // Named explicitly: Setting.orgId is a real foreign key rather than a
+      // defaulted column, so Prisma requires it at the type level.
+      orgId: org.id,
       instituteName: INSTITUTE.name,
       instituteTimezone: INSTITUTE.timezone,
       agentHourlyCostUsd: '12.00',
     },
-    update: {},
   });
 
   /* --------------------------------- users -------------------------------- */
@@ -187,7 +233,8 @@ async function main() {
           skills: a.skills as unknown as Prisma.UserCreateInput['skills'],
           extension: a.ext,
           avatarColor: a.colour,
-          presence: { create: { status: 'OFFLINE', since: new Date() } },
+          // Nested create: the extension only sees the top-level model.
+          presence: { create: { orgId: org.id, status: 'OFFLINE', since: new Date() } },
         },
       }),
     );
@@ -406,18 +453,20 @@ async function main() {
       // Contact: reuse an existing one sometimes so history looks real.
       const callerName = `${pick(FIRST)} ${pick(LAST)}`;
       const phone = makeCallerNumber();
-      const contact = await prisma.contact.upsert({
-        where: { phoneE164: phone },
-        create: {
-          phoneE164: phone,
-          name: callerName,
-          courseInterest: chance(0.6) ? pick(COURSES).title : null,
-          bitrixEntity: chance(0.75) ? 'lead' : null,
-          bitrixId: chance(0.75) ? String(int(1000, 9999)) : null,
-          bitrixSyncedAt: chance(0.75) ? startedAt : null,
-        },
-        update: {},
-      });
+      // findFirst + create rather than upsert: phoneE164 is unique per org now,
+      // and the scoped read already answers "does this centre know this caller".
+      const contact =
+        (await prisma.contact.findFirst({ where: { phoneE164: phone } })) ??
+        (await prisma.contact.create({
+          data: {
+            phoneE164: phone,
+            name: callerName,
+            courseInterest: chance(0.6) ? pick(COURSES).title : null,
+            bitrixEntity: chance(0.75) ? 'lead' : null,
+            bitrixId: chance(0.75) ? String(int(1000, 9999)) : null,
+            bitrixSyncedAt: chance(0.75) ? startedAt : null,
+          },
+        }));
 
       /* --- 15% of the traffic is WhatsApp so the unified inbox looks real --- */
       if (chance(0.15)) {
@@ -870,7 +919,8 @@ async function main() {
       `  ${users.length} users · ${queues.length} queues · ${chunkCount} KB chunks\n` +
       `  ${totalCalls} inbound voice · ${totalOutbound} outbound voice · ${totalWhatsApp} WhatsApp over ${DAYS} days\n` +
       `\n  Sign in with any address above, password: Password123!\n` +
-      `  Admin: layla@fitiedu.com · Supervisor: omar@fitiedu.com · Agent: mariam@fitiedu.com\n`,
+      `  Admin: layla@fitiedu.com · Supervisor: omar@fitiedu.com · Agent: mariam@fitiedu.com\n` +
+      `  Platform operator: super@hirestella.com — creates and manages contact centres\n`,
   );
 }
 

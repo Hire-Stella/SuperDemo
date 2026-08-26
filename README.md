@@ -46,9 +46,120 @@ cd apps/web && pnpm dev
 
 | Account | Role | Use it to see |
 |---|---|---|
+| `super@hirestella.com` | Platform operator | the one page that creates and manages contact centres |
 | `layla@fitiedu.com` | Admin | settings, numbers, AI config, simulator |
 | `omar@fitiedu.com` | Supervisor | live ops, analytics |
 | `mariam@fitiedu.com` | Agent | the softphone receiving a real handoff |
+
+### Tenancy
+
+**HireStella is the platform; FIT Institute is a tenant on it.** The deployment hosts many
+contact centres — clinics, restaurants, training institutes — and a platform operator creates
+them from **Contact centres**, the only page that role has. The seed ships one tenant so the
+demo has data; everything else is onboarded through that page.
+
+Onboarding provisions a working centre, not an empty shell: queues, an AI receptionist briefed
+for that vertical, placeholder knowledge documents and a phone number pointed at both. The
+routing categories are re-labelled per vertical (`CATEGORY_LABELS`), so a clinic sees
+*Appointments* where the institute sees *Courses & admissions* — same five slots underneath.
+
+The platform's own name lives in `apps/web/lib/platform.ts` and reads
+`NEXT_PUBLIC_PLATFORM_NAME`, so a white-label deployment changes one value.
+
+### Outbound campaigns
+
+**Outbound** in the sidebar. A campaign has an opening line, an AI assistant, a list of people
+drawn from contacts the centre already knows, and pacing: how many calls at once, a calling window
+in the centre's own timezone, and how many attempts each person gets before it gives up.
+
+The dialer (`apps/api/src/calls/dialer.service.ts`) ticks every 5s and asks only "may I place
+another call right now" — never "how many are left", because pacing off a backlog is how a list
+gets hammered. Three things it guarantees:
+
+* **A consent basis is required**, in free text, and it is written onto every conversation the
+  campaign creates. Cold-calling a list you happen to hold is not a lawful basis, and a dialer that
+  doesn't make you write it down invites exactly that.
+* **Opt-outs apply at dial time**, not at import. Marking a contact do-not-call also suppresses
+  them from every list they are currently queued on.
+* **Targets are claimed atomically**, so two API instances cannot call the same person at once.
+
+Today it dials the **simulated** driver: real conversations, real AI turns, real analytics, no
+carrier. `dial()` throws on the other drivers — attaching a carrier with outbound termination is
+the only missing piece, and the dialer already treats "answered" as an event that arrives later,
+which is the shape a real carrier has.
+
+### CRM per tenant
+
+Each centre picks its own CRM in **Settings → CRM integration**. A centre that picks nothing
+inherits the deployment's `CRM_DRIVER`, so an existing single-tenant install keeps working
+untouched.
+
+| Provider | Credentials | Live calls? | Notes |
+|---|---|---|---|
+| **Bitrix24** | One inbound webhook URL | Yes | `telephony.externalcall.*` shows the call while it rings |
+| **Zoho CRM** | OAuth client + refresh token + region | No | Calls module records finished calls; recordings become Notes |
+| **HubSpot** | Private app token (`pat-…`) | Yes | Calls, Notes and a first-class recording field on the contact |
+| **Custom webhook** | Your URL + a signing secret | No | Signed JSON to your endpoint — reaches Salesforce, Pipedrive, Dynamics or a booking system via Zapier / Make / your own code |
+| **None** | — | Yes (mock) | In-process mock; sync still runs end to end |
+
+Adding a sixth provider is a class implementing `CrmProvider` (8 members) plus a case in
+`CrmResolver` and a form field — no migration, because credentials live in one encrypted blob
+and non-secret fields in a JSON column.
+
+**The webhook driver cannot read.** A CRM driver's first job is "does this caller already exist,
+and what is their id"; a fire-and-forget POST gets no answer, so it returns a stable id derived
+from the phone number. Reply with `{"id":"..."}` and it will use yours instead. Every request
+carries `X-HireStella-Signature`: HMAC-SHA256 over `timestamp.body`, with the timestamp signed so
+a captured request cannot be replayed.
+
+**Sync is one-way (us → CRM).** There is no inbound route, so a lead edited in the CRM does not
+flow back.
+
+* Credentials are encrypted at rest with AES-256-GCM under `CRM_SECRET_KEY`, and the API never
+  returns them — the settings page is told *whether* each secret is set, never what it is. Saving
+  therefore means re-entering them.
+* Without `CRM_SECRET_KEY` set, saving a credential is **refused** rather than stored in the clear.
+* `CrmResolver` picks the driver per organisation and caches an instance keyed by a fingerprint of
+  the credentials, so a change takes effect immediately and a Zoho access token is reused rather
+  than re-minted per call.
+* A centre with broken credentials fails its syncs into the outbox's dead letters — visible on its
+  own settings page — while its calls keep being answered.
+
+### Per-tenant theming
+
+Every colour in the app is already a shadcn CSS custom property, so a tenant theme is just a
+set of overrides for those same properties — which is exactly what
+[tweakcn](https://tweakcn.com) exports. A client's brand can therefore be pasted in rather than
+translated.
+
+* **Presets** — seven palettes in `packages/contracts/src/themes.ts`, derived from a hue and a
+  chroma so every tenant's UI is structurally identical and only differently coloured. The
+  operator picks one per centre on the **Contact centres** page; a new centre defaults to
+  whatever suits its vertical (clinic → teal, restaurant → amber).
+* **Custom tokens** — `Organization.themeTokens` takes a tweakcn export as
+  `{ light: {...}, dark: {...} }` and wins over the preset. Settable via
+  `PUT /api/platform/orgs/:id`; there is no UI for pasting one yet.
+* **What is not themeable, deliberately** — the state colours. Amber means warning, green means
+  live, purple means AI-handled, in every centre. An operator moving between two clients should
+  not have to relearn them.
+
+Applied client-side by `components/tenant-theme.tsx`, which injects one stylesheet after
+`globals.css`. There is a brief flash of the default palette on hard reload, since the theme is
+only known once the session resolves.
+
+* Every tenant-owned row carries `orgId`, and isolation is enforced by a Prisma client
+  extension ([`packages/db/src/tenant.ts`](packages/db/src/tenant.ts)) that injects it into
+  every where-clause and every create. Individual queries do not filter by org, so there is
+  no filter to forget — that file also documents what it deliberately does not cover
+  (raw SQL, nested writes).
+* A platform operator can **read** any centre — a banner names the one on screen — and can
+  **write** nothing inside it. `JwtAuthGuard` refuses their non-GET requests to anything but
+  `/api/platform/*`, so the rule holds for controllers written later.
+* Suspending a centre signs out its whole staff and refuses new sign-ins, and takes effect on
+  the next request rather than when tokens expire, because the org is re-read every time.
+* An inbound call is attributed to a centre by the number dialled
+  ([`CallsService.onInboundCall`](apps/api/src/calls/calls.service.ts)), since a carrier
+  webhook arrives with no session to inherit an org from.
 
 ---
 
