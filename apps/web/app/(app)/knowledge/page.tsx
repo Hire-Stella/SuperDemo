@@ -3,12 +3,16 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { BookOpen } from 'lucide-react';
-import type { KnowledgeDocDto } from '@fit-ai/contracts';
+import { categoryLabel, type KnowledgeDocDto, type Skill } from '@fit-ai/contracts';
 import { api } from '@/lib/api';
 import { dateTime } from '@/lib/format';
+import { useUser } from '@/components/providers';
 import { Badge, Button, Card, MockNotice, SkeletonRows, Table, Td, Th } from '@/components/composites';
 
 export default function KnowledgePage() {
+  // Category names are per-vertical: a clinic's "Appointments" is the same
+  // routing slot as an institute's "Courses & admissions".
+  const user = useUser();
   const query = useQuery({
     queryKey: ['knowledge'],
     queryFn: () => api.get<KnowledgeDocDto[]>('/knowledge'),
@@ -39,7 +43,7 @@ export default function KnowledgePage() {
       <div className="mb-4">
         <MockNotice>
           Course names, categories and contact details are from fitiedu.com and are real. Fees,
-          durations and intake dates are <strong>placeholders</strong> — replace them with FIT&apos;s
+          durations and intake dates are <strong>placeholders</strong> — replace them with your
           actual figures before any customer-facing use. The assistant is configured to hedge on
           price and defer to admissions for the exact amount.
         </MockNotice>
@@ -52,7 +56,7 @@ export default function KnowledgePage() {
           {Object.entries(byCategory).map(([category, docs]) => (
             <Card
               key={category}
-              title={category.charAt(0) + category.slice(1).toLowerCase()}
+              title={categoryLabel(user.orgIndustry, category as Skill)}
               subtitle={`${docs.length} document${docs.length === 1 ? '' : 's'}`}
             >
               <Table>

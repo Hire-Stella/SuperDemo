@@ -3,12 +3,15 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Users } from 'lucide-react';
-import type { AgentScorecard, AgentSummary } from '@fit-ai/contracts';
+import { categoryLabel, type AgentScorecard, type AgentSummary } from '@fit-ai/contracts';
 import { api, qs } from '@/lib/api';
 import { AGENT_STATUS_STYLE, dateRange, pct, seconds } from '@/lib/format';
+import { useUser } from '@/components/providers';
 import { Avatar, Badge, Card, Select, SkeletonRows, Table, Td, Th, cn } from '@/components/composites';
 
 export default function AgentsPage() {
+  // Skill chips read in this centre's own vocabulary.
+  const user = useUser();
   const [days, setDays] = useState('7');
   const range = dateRange(Number(days));
 
@@ -24,6 +27,22 @@ export default function AgentsPage() {
   });
 
   const byId = new Map((scores.data ?? []).map((s) => [s.userId, s]));
+
+  // Was a hardcoded "Dubai 8 · India 2 · Egypt 2" — one tenant's headcount, on
+  // every tenant's page. Counted from the roster instead.
+  const agents = roster.data ?? [];
+  const byLocation = agents.reduce<Record<string, number>>((acc, a) => {
+    const key = a.location.charAt(0) + a.location.slice(1).toLowerCase();
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+  const teamSubtitle =
+    agents.length === 0
+      ? 'No agents yet'
+      : Object.entries(byLocation)
+          .sort(([, a], [, b]) => b - a)
+          .map(([place, n]) => `${place} ${n}`)
+          .join(' · ');
 
   return (
     <div className="mx-auto max-w-[1600px] px-4 py-5 sm:px-6">
@@ -44,7 +63,7 @@ export default function AgentsPage() {
         </Select>
       </header>
 
-      <Card title="Team" subtitle="Dubai 8 · India 2 · Egypt 2">
+      <Card title="Team" subtitle={teamSubtitle}>
         {roster.isLoading ? (
           <SkeletonRows rows={8} cols={7} />
         ) : (
@@ -89,7 +108,7 @@ export default function AgentsPage() {
                       <div className="flex flex-wrap gap-1">
                         {a.skills.map((sk) => (
                           <Badge key={sk} className="text-[10px]">
-                            {sk.toLowerCase()}
+                            {categoryLabel(user.orgIndustry, sk)}
                           </Badge>
                         ))}
                       </div>

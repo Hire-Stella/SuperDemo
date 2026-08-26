@@ -300,8 +300,21 @@ export function Th({ children, className }: { children?: ReactNode; className?: 
   );
 }
 
-export function Td({ children, className }: { children?: ReactNode; className?: string }) {
-  return <TableCell className={cn('px-4 py-2.5 align-middle', className)}>{children}</TableCell>;
+export function Td({
+  children,
+  className,
+  colSpan,
+}: {
+  children?: ReactNode;
+  className?: string;
+  /** For full-width rows: an expander under a row, or an empty-state message. */
+  colSpan?: number;
+}) {
+  return (
+    <TableCell colSpan={colSpan} className={cn('px-4 py-2.5 align-middle', className)}>
+      {children}
+    </TableCell>
+  );
 }
 
 /* ------------------------------- Mock notice ------------------------------ */

@@ -11,6 +11,8 @@
 
 const BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3101';
 
+const VIEWING_ORG_KEY = 'fitai.viewingOrg';
+
 let accessToken: string | null = null;
 let refreshInFlight: Promise<string | null> | null = null;
 
@@ -19,6 +21,25 @@ export function setAccessToken(token: string | null): void {
 }
 export function getAccessToken(): string | null {
   return accessToken;
+}
+
+/**
+ * The centre a platform operator is currently looking at, sent as X-Org-Id.
+ *
+ * localStorage, unlike the access token: this is not a credential. The header
+ * only does anything for a SUPERADMIN — the API ignores it for everyone else
+ * and refuses writes while it is set — so persisting it just means a refresh
+ * doesn't kick the operator out of the centre they were inspecting.
+ */
+export function setViewingOrg(orgId: string | null): void {
+  if (typeof window === 'undefined') return;
+  if (orgId) window.localStorage.setItem(VIEWING_ORG_KEY, orgId);
+  else window.localStorage.removeItem(VIEWING_ORG_KEY);
+}
+
+export function getViewingOrg(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(VIEWING_ORG_KEY);
 }
 
 export class ApiError extends Error {
@@ -80,6 +101,11 @@ async function request<T>(
 ): Promise<T> {
   const headers = new Headers(init.headers);
   if (accessToken) headers.set('authorization', `Bearer ${accessToken}`);
+  // Platform routes are about orgs rather than inside one, so they must not
+  // inherit the centre being viewed — /platform/orgs would otherwise scope its
+  // own listing to one tenant.
+  const viewingOrg = path.startsWith('/platform/') ? null : getViewingOrg();
+  if (viewingOrg) headers.set('x-org-id', viewingOrg);
   if (init.body && !(init.body instanceof FormData)) {
     headers.set('content-type', 'application/json');
   }
@@ -121,6 +147,8 @@ export const api = {
   download: async (path: string): Promise<void> => {
     const headers = new Headers();
     if (accessToken) headers.set('authorization', `Bearer ${accessToken}`);
+    const org = getViewingOrg();
+    if (org) headers.set('x-org-id', org);
     const res = await fetch(`${BASE}/api${path}`, { headers, credentials: 'include' });
     if (!res.ok) throw await readError(res);
 

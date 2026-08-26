@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Headphones, ArrowRight } from 'lucide-react';
-import { useSession } from '@/components/providers';
+import { homeFor, useSession } from '@/components/providers';
 import { Button, Input, Spinner } from '@/components/composites';
+import { PLATFORM_NAME, PLATFORM_TAGLINE } from '@/lib/platform';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 /** Seeded accounts, so a demo doesn't stall on "what was the password?". */
 const DEMO_ACCOUNTS = [
+  { email: 'super@hirestella.com', role: 'Platform', note: 'creates & manages contact centres' },
   { email: 'layla@fitiedu.com', role: 'Admin', note: 'settings, numbers, AI config' },
   { email: 'omar@fitiedu.com', role: 'Supervisor', note: 'live ops, analytics' },
   { email: 'mariam@fitiedu.com', role: 'Agent', note: 'softphone, receives calls' },
@@ -23,7 +25,8 @@ export default function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (user) router.replace('/');
+    // A platform operator has no live board of their own to land on.
+    if (user) router.replace(homeFor(user));
   }, [user, router]);
 
   if (loading) return <Spinner label="Restoring session…" />;
@@ -49,8 +52,8 @@ export default function LoginPage() {
             <Headphones className="size-5" aria-hidden />
           </span>
           <div className="flex-1">
-            <p className="font-semibold">FIT-AI Contact Centre</p>
-            <p className="text-xs text-muted-foreground">FIT Institute · Dubai</p>
+            <p className="font-semibold">{PLATFORM_NAME}</p>
+            <p className="text-xs text-muted-foreground">{PLATFORM_TAGLINE}</p>
           </div>
           <ThemeToggle />
         </div>

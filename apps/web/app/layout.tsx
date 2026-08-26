@@ -2,14 +2,16 @@ import type { Metadata } from 'next';
 import { Geist } from 'next/font/google';
 import './globals.css';
 import { Providers } from '@/components/providers';
+import { PLATFORM_NAME, PLATFORM_TAGLINE } from '@/lib/platform';
 import { cn } from '@/lib/utils';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'FIT-AI · Contact Centre',
+  title: `${PLATFORM_NAME} · ${PLATFORM_TAGLINE}`,
   description:
-    'AI-first contact centre for FIT Institute — inbound AI voice with warm handoff to human agents, unified with Bitrix24.',
+    `${PLATFORM_NAME} runs AI-first contact centres for clinics, restaurants, institutes and ` +
+    'more — inbound AI voice with warm handoff to human agents, one isolated centre per client.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

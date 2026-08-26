@@ -16,7 +16,7 @@ import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@/components/ui/sonner';
 import { useRouter } from 'next/navigation';
 import type { LoginOutput, SessionUser } from '@fit-ai/contracts';
-import { api, setAccessToken } from '@/lib/api';
+import { api, getViewingOrg, setAccessToken, setViewingOrg } from '@/lib/api';
 import { connectSocket, disconnectSocket, type AppSocket } from '@/lib/socket';
 
 /* ------------------------------- session ---------------------------------- */
@@ -25,9 +25,16 @@ interface SessionValue {
   user: SessionUser | null;
   loading: boolean;
   socket: AppSocket | null;
+  /** Set only for a platform operator inspecting one centre. */
+  viewingOrgId: string | null;
+  viewOrg: (orgId: string | null) => void;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
+
+/** Where a role lands after signing in. */
+export const homeFor = (user: SessionUser): string =>
+  user.role === 'SUPERADMIN' ? '/superadmin' : '/';
 
 const SessionContext = createContext<SessionValue | null>(null);
 
@@ -48,8 +55,16 @@ function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [socket, setSocket] = useState<AppSocket | null>(null);
+  // Read lazily rather than in an effect: the first render already needs it to
+  // decide whether an operator is inside a centre or looking at the list.
+  const [viewingOrgId, setViewingOrgId] = useState<string | null>(() => getViewingOrg());
   const router = useRouter();
   const heartbeat = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const viewOrg = useCallback((orgId: string | null) => {
+    setViewingOrg(orgId);
+    setViewingOrgId(orgId);
+  }, []);
 
   const attachSocket = useCallback(() => {
     const s = connectSocket();
@@ -107,9 +122,12 @@ function SessionProvider({ children }: { children: ReactNode }) {
       setAccessToken(body.accessToken);
       setUser(body.user);
       attachSocket();
-      router.push('/');
+      // A fresh sign-in starts outside any centre, even if a previous operator
+      // session left one selected on this machine.
+      if (body.user.role === 'SUPERADMIN') viewOrg(null);
+      router.push(homeFor(body.user));
     },
-    [attachSocket, router],
+    [attachSocket, router, viewOrg],
   );
 
   const logout = useCallback(async () => {
@@ -119,12 +137,13 @@ function SessionProvider({ children }: { children: ReactNode }) {
     setAccessToken(null);
     setUser(null);
     setSocket(null);
+    viewOrg(null);
     router.push('/login');
-  }, [router]);
+  }, [router, viewOrg]);
 
   const value = useMemo(
-    () => ({ user, loading, socket, login, logout }),
-    [user, loading, socket, login, logout],
+    () => ({ user, loading, socket, viewingOrgId, viewOrg, login, logout }),
+    [user, loading, socket, viewingOrgId, viewOrg, login, logout],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

@@ -16,8 +16,9 @@ import {
   YAxis,
 } from 'recharts';
 import { BarChart3, Download, PiggyBank } from 'lucide-react';
-import { DISPOSITION_LABELS, type AnalyticsOverview } from '@fit-ai/contracts';
+import { dispositionLabel, type AnalyticsOverview } from '@fit-ai/contracts';
 import { api, qs } from '@/lib/api';
+import { useUser } from '@/components/providers';
 import { dateRange, ESCALATION_LABEL, money, pct, seconds } from '@/lib/format';
 import { Badge, Button, Card, Metric, Select, Spinner, Table, Td, Th } from '@/components/composites';
 
@@ -25,7 +26,7 @@ import { Badge, Button, Card, Metric, Select, Spinner, Table, Td, Th } from '@/c
  * Chart palette — read from the theme, not hardcoded.
  *
  * These are CSS variable references, which SVG resolves at paint time, so the
- * charts follow the FIT red brand and flip correctly between light and dark
+ * charts follow the active tenant brand and flip correctly between light and dark
  * without a re-render or a JS colour lookup.
  *
  * Series meanings are kept consistent with the rest of the app: brand red for
@@ -44,6 +45,8 @@ const C = {
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 export default function AnalyticsPage() {
+  // Outcome labels read in this centre's own vocabulary.
+  const user = useUser();
   const [days, setDays] = useState('30');
   const range = dateRange(Number(days));
 
@@ -145,7 +148,7 @@ export default function AnalyticsPage() {
           <Metric
             label="Assumed agent cost"
             value={`${money(d.savings.assumedAgentHourlyUsd)}/hr`}
-            hint="editable in Settings — replace with FIT's real figure before quoting"
+            hint="editable in Settings — replace with your real figure before quoting"
           />
         </div>
       </Card>
@@ -264,7 +267,7 @@ export default function AnalyticsPage() {
       <Card
         className="mt-4"
         title="When calls arrive"
-        subtitle="Hour × weekday, institute local time — this is the staffing chart"
+        subtitle="Hour × weekday, centre local time — this is the staffing chart"
       >
         <div className="overflow-x-auto p-4">
           <table className="border-separate border-spacing-0.5">
@@ -394,7 +397,7 @@ export default function AnalyticsPage() {
                     key={x.disposition}
                     className="flex items-center justify-between gap-3 px-4 py-2.5"
                   >
-                    <span className="truncate text-sm">{DISPOSITION_LABELS[x.disposition]}</span>
+                    <span className="truncate text-sm">{dispositionLabel(user.orgIndustry, x.disposition)}</span>
                     <Badge>{x.count}</Badge>
                   </li>
                 ))}

@@ -25,6 +25,12 @@
  * That leaves state legible while the app still looks unmistakably FIT. Every
  * state colour is paired with an icon or text label, so nothing depends on hue
  * alone — roughly one man in twelve cannot rely on red/green.
+
+ * TENANT THEMES: the tokens below that carry brand identity are derived from
+ * --primary with color-mix rather than from --fit-red directly. That is what
+ * lets a per-tenant theme (packages/contracts/src/themes.ts) override --primary
+ * and have the active nav pill, charts and sidebar follow it. Hardcoding the red
+ * hue here left a pink nav item on a navy tenant.
  */
 
 :root {
@@ -53,7 +59,7 @@
   --muted-foreground: oklch(0.5 0.015 25);
 
   --accent: oklch(0.955 0.02 25);
-  --accent-foreground: var(--fit-red);
+  --accent-foreground: var(--primary);
 
   /* Deeper and browner than the brand red so "destructive" never reads as
      "primary". Paired with an icon everywhere it appears. */
@@ -62,7 +68,7 @@
 
   --border: oklch(0.912 0.008 25);
   --input: oklch(0.912 0.008 25);
-  --ring: var(--fit-red);
+  --ring: var(--primary);
 
   /* ── semantic state ─────────────────────────────────────────────────── */
   --ai: oklch(0.55 0.155 292);
@@ -71,10 +77,10 @@
   --live-soft: oklch(0.962 0.032 152);
   --warn: oklch(0.63 0.145 65);
   --warn-soft: oklch(0.965 0.04 75);
-  --brand-soft: oklch(0.962 0.024 25);
+  --brand-soft: color-mix(in oklch, var(--primary) 9%, var(--background));
 
   /* ── charts: brand-led, then the semantic hues ──────────────────────── */
-  --chart-1: var(--fit-red);
+  --chart-1: var(--primary);
   --chart-2: var(--ai);
   --chart-3: var(--live);
   --chart-4: var(--warn);
@@ -83,12 +89,12 @@
   /* ── sidebar ────────────────────────────────────────────────────────── */
   --sidebar: oklch(1 0 0);
   --sidebar-foreground: var(--foreground);
-  --sidebar-primary: var(--fit-red);
+  --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.962 0.024 25);
-  --sidebar-accent-foreground: var(--fit-red);
+  --sidebar-accent: color-mix(in oklch, var(--primary) 9%, var(--background));
+  --sidebar-accent-foreground: var(--primary);
   --sidebar-border: oklch(0.912 0.008 25);
-  --sidebar-ring: var(--fit-red);
+  --sidebar-ring: var(--primary);
 }
 
 .dark {
@@ -119,7 +125,7 @@
 
   --border: oklch(1 0 0 / 12%);
   --input: oklch(1 0 0 / 16%);
-  --ring: var(--fit-red-dark);
+  --ring: var(--primary);
 
   --ai: oklch(0.74 0.14 292);
   --ai-soft: oklch(0.3 0.05 292);
@@ -127,9 +133,9 @@
   --live-soft: oklch(0.29 0.05 152);
   --warn: oklch(0.79 0.14 72);
   --warn-soft: oklch(0.31 0.05 72);
-  --brand-soft: oklch(0.3 0.05 25);
+  --brand-soft: color-mix(in oklch, var(--primary) 22%, var(--background));
 
-  --chart-1: var(--fit-red-dark);
+  --chart-1: var(--primary);
   --chart-2: var(--ai);
   --chart-3: var(--live);
   --chart-4: var(--warn);
@@ -137,12 +143,12 @@
 
   --sidebar: oklch(0.19 0.009 25);
   --sidebar-foreground: var(--foreground);
-  --sidebar-primary: var(--fit-red-dark);
+  --sidebar-primary: var(--primary);
   --sidebar-primary-foreground: oklch(0.16 0.01 25);
   --sidebar-accent: oklch(0.3 0.045 25);
   --sidebar-accent-foreground: oklch(0.9 0.06 26);
   --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: var(--fit-red-dark);
+  --sidebar-ring: var(--primary);
 }
 
 @theme inline {

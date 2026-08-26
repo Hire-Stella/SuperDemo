@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownLeft, ArrowUpRight, CheckCircle2, Download, Inbox, MessageCircle, Phone, Search, Sparkles } from 'lucide-react';
 import {
-  DISPOSITION_LABELS,
+  dispositionLabel,
   type Channel,
   type ConversationListItem,
 } from '@fit-ai/contracts';
 import { api, qs } from '@/lib/api';
+import { useUser } from '@/components/providers';
 import { useSession } from '@/components/providers';
 import { CHANNEL_LABEL, dateTime, duration, ESCALATION_LABEL, phone } from '@/lib/format';
 import {
@@ -27,6 +28,8 @@ import {
 } from '@/components/composites';
 
 export default function ConversationsPage() {
+  // Outcome labels read in this centre's own vocabulary.
+  const user = useUser();
   const { socket } = useSession();
   const queryClient = useQueryClient();
 
@@ -231,7 +234,7 @@ export default function ConversationsPage() {
                     </div>
                     {c.disposition && (
                       <span className="mt-0.5 block text-[11px] text-muted-foreground/70">
-                        {DISPOSITION_LABELS[c.disposition]}
+                        {dispositionLabel(user.orgIndustry, c.disposition)}
                       </span>
                     )}
                   </Td>

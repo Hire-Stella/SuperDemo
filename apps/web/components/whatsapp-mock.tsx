@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { Check, MessageCircle, Phone, RotateCcw, Send, Video } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Badge, Button, Card, Input, MockNotice, cn } from '@/components/composites';
+import { useUser } from '@/components/providers';
 
 type Bubble = { id: string; who: 'customer' | 'business'; text: string; at: string };
 
@@ -44,6 +45,16 @@ function clockOf(iso: string): string {
 }
 
 export function WhatsAppMock() {
+  // The handset shows whichever centre the viewer belongs to — this pane used to
+  // name FIT because FIT was the only tenant.
+  const { orgName: userOrgName } = useUser();
+  const orgName = userOrgName ?? 'Contact centre';
+  const initials = orgName
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0] ?? '')
+    .join('')
+    .toUpperCase();
   const queryClient = useQueryClient();
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [text, setText] = useState('');
@@ -130,14 +141,14 @@ export function WhatsAppMock() {
 
         {/* ------------------------------ handset ------------------------------ */}
         <div className="mx-auto w-full max-w-sm overflow-hidden rounded-2xl border border-border shadow-sm">
-          {/* WhatsApp's own chrome is intentionally its green, not the FIT red —
-              this pane is meant to read as WhatsApp, not as our product. */}
+          {/* WhatsApp's own chrome is intentionally its green, not our brand
+              colour — this pane is meant to read as WhatsApp, not as us. */}
           <div className="flex items-center gap-2.5 bg-[#075E54] px-3 py-2.5 text-white">
             <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white/20 text-xs font-semibold">
-              FIT
+              {initials}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">FIT Institute</p>
+              <p className="truncate text-sm font-medium">{orgName}</p>
               <p className="truncate text-[11px] text-white/70">
                 {sending ? 'typing…' : 'business account'}
               </p>

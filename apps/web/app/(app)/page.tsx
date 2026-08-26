@@ -307,7 +307,7 @@ export default function LiveOpsPage() {
         </Card>
 
         {/* queues */}
-        <Card title="Queues" subtitle="Mapped to FIT's course categories">
+        <Card title="Queues" subtitle="Where escalated calls land">
           {queues.isLoading ? (
             <SkeletonRows rows={5} cols={2} />
           ) : (
@@ -351,7 +351,7 @@ export default function LiveOpsPage() {
       <Card
         className="mt-4"
         title="Agents on shift"
-        subtitle="Dubai 8 · India 2 · Egypt 2 — remote agents work in the browser, no SIM, no roaming"
+        subtitle="Remote agents work in the browser — no SIM, no roaming"
       >
         {roster.isLoading ? (
           <SkeletonRows rows={3} cols={4} />

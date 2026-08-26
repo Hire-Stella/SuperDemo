@@ -12,6 +12,10 @@ import {
   ShoppingCart,
   XCircle,
 } from 'lucide-react';
+import {
+  CRM_DRIVER_LABELS,
+  type CrmDriver,
+} from '@fit-ai/contracts';
 import type {
   AvailableNumberDto,
   CrmConnectionDto,
@@ -22,6 +26,7 @@ import type {
 } from '@fit-ai/contracts';
 import { api, qs } from '@/lib/api';
 import { dateTime, money, phone } from '@/lib/format';
+import { CrmConfigPanel } from '@/components/crm-config';
 import {
   Badge,
   Button,
@@ -304,7 +309,10 @@ export default function SettingsPage() {
         className="mt-4"
         title={
           <span className="flex items-center gap-1.5">
-            <PlugZap className="size-4" aria-hidden /> Bitrix24
+            <PlugZap className="size-4" aria-hidden />
+            {crm.data?.config
+              ? CRM_DRIVER_LABELS[crm.data.config.provider]
+              : 'CRM integration'}
           </span>
         }
         subtitle="Calls, recordings and AI transcripts land on the lead's timeline"
@@ -320,9 +328,9 @@ export default function SettingsPage() {
           <>
             <div className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-4">
               <Metric
-                label="Driver"
-                value={crm.data.driver}
-                tone={crm.data.driver === 'bitrix' ? 'live' : 'warn'}
+                label="Provider"
+                value={CRM_DRIVER_LABELS[(crm.data.driver as CrmDriver) ?? 'mock']}
+                tone={crm.data.driver === 'mock' ? 'warn' : 'live'}
                 hint={crm.data.portalUrl ?? undefined}
               />
               <Metric label="Synced (24h)" value={crm.data.succeeded24h} tone="live" />
@@ -342,15 +350,14 @@ export default function SettingsPage() {
             {crm.data.driver === 'mock' && (
               <div className="px-4 pb-4">
                 <MockNotice>
-                  No real Bitrix24 portal is attached. To connect for real: in Bitrix24 go to
-                  Developer resources → Other → Inbound webhook, tick the <strong>CRM</strong> and{' '}
-                  <strong>Telephony</strong> scopes, then set{' '}
-                  <code className="text-[11px]">CRM_DRIVER=bitrix</code> and{' '}
-                  <code className="text-[11px]">BITRIX_WEBHOOK_URL</code>. Takes about two minutes
-                  and needs no marketplace app.
+                  No external CRM is connected for this centre, so sync runs against an in-process
+                  mock. Connect Bitrix24 or Zoho CRM below — each centre connects its own, and
+                  credentials are stored encrypted.
                 </MockNotice>
               </div>
             )}
+
+            <CrmConfigPanel config={crm.data.config} />
 
             <div className="border-t border-border">
               <p className="px-4 py-2 text-xs font-semibold text-muted-foreground">Recent sync activity</p>
