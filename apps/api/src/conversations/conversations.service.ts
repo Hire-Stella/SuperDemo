@@ -104,7 +104,7 @@ export class ConversationsService {
     if (!conv) throw new NotFoundException('Conversation not found');
 
     const crmSynced = await this.crmSyncedSet([id]);
-    const settings = await this.prisma.setting.findUnique({ where: { id: 'singleton' } });
+    const settings = await this.prisma.setting.findFirst();
 
     const recording = conv.call?.recording
       ? {

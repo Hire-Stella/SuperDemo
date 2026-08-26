@@ -65,7 +65,7 @@ export class MediaController {
     const key = `recordings/${callId}.webm`;
     const stored = await this.storage.put(key, file.buffer, file.mimetype || 'audio/webm');
 
-    const retention = await this.prisma.setting.findUnique({ where: { id: 'singleton' } });
+    const retention = await this.prisma.setting.findFirst();
     const days = retention?.recordingRetentionDays ?? 365;
 
     const recording = await this.prisma.recording.upsert({

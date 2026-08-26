@@ -70,8 +70,11 @@ export class AnalyticsService {
     const withinSla = answered && (call.queueWaitMs ?? Infinity) <= slaMs;
 
     await this.prisma.callMetricsDaily.upsert({
-      where: { day_queueId_agentId: { day, queueId, agentId } },
+      // orgId comes off the call rather than the request context: this runs
+      // from an outbox handler, which has no request and therefore no context.
+      where: { orgId_day_queueId_agentId: { orgId: call.orgId, day, queueId, agentId } },
       create: {
+        orgId: call.orgId,
         day,
         queueId,
         agentId,
@@ -243,7 +246,7 @@ export class AnalyticsService {
       },
     );
 
-    const settings = await this.prisma.setting.findUnique({ where: { id: 'singleton' } });
+    const settings = await this.prisma.setting.findFirst();
     const hourlyUsd = Number(settings?.agentHourlyCostUsd ?? 12);
 
     // Cost avoided: an AI-contained call consumed no agent time. Valued at the

@@ -17,6 +17,13 @@ export interface JwtPayload {
   email: string;
   role: string;
   name: string;
+  /**
+   * Present for convenience and debugging only — the guard re-reads the org
+   * from the database on every request. A token must not be able to assert
+   * which tenant it belongs to, or a deactivated centre would keep working
+   * until its tokens expired.
+   */
+  orgId: string | null;
 }
 
 /** Refresh tokens are stored hashed — a DB leak must not yield usable tokens. */
@@ -33,7 +40,12 @@ export class AuthService {
   ) {}
 
   async validate(email: string, password: string): Promise<SessionUser> {
-    const user = await this.prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    // Sign-in runs before any tenant context exists, so this lookup is
+    // unscoped — which it must be: the address is what tells us the org.
+    const user = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      include: { org: { select: { name: true, industry: true, isActive: true, themePreset: true, themeTokens: true } } },
+    });
 
     // Verify against a dummy hash when the user is absent so the response time
     // doesn't reveal whether an address exists.
@@ -48,6 +60,11 @@ export class AuthService {
     const ok = await argon2.verify(user.passwordHash, password).catch(() => false);
     if (!ok) throw new UnauthorizedException('Invalid email or password');
     if (!user.isActive) throw new ForbiddenException('This account has been deactivated');
+    // Deactivating an org locks out its whole staff in one action, which is the
+    // point of having the switch on the superadmin's page.
+    if (user.org && !user.org.isActive) {
+      throw new ForbiddenException('This contact centre has been deactivated');
+    }
 
     await this.prisma.user.update({
       where: { id: user.id },
@@ -59,6 +76,11 @@ export class AuthService {
       email: user.email,
       name: user.name,
       role: user.role,
+      orgId: user.orgId,
+      orgName: user.org?.name ?? null,
+      orgIndustry: user.org?.industry ?? null,
+      orgThemePreset: (user.org?.themePreset as SessionUser['orgThemePreset']) ?? null,
+      orgThemeTokens: (user.org?.themeTokens as SessionUser['orgThemeTokens']) ?? null,
       location: user.location,
       timezone: user.timezone,
       skills: user.skills,
@@ -72,6 +94,7 @@ export class AuthService {
       email: user.email,
       role: user.role,
       name: user.name,
+      orgId: user.orgId,
     };
     return this.jwt.sign(payload, {
       secret: this.env.JWT_ACCESS_SECRET,
@@ -117,7 +140,7 @@ export class AuthService {
   ): Promise<{ user: SessionUser; accessToken: string; refreshToken: string }> {
     const existing = await this.prisma.refreshToken.findUnique({
       where: { tokenHash: hashToken(token) },
-      include: { user: true },
+      include: { user: { include: { org: { select: { name: true, industry: true, isActive: true, themePreset: true, themeTokens: true } } } } },
     });
 
     if (!existing) throw new UnauthorizedException('Invalid refresh token');
@@ -139,6 +162,9 @@ export class AuthService {
     if (!existing.user.isActive) {
       throw new ForbiddenException('This account has been deactivated');
     }
+    if (existing.user.org && !existing.user.org.isActive) {
+      throw new ForbiddenException('This contact centre has been deactivated');
+    }
 
     await this.prisma.refreshToken.update({
       where: { id: existing.id },
@@ -150,6 +176,12 @@ export class AuthService {
       email: existing.user.email,
       name: existing.user.name,
       role: existing.user.role,
+      orgId: existing.user.orgId,
+      orgName: existing.user.org?.name ?? null,
+      orgIndustry: existing.user.org?.industry ?? null,
+      orgThemePreset:
+        (existing.user.org?.themePreset as SessionUser['orgThemePreset']) ?? null,
+      orgThemeTokens: (existing.user.org?.themeTokens as SessionUser['orgThemeTokens']) ?? null,
       location: existing.user.location,
       timezone: existing.user.timezone,
       skills: existing.user.skills,

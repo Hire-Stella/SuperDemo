@@ -1,10 +1,13 @@
-import { Module } from '@nestjs/common';
+import { type MiddlewareConsumer, Module, type NestModule } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { MaintenanceService } from './maintenance.service';
 import { ScheduleModule } from '@nestjs/schedule';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 
 import { ConfigModule, ENV } from './config/config.module';
+import { TenancyModule } from './tenancy/tenancy.module';
+import { TenantMiddleware } from './tenancy/tenant.middleware';
+import { PlatformModule } from './platform/platform.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
@@ -34,6 +37,8 @@ import { HealthController } from './health.controller';
 @Module({
   imports: [
     ConfigModule,
+    // Before PrismaModule: PrismaService takes TenantContext in its constructor.
+    TenancyModule,
     PrismaModule,
     RedisModule,
     ScheduleModule.forRoot(),
@@ -63,6 +68,9 @@ import { HealthController } from './health.controller';
     AdminModule,
     MediaModule,
     ReportsModule,
+
+    // Platform administration — organisations themselves, superadmin only.
+    PlatformModule,
   ],
   controllers: [HealthController, ElevenLabsController],
   providers: [
@@ -73,4 +81,13 @@ import { HealthController } from './health.controller';
     { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  /**
+   * Every route gets a tenant context, including @Public() ones — login has no
+   * org yet, but the context must exist before the guard can fill it in, and a
+   * per-route opt-in is a filter someone would forget.
+   */
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(TenantMiddleware).forRoutes('*');
+  }
+}

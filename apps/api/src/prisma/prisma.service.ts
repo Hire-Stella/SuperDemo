@@ -1,12 +1,23 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '@fit-ai/db';
+import { PrismaClient, tenantExtension } from '@fit-ai/db';
+import { TenantContext } from '../tenancy/tenant-context.service';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private readonly log = new Logger(PrismaService.name);
 
-  constructor() {
+  constructor(private readonly tenants: TenantContext) {
     super({ log: ['warn', 'error'] });
+
+    // Returning from a constructor replaces the instance, so every injected
+    // PrismaService *is* the tenant-scoped client — no second symbol to
+    // remember and no way to reach the unscoped delegates by accident. The
+    // extension proxies to this instance, so $connect, $transaction, $queryRaw
+    // and the methods below all still resolve (verified, not assumed).
+    //
+    // The resolver is read per query rather than captured, which is what lets
+    // one singleton client serve every request's own org.
+    return this.$extends(tenantExtension(() => this.tenants.orgId())) as unknown as PrismaService;
   }
 
   async onModuleInit(): Promise<void> {
@@ -21,6 +32,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   /**
    * Wipe every table. Test-only guard rail: refuses to run outside NODE_ENV=test
    * so nobody destroys a demo database with a stray call.
+   *
+   * Raw SQL, so the tenant extension does not see it — which is correct here
+   * (the point is to truncate everything) and a reminder that raw queries are
+   * outside the isolation guarantee.
    */
   async truncateAllForTests(): Promise<void> {
     if (process.env.NODE_ENV !== 'test') {

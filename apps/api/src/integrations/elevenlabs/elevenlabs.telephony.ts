@@ -257,7 +257,7 @@ export class ElevenLabsTelephony implements TelephonyProvider {
     const key = `recordings/${call.id}.mp3`;
     const stored = await this.storage.put(key, bytes, 'audio/mpeg');
 
-    const settings = await this.prisma.setting.findUnique({ where: { id: 'singleton' } });
+    const settings = await this.prisma.setting.findFirst();
     const days = settings?.recordingRetentionDays ?? 365;
 
     await this.prisma.recording.upsert({

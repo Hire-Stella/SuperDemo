@@ -120,6 +120,9 @@ export class WhatsAppService implements MessagingSink {
           startedAt: event.receivedAt,
           aiSession: {
             create: {
+              // Nested create — the tenant extension does not see it, so the
+              // org is taken from the AI agent that is answering.
+              orgId: aiAgent.orgId,
               aiAgentId: aiAgent.id,
               driverStt: 'n/a',
               driverLlm: this.ai.driverNames().llm,
@@ -394,7 +397,7 @@ export class WhatsAppService implements MessagingSink {
       receivedAt: new Date(),
     });
 
-    const contact = await this.prisma.contact.findUnique({
+    const contact = await this.prisma.contact.findFirst({
       where: { phoneE164: params.fromNumber },
       select: { id: true },
     });
@@ -428,7 +431,9 @@ export class WhatsAppService implements MessagingSink {
   /* ------------------------------- helpers -------------------------------- */
 
   private async upsertContact(phoneE164: string, name?: string) {
-    const existing = await this.prisma.contact.findUnique({ where: { phoneE164 } });
+    // A number identifies a contact only within one centre; the extension has
+    // already scoped this read to the right one.
+    const existing = await this.prisma.contact.findFirst({ where: { phoneE164 } });
     if (!existing) {
       return this.prisma.contact.create({ data: { phoneE164, name: name ?? null } });
     }
