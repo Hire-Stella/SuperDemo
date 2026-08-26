@@ -1,6 +1,8 @@
 import { Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { z } from 'zod';
 import {
+  ManualCallInput,
+  type ManualCallResult,
   AnswerCallInput,
   BrowserCallTurnInput,
   type BrowserCallTurnOutput,
@@ -81,6 +83,28 @@ export class CallsController {
   ) {
     await this.calls.completeWrapup(body.callId, user.id, body.disposition, body.notes);
     return { ok: true };
+  }
+
+  /**
+   * Place a call by hand.
+   *
+   * Available to AGENT as well as the admin roles — a telecaller is an agent,
+   * and this is the one outbound action that does not go through a campaign.
+   */
+  @Roles('ADMIN', 'SUPERVISOR', 'AGENT')
+  @Post('manual')
+  @HttpCode(201)
+  manual(
+    @ZodBody(ManualCallInput) body: ManualCallInput,
+    @CurrentUser() user: SessionUser,
+  ): Promise<ManualCallResult> {
+    return this.calls.placeManualCall({
+      agentUserId: user.id,
+      contactId: body.contactId,
+      phoneE164: body.phoneE164,
+      name: body.name,
+      note: body.note,
+    });
   }
 
   /** Re-fetch a screen-pop, e.g. after a page reload mid-ring. */

@@ -1,0 +1,9 @@
+{
+  // The worker gets its own outDir so `dev` and `dev:worker` can run at the same
+  // time without two tsc watchers writing the same files.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "./dist-worker",
+    "tsBuildInfoFile": "./tsconfig.worker.tsbuildinfo"
+  }
+}

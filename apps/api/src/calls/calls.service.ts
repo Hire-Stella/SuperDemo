@@ -30,6 +30,7 @@ import { SimulatedTelephony } from '../integrations/telephony/simulated.telephon
 import { BrowserTelephony } from '../integrations/telephony/browser.telephony';
 import { ElevenLabsTelephony } from '../integrations/elevenlabs/elevenlabs.telephony';
 import { OutboxService } from '../outbox/outbox.service';
+import { TenantContext } from '../tenancy/tenant-context.service';
 
 /**
  * The call engine. Owns the state machine and is the sink for every telephony
@@ -66,6 +67,7 @@ export class CallsService implements TelephonySink, OnModuleInit {
     private readonly simulated: SimulatedTelephony,
     private readonly browser: BrowserTelephony,
     private readonly elevenlabs: ElevenLabsTelephony,
+    private readonly tenants: TenantContext,
     @Inject(TELEPHONY_PROVIDER) private readonly telephony: TelephonyProvider,
     @Inject(ENV) private readonly env: ApiEnv,
   ) {}
@@ -126,6 +128,16 @@ export class CallsService implements TelephonySink, OnModuleInit {
 
   /* ==================== inbound ==================== */
 
+  /**
+   * The single funnel for every telephony driver, and therefore the place where
+   * a call is attributed to a centre.
+   *
+   * A carrier webhook arrives with no session, so there is no tenant context to
+   * inherit — the dialled number is what identifies the org. Resolving it here
+   * and running the rest of the flow inside that context means the whole
+   * downstream chain (contact upsert, queueing, transcript, rollup) lands in one
+   * tenant without any of those steps needing to know tenancy exists.
+   */
   async onInboundCall(event: InboundCallEvent): Promise<void> {
     // Idempotency: the unique constraint on providerCallId is the real guard,
     // but checking first avoids noisy error logs on redelivery.
@@ -138,11 +150,34 @@ export class CallsService implements TelephonySink, OnModuleInit {
       return;
     }
 
-    const number = await this.prisma.phoneNumber.findUnique({
-      where: { e164: event.toNumber },
+    const number = await this.findInboundNumber(event.toNumber);
+
+    // An in-app simulated call already has the operator's org in context; a real
+    // webhook does not, and falls back to whoever owns the DID.
+    const orgId = this.tenants.orgId() ?? number?.orgId ?? null;
+    if (!orgId) {
+      this.log.error(
+        `Inbound call to ${event.toNumber} belongs to no centre — no number record and no session. Dropping.`,
+      );
+      return;
+    }
+
+    return this.tenants.runAs(orgId, null, () => this.startInboundCall(event, number, orgId));
+  }
+
+  /** The DID that was dialled, with the routing it carries. */
+  private findInboundNumber(e164: string) {
+    return this.prisma.phoneNumber.findUnique({
+      where: { e164 },
       include: { aiAgent: true, inboundQueue: true },
     });
+  }
 
+  private async startInboundCall(
+    event: InboundCallEvent,
+    number: Awaited<ReturnType<CallsService['findInboundNumber']>>,
+    orgId: string,
+  ): Promise<void> {
     const aiAgent =
       number?.aiAgent ??
       (await this.prisma.aiAgent.findFirst({ where: { isActive: true }, orderBy: { createdAt: 'asc' } }));
@@ -161,8 +196,11 @@ export class CallsService implements TelephonySink, OnModuleInit {
         status: 'ACTIVE',
         contactId: contact.id,
         startedAt: event.receivedAt,
+        // Both nested creates name the org explicitly: the extension only sees
+        // the top-level model, so a nested row would otherwise be orphaned.
         call: {
           create: {
+            orgId,
             providerCallId: event.providerCallId,
             driver: this.telephony.name,
             fromNumber: event.fromNumber,
@@ -173,6 +211,7 @@ export class CallsService implements TelephonySink, OnModuleInit {
         },
         aiSession: {
           create: {
+            orgId,
             aiAgentId: aiAgent.id,
             driverStt: this.ai.driverNames().stt,
             driverLlm: this.ai.driverNames().llm,
@@ -205,7 +244,343 @@ export class CallsService implements TelephonySink, OnModuleInit {
     await this.answerWithAi(call.id, aiAgent.id);
   }
 
-  private async answerWithAi(callId: string, aiAgentId: string): Promise<void> {
+  /* ==================== outbound ==================== */
+
+  /**
+   * Place an outbound call for a campaign.
+   *
+   * The mirror image of the inbound flow: there, a call arrives and we look up
+   * who owns the number; here we already know the centre, the contact and what
+   * to say. The rows are created before the carrier is asked to dial so that a
+   * call which is never answered still leaves a record — a dialer that only
+   * writes down the calls that connected cannot tell you why a list went cold.
+   *
+   * Returns the ids so the dialer can correlate the later answer/no-answer
+   * callback without holding state of its own.
+   */
+  async placeOutboundCall(params: {
+    orgId: string;
+    contactId: string;
+    aiAgentId: string;
+    fromNumber: string;
+    toNumber: string;
+    opener: string;
+    /** Recorded on the conversation so the basis is attached to the call. */
+    consentBasis: string;
+    campaignName: string;
+    /** Where an escalation from this call should land, if the campaign named one. */
+    queueId?: string | null;
+  }): Promise<{ callId: string; conversationId: string; providerCallId: string } | null> {
+    if (!this.telephony.supportsOutbound) {
+      this.log.error(
+        `Telephony driver "${this.telephony.name}" cannot dial out — campaign "${params.campaignName}" cannot run`,
+      );
+      return null;
+    }
+
+    return this.tenants.runAs(params.orgId, null, async () => {
+      const startedAt = new Date();
+
+      // Dial first: if the carrier refuses, there is nothing to record and the
+      // dialer should see the error rather than find an orphaned conversation.
+      const handle = await this.telephony.dial({
+        fromNumber: params.fromNumber,
+        toNumber: params.toNumber,
+        opener: params.opener,
+      });
+
+      const aiAgent = await this.prisma.aiAgent.findUnique({ where: { id: params.aiAgentId } });
+      if (!aiAgent) {
+        await this.telephony.hangup(handle.providerCallId, 'AI agent missing').catch(() => undefined);
+        return null;
+      }
+
+      const conversation = await this.prisma.conversation.create({
+        data: {
+          channel: 'VOICE',
+          direction: 'OUTBOUND',
+          status: 'ACTIVE',
+          contactId: params.contactId,
+          startedAt,
+          // Set now rather than at escalation time so the campaign's chosen
+          // queue is what an escalation actually uses — see escalate().
+          queueId: params.queueId ?? null,
+          // The basis travels with the conversation, so an audit of one call
+          // does not need to go and find the campaign it came from.
+          notes: `Campaign: ${params.campaignName}\nConsent basis: ${params.consentBasis}`,
+          call: {
+            create: {
+              orgId: params.orgId,
+              providerCallId: handle.providerCallId,
+              driver: this.telephony.name,
+              fromNumber: params.fromNumber,
+              toNumber: params.toNumber,
+              state: 'RINGING',
+              ringingAt: startedAt,
+              mediaSessionId: handle.mediaSessionId,
+            },
+          },
+          aiSession: {
+            create: {
+              orgId: params.orgId,
+              aiAgentId: aiAgent.id,
+              driverStt: this.ai.driverNames().stt,
+              driverLlm: this.ai.driverNames().llm,
+              driverTts: this.ai.driverNames().tts,
+            },
+          },
+        },
+        include: { call: true },
+      });
+
+      const call = conversation.call!;
+      await this.prisma.callParticipant.create({
+        data: { callId: call.id, kind: 'CALLER', joinedAt: startedAt },
+      });
+
+      this.realtime.toSupervisors('call.ringing', {
+        callId: call.id,
+        conversationId: conversation.id,
+        state: 'RINGING',
+        fromNumber: params.toNumber,
+        contactName: null,
+        queueName: null,
+        agentName: null,
+        startedAt,
+        elapsedMs: 0,
+        lastUtterance: null,
+        detectedIntent: null,
+      });
+
+      return {
+        callId: call.id,
+        conversationId: conversation.id,
+        providerCallId: handle.providerCallId,
+      };
+    });
+  }
+
+  /**
+   * A telecaller dialling by hand.
+   *
+   * Deliberately not the campaign path with a different flag: a manual call has
+   * no AI leg at all. The agent is on the line when it connects, so there is
+   * nothing to hand over from and no queue to wait in — which is why the call
+   * goes straight to AGENT_TALKING and no AiSession is created. Creating one
+   * would put this call in the containment numbers as an AI call that instantly
+   * escalated, quietly wrecking the metric the whole product is sold on.
+   */
+  async placeManualCall(params: {
+    agentUserId: string;
+    contactId?: string;
+    phoneE164?: string;
+    name?: string;
+    note?: string;
+  }): Promise<{
+    callId: string;
+    conversationId: string;
+    contactId: string;
+    contactName: string | null;
+    phoneE164: string;
+  }> {
+    const orgId = this.tenants.requireOrgId();
+
+    if (!this.telephony.supportsOutbound) {
+      throw new BadRequestException(
+        `Telephony driver "${this.telephony.name}" cannot place outbound calls`,
+      );
+    }
+
+    // Scoped reads throughout: a contact id from another centre simply does not
+    // resolve, so a telecaller cannot dial another client's customer.
+    const contact = params.contactId
+      ? await this.prisma.contact.findUnique({ where: { id: params.contactId } })
+      : params.phoneE164
+        ? ((await this.prisma.contact.findFirst({ where: { phoneE164: params.phoneE164 } })) ??
+          (await this.prisma.contact.create({
+            data: { phoneE164: params.phoneE164, name: params.name ?? null },
+          })))
+        : null;
+
+    if (!contact) throw new NotFoundException('Contact not found');
+    if (!contact.phoneE164) throw new BadRequestException('That contact has no phone number');
+    if (contact.doNotCall) {
+      // The same guard the automated dialer applies, for the same reason: an
+      // opt-out that a human can click past is not an opt-out.
+      throw new BadRequestException(`${contact.name ?? contact.phoneE164} asked not to be called`);
+    }
+
+    const fromNumber = await this.prisma.phoneNumber.findFirst({
+      where: { status: 'ASSIGNED' },
+      select: { e164: true },
+    });
+    if (!fromNumber) throw new BadRequestException('This centre has no number to call from');
+
+    const startedAt = new Date();
+    const handle = await this.telephony.dial({
+      fromNumber: fromNumber.e164,
+      toNumber: contact.phoneE164,
+    });
+
+    const conversation = await this.prisma.conversation.create({
+      data: {
+        channel: 'VOICE',
+        direction: 'OUTBOUND',
+        status: 'ACTIVE',
+        contactId: contact.id,
+        // Attributed to the telecaller from the outset — unlike an AI call,
+        // where handledById is only set if it escalates to someone.
+        handledById: params.agentUserId,
+        startedAt,
+        notes: params.note ?? null,
+        call: {
+          create: {
+            orgId,
+            providerCallId: handle.providerCallId,
+            driver: this.telephony.name,
+            fromNumber: fromNumber.e164,
+            toNumber: contact.phoneE164,
+            state: 'RINGING',
+            ringingAt: startedAt,
+            mediaSessionId: handle.mediaSessionId,
+            placedByUserId: params.agentUserId,
+          },
+        },
+      },
+      include: { call: true },
+    });
+
+    const call = conversation.call!;
+    await this.prisma.callParticipant.create({
+      data: { callId: call.id, kind: 'CALLER', joinedAt: startedAt },
+    });
+
+    this.realtime.toSupervisors('call.ringing', {
+      callId: call.id,
+      conversationId: conversation.id,
+      state: 'RINGING',
+      fromNumber: contact.phoneE164,
+      contactName: contact.name,
+      queueName: null,
+      agentName: null,
+      startedAt,
+      elapsedMs: 0,
+      lastUtterance: null,
+      detectedIntent: null,
+    });
+
+    this.log.log(`manual call ${call.id} placed by ${params.agentUserId} to ${contact.phoneE164}`);
+    return {
+      callId: call.id,
+      conversationId: conversation.id,
+      contactId: contact.id,
+      contactName: contact.name,
+      phoneE164: contact.phoneE164,
+    };
+  }
+
+  /**
+   * The carrier's verdict on an outbound attempt.
+   *
+   * Answered means the AI leg starts and the call proceeds exactly as an inbound
+   * one would from that point. Unanswered ends the call as ABANDONED_IN_QUEUE's
+   * outbound equivalent — NO_ANSWER — so analytics can tell a list that never
+   * picks up from one that hangs up on the assistant.
+   */
+  async onOutboundResult(params: {
+    providerCallId: string;
+    answered: boolean;
+    failureReason?: string;
+  }): Promise<void> {
+    const call = await this.prisma.call.findUnique({
+      where: { providerCallId: params.providerCallId },
+      include: { conversation: { select: { aiSession: { select: { aiAgentId: true } } } } },
+    });
+    if (!call) return;
+
+    return this.tenants.runAs(call.orgId, null, async () => {
+      if (!params.answered) {
+        await this.complete(call.id, 'ABANDONED_IN_QUEUE');
+        this.log.log(`outbound ${call.id} not answered — ${params.failureReason ?? 'no reason given'}`);
+        return;
+      }
+
+      // A manual call has a person already holding the line: connect them
+      // rather than starting an AI leg.
+      if (call.placedByUserId) {
+        await this.transition(call.id, 'AGENT_TALKING', {
+          agentAnsweredAt: new Date(),
+        });
+        await this.prisma.callParticipant.create({
+          data: {
+            callId: call.id,
+            kind: 'HUMAN_AGENT',
+            userId: call.placedByUserId,
+            joinedAt: new Date(),
+          },
+        });
+        await this.presence.transition(
+          call.placedByUserId,
+          'ON_CALL',
+          'manual outbound call connected',
+          call.id,
+        );
+        // No bespoke event: transition() already emits call.state_changed to the
+        // call room and to supervisors, which is what the dialling page watches.
+        return;
+      }
+
+      const aiAgentId = call.conversation.aiSession?.aiAgentId;
+      if (!aiAgentId) {
+        await this.complete(call.id, 'SYSTEM_ERROR');
+        return;
+      }
+
+      // The opener lives on the campaign, and the target row is what ties this
+      // call to it. A plain lookup rather than a service dependency: the dialer
+      // knows about calls, and calls should not have to know about campaigns.
+      const target = await this.prisma.campaignTarget.findFirst({
+        where: { conversationId: call.conversationId },
+        select: { campaign: { select: { opener: true } } },
+      });
+
+      await this.answerWithAi(call.id, aiAgentId, target?.campaign.opener);
+    });
+  }
+
+  /**
+   * End a call that stalled before anyone answered.
+   *
+   * The simulated driver keeps its ring timers in memory, so an API restart
+   * mid-ring leaves the call in RINGING with nobody coming to resolve it. A real
+   * carrier can do the same by dropping a webhook. Either way the row has to be
+   * closed through the state machine rather than by hand, so timings and the
+   * realtime feed stay consistent with every other completed call.
+   */
+  async abandonStalledCall(callId: string): Promise<void> {
+    const call = await this.prisma.call.findUnique({
+      where: { id: callId },
+      select: { orgId: true, state: true },
+    });
+    if (!call || call.state === 'COMPLETED') return;
+
+    await this.tenants.runAs(call.orgId, null, async () => {
+      await this.complete(callId, 'SYSTEM_ERROR');
+    });
+    this.log.warn(`call ${callId} stalled before answer — closed as SYSTEM_ERROR`);
+  }
+
+  /**
+   * @param openingLine Spoken instead of the agent's greeting. Outbound calls
+   *   pass the campaign's opener here — "Thank you for calling…" is plainly
+   *   wrong when we are the ones who rang, and it is the first thing a client
+   *   would notice on a demo.
+   */
+  private async answerWithAi(
+    callId: string,
+    aiAgentId: string,
+    openingLine?: string,
+  ): Promise<void> {
     const call = await this.prisma.call.findUniqueOrThrow({ where: { id: callId } });
 
     await this.telephony.answer(call.providerCallId);
@@ -222,7 +597,8 @@ export class CallsService implements TelephonySink, OnModuleInit {
     // Consent first where required — Dubai, India and Egypt all expect it, and
     // it must be on the recording itself, not just in a policy document.
     const consent = await this.ai.consentAnnouncement();
-    const greeting = consent ? `${consent} ${agent.greeting}` : agent.greeting;
+    const opening = openingLine ?? agent.greeting;
+    const greeting = consent ? `${consent} ${opening}` : opening;
 
     await this.speak(callId, conversationId, greeting, 0);
     this.realtime.toSupervisors('call.ai_answered', { callId, conversationId });
@@ -427,9 +803,14 @@ export class CallsService implements TelephonySink, OnModuleInit {
       escalationReason: params.reason,
     });
 
-    const queue = params.targetQueueId
+    // Precedence: an explicit transfer target, then the queue this conversation
+    // was created for, then whichever queue holds the skill. The middle case is
+    // an outbound campaign — its admin chose an escalation queue, and picking by
+    // skill instead would quietly ignore that choice.
+    const designatedQueueId = params.targetQueueId ?? call.conversation.queueId ?? null;
+    const queue = designatedQueueId
       ? await this.prisma.queue.findUnique({
-          where: { id: params.targetQueueId },
+          where: { id: designatedQueueId },
           select: { id: true, name: true, slaSeconds: true },
         })
       : await this.routing.queueForSkill(params.skill);
@@ -563,7 +944,7 @@ export class CallsService implements TelephonySink, OnModuleInit {
         })
       : [];
 
-    const settings = await this.prisma.setting.findUnique({ where: { id: 'singleton' } });
+    const settings = await this.prisma.setting.findFirst();
     const portal = settings?.bitrixPortalUrl ?? null;
 
     return {
@@ -867,6 +1248,16 @@ export class CallsService implements TelephonySink, OnModuleInit {
     const endedAt = new Date();
     const humanJoined = call.participants.some((p) => p.kind === 'HUMAN_AGENT');
 
+    /**
+     * "AI contained" means the assistant handled it alone — so a call the
+     * assistant never touched cannot be one, however few humans joined.
+     *
+     * A manually dialled call has no AI leg at all. Left as `!humanJoined` it
+     * counted as contained whenever the callee did not pick up, inflating the
+     * single number this product is sold on with calls the AI never made.
+     */
+    const aiContained = !humanJoined && !call.placedByUserId;
+
     // Every completed call gets a summary, not just escalated ones. Escalation
     // already generated one (the screen-pop needs it before an agent answers);
     // AI-contained calls had none at all, which meant ~44% of traffic reached
@@ -934,7 +1325,7 @@ export class CallsService implements TelephonySink, OnModuleInit {
       }),
       this.prisma.conversation.update({
         where: { id: call.conversationId },
-        data: { status: 'CLOSED', endedAt, aiContained: !humanJoined },
+        data: { status: 'CLOSED', endedAt, aiContained },
       }),
       // Transactional outbox: the domain write and the event publication commit
       // together, so the CRM push cannot be lost even if Bitrix is down.
@@ -946,7 +1337,7 @@ export class CallsService implements TelephonySink, OnModuleInit {
           payload: {
             callId,
             conversationId: call.conversationId,
-            aiContained: !humanJoined,
+            aiContained,
             hangupCause: cause,
             durationMs: totalMs,
           },
@@ -958,7 +1349,7 @@ export class CallsService implements TelephonySink, OnModuleInit {
       callId,
       conversationId: call.conversationId,
       hangupCause: cause,
-      aiContained: !humanJoined,
+      aiContained,
       durationMs: totalMs,
     });
 
@@ -997,7 +1388,9 @@ export class CallsService implements TelephonySink, OnModuleInit {
    * curated in the CRM, which is why this isn't a plain upsert.
    */
   private async upsertContact(phoneE164: string, name?: string) {
-    const existing = await this.prisma.contact.findUnique({ where: { phoneE164 } });
+    // findFirst, not findUnique: a number is only unique within one centre now,
+    // and the extension has already narrowed this to the caller's org.
+    const existing = await this.prisma.contact.findFirst({ where: { phoneE164 } });
     if (!existing) {
       return this.prisma.contact.create({ data: { phoneE164, name: name ?? null } });
     }

@@ -207,7 +207,7 @@ export class AiOrchestrator {
   /** The consent line spoken before anything else, where enabled. */
   async consentAnnouncement(): Promise<string | null> {
     if (!this.env.RECORDING_CONSENT_ENABLED) return null;
-    const settings = await this.prisma.setting.findUnique({ where: { id: 'singleton' } });
+    const settings = await this.prisma.setting.findFirst();
     if (settings && !settings.recordingConsentOn) return null;
     return (
       settings?.recordingConsentText ??

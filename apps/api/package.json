@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "dotenv -e ../../.env -- tsx watch --tsconfig tsconfig.json src/main.ts",
-    "dev:worker": "dotenv -e ../../.env -- tsx watch src/worker.ts",
+    "dev": "dotenv -e ../../.env -- nest start --watch",
+    "dev:worker": "dotenv -e ../../.env -- nest start --watch --path tsconfig.worker.json --entryFile worker",
     "build": "rm -rf dist tsconfig.tsbuildinfo && tsc -p tsconfig.json",
     "start": "node dist/main.js",
     "start:worker": "node dist/worker.js",

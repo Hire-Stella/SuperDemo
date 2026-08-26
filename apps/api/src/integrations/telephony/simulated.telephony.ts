@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { SCENARIOS, type CallScenario } from '@fit-ai/db/data';
 import {
-  NotImplementedByDriverError,
   type PlayAudioOptions,
   type TelephonyCallHandle,
   type TelephonyProvider,
@@ -25,7 +24,15 @@ import {
 export class SimulatedTelephony implements TelephonyProvider {
   readonly name = 'simulated';
   readonly supportsMedia = false;
-  readonly supportsOutbound = false;
+  /**
+   * True, and it is the only driver where it is.
+   *
+   * A carrier cannot be dialled from here, but the dialer itself — pacing, call
+   * windows, retries, consent — is ordinary logic that deserves to be exercised
+   * rather than reasoned about. Pointing it at the simulator does that: real
+   * conversations, real AI turns, real analytics, no carrier.
+   */
+  readonly supportsOutbound = true;
 
   private readonly log = new Logger(SimulatedTelephony.name);
   private sink?: TelephonySink;
@@ -33,7 +40,20 @@ export class SimulatedTelephony implements TelephonyProvider {
   /** Timers per call, so a hangup cancels the rest of the script. */
   private readonly running = new Map<
     string,
-    { timers: NodeJS.Timeout[]; cancelled: boolean; escalated: boolean; scenario: CallScenario }
+    {
+      timers: NodeJS.Timeout[];
+      cancelled: boolean;
+      escalated: boolean;
+      /** Absent for outbound calls, which are driven by a campaign opener. */
+      scenario?: CallScenario;
+      /**
+       * How long an outbound callee waits on hold before hanging up. Inbound
+       * callers get this from their scenario; someone we rang out of the blue
+       * will not hold for long, and without it a campaign parks every line
+       * indefinitely whenever no agent is free.
+       */
+      abandonAfterEscalationMs?: number;
+    }
   >();
 
   attachSink(sink: TelephonySink): void {
@@ -75,8 +95,100 @@ export class SimulatedTelephony implements TelephonyProvider {
     this.cancel(providerCallId);
   }
 
-  async dial(): Promise<TelephonyCallHandle> {
-    throw new NotImplementedByDriverError('simulated', 'outbound dialling');
+  /**
+   * Place a simulated outbound call.
+   *
+   * Returns as soon as the attempt is registered; whether it is answered is
+   * reported later through `onOutboundResult`, because that is the shape a real
+   * carrier has and a dialer written against a synchronous answer would need
+   * rewriting the day one is attached.
+   *
+   * ~62% answer rate, matching the seeded history so analytics stay coherent
+   * across simulated and historical outbound calls.
+   */
+  async dial(params: {
+    fromNumber: string;
+    toNumber: string;
+    opener?: string;
+    speed?: number;
+  }): Promise<TelephonyCallHandle> {
+    const providerCallId = `sim-out-${randomUUID()}`;
+    const speed = params.speed ?? 1;
+
+    this.running.set(providerCallId, {
+      timers: [],
+      cancelled: false,
+      escalated: false,
+      // No scenario: outbound is driven by the campaign's opener, not a
+      // scripted inbound caller.
+      abandonAfterEscalationMs: 25_000,
+    });
+
+    void this.driveOutbound(providerCallId, params.opener, speed);
+    return { providerCallId, mediaSessionId: null };
+  }
+
+  /** Ring, then either answer and talk, or report no answer. */
+  private async driveOutbound(
+    providerCallId: string,
+    opener: string | undefined,
+    speed: number,
+  ): Promise<void> {
+    const sink = this.sink;
+    if (!sink?.onOutboundResult) return;
+
+    try {
+      // Ringing time before anyone picks up (or doesn't).
+      await this.wait(providerCallId, 2500 * speed);
+      if (this.running.get(providerCallId)?.cancelled) return;
+
+      const answered = Math.random() < 0.62;
+      await sink.onOutboundResult({
+        providerCallId,
+        answered,
+        failureReason: answered ? undefined : 'No answer or voicemail',
+      });
+      if (!answered) {
+        this.cancel(providerCallId);
+        return;
+      }
+
+      // Answered: the person on the other end responds to the opener, and the
+      // real orchestrator produces the assistant's side from there.
+      const replies = [
+        'Yes, speaking. What is this about?',
+        'Now is fine, go ahead.',
+        'I was actually still thinking about it.',
+      ];
+      await this.wait(providerCallId, 1200 * speed);
+      await sink.onCallerUtterance({
+        providerCallId,
+        text: replies[Math.floor(Math.random() * replies.length)]!,
+        startMs: 0,
+        endMs: 1500,
+        confidence: 0.94,
+      });
+
+      await this.wait(providerCallId, 6000 * speed);
+      if (this.running.get(providerCallId)?.cancelled) return;
+      await sink.onCallerUtterance({
+        providerCallId,
+        text: 'That answers it, thank you.',
+        startMs: 8000,
+        endMs: 9500,
+        confidence: 0.93,
+      });
+
+      await this.wait(providerCallId, 3000 * speed);
+      if (this.running.get(providerCallId)?.cancelled) return;
+      await sink.onCallerHangup(providerCallId);
+    } catch {
+      // A cancelled wait is the normal way an outbound script ends early.
+    } finally {
+      this.cancel(providerCallId);
+    }
+
+    if (opener) this.log.debug(`outbound ${providerCallId} opened with: ${opener.slice(0, 60)}`);
   }
 
   /* ------------------------------- simulation ----------------------------- */
@@ -241,7 +353,12 @@ export class SimulatedTelephony implements TelephonyProvider {
     for (const t of state.timers) clearTimeout(t);
     state.timers = [];
 
-    const abandonAfterMs = state.scenario.abandonsInQueueAfterMs;
+    // Optional chaining, not a bare access: an outbound call has no scenario,
+    // and this method runs for every escalation regardless of direction. The
+    // TypeError this used to throw aborted escalate() midway, leaving the call
+    // stuck in ESCALATING and its campaign target stuck holding a line.
+    const abandonAfterMs =
+      state.scenario?.abandonsInQueueAfterMs ?? state.abandonAfterEscalationMs;
     if (!abandonAfterMs) {
       // Caller waits. Keep the entry so a later hangup can still clean up.
       this.log.debug(`[${providerCallId}] escalated — scripted caller now waiting for an agent`);
