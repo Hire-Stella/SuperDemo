@@ -3,6 +3,7 @@ import { PrismaClient } from '@prisma/client';
 export * from '@prisma/client';
 export { PrismaClient };
 export * from './embedding';
+export * from './tenant';
 
 /**
  * Singleton across hot reloads. Nest's dev watcher and Next's route handlers

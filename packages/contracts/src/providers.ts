@@ -68,8 +68,21 @@ export interface TelephonyProvider {
   hold(providerCallId: string, hold: boolean): Promise<void>;
   hangup(providerCallId: string, reason?: string): Promise<void>;
 
-  /** Outbound dial. Throws NotImplemented on drivers that can't. */
-  dial(params: { fromNumber: string; toNumber: string }): Promise<TelephonyCallHandle>;
+  /**
+   * Outbound dial. Throws NotImplemented on drivers that can't (check
+   * `supportsOutbound` first).
+   *
+   * Resolves once the attempt is placed, not once it is answered — whether
+   * anyone picked up arrives via `TelephonySink.onOutboundResult`.
+   */
+  dial(params: {
+    fromNumber: string;
+    toNumber: string;
+    /** What the assistant says first, when the driver drives the script. */
+    opener?: string;
+    /** Scales scripted pauses on the simulated driver. Ignored by real ones. */
+    speed?: number;
+  }): Promise<TelephonyCallHandle>;
 
   /** Called once at boot so a driver can register listeners / warm up. */
   init?(): Promise<void>;
@@ -79,6 +92,20 @@ export interface TelephonyProvider {
 export interface TelephonySink {
   onInboundCall(event: InboundCallEvent): Promise<void>;
   onCallerHangup(providerCallId: string): Promise<void>;
+  /**
+   * How an outbound attempt resolved.
+   *
+   * Inbound arrives as an event; outbound is the inverse — we already created
+   * the call, and what we do not know is whether anyone picked up. A dialer
+   * needs that answer to decide between "log the conversation" and "retry in
+   * two hours", so it is a distinct callback rather than an overload of
+   * onInboundCall.
+   */
+  onOutboundResult?(params: {
+    providerCallId: string;
+    answered: boolean;
+    failureReason?: string;
+  }): Promise<void>;
   /** A caller utterance became available (final, not partial). */
   onCallerUtterance(params: {
     providerCallId: string;
@@ -261,12 +288,33 @@ export interface CrmProvider {
   readonly name: string;
   readonly portalUrl: string | null;
 
+  /**
+   * Whether this CRM can represent a call that is still happening.
+   *
+   * Bitrix can (`telephony.externalcall.register` shows a ringing call to the
+   * agent). Zoho cannot — its Calls module records calls that already ended, so
+   * its driver opens a record and completes it later. HubSpot can, via
+   * `hs_call_status`.
+   *
+   * Declared rather than inferred so callers can say "appears in the CRM when
+   * the call ends" instead of implying live visibility every driver would then
+   * have to fake. Adding a fourth and fifth provider is what made this
+   * necessary: three different flavours of pretending is a bug waiting to be
+   * written.
+   */
+  readonly supportsLiveCall: boolean;
+
   testConnection(): Promise<{ ok: boolean; detail: string; scopes?: string[] }>;
 
   /** Match on phone, create a lead when unknown. */
   findOrCreateContact(input: CrmContactInput): Promise<CrmContactRef>;
 
-  /** telephony.externalcall.register — returns Bitrix's CALL_ID. */
+  /**
+   * Open the CRM's record for this call and return its id.
+   *
+   * On a provider with `supportsLiveCall` the record is visible immediately; on
+   * one without, it exists but only becomes meaningful once `finishCall` runs.
+   */
   registerCall(input: CrmCallInput): Promise<{ crmCallId: string }>;
 
   /** telephony.externalcall.finish */

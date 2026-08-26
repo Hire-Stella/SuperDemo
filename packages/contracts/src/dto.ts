@@ -1,7 +1,12 @@
 import { z } from 'zod';
+import { ThemePreset, ThemeTokens } from './themes';
+import { CrmDriver } from './enums';
+import { CampaignStatus, TargetStatus } from './enums';
 import {
   AgentStatus,
+  AssignableRole,
   CallState,
+  Industry,
   Channel,
   ConversationStatus,
   Direction,
@@ -17,6 +22,7 @@ import {
   Skill,
   SyncDirection,
   SyncStatus,
+  ZohoRegion,
 } from './enums';
 
 /* ================================ primitives ============================== */
@@ -56,6 +62,14 @@ export const SessionUser = z.object({
   email: z.string().email(),
   name: z.string(),
   role: Role,
+  /** Null for SUPERADMIN only — every other role lives inside one org. */
+  orgId: Cuid.nullable(),
+  orgName: z.string().nullable(),
+  /** Drives the routing-category labels this user sees. Null for SUPERADMIN. */
+  orgIndustry: Industry.nullable(),
+  /** This centre's theme, applied over globals.css. Null for SUPERADMIN. */
+  orgThemePreset: ThemePreset.nullable(),
+  orgThemeTokens: ThemeTokens.nullable(),
   location: Location,
   timezone: z.string(),
   skills: z.array(Skill),
@@ -69,13 +83,78 @@ export const LoginOutput = z.object({
 });
 export type LoginOutput = z.infer<typeof LoginOutput>;
 
+/* ============================= organisations ============================== */
+
+export const OrgSummary = z.object({
+  id: Cuid,
+  name: z.string(),
+  slug: z.string(),
+  industry: Industry,
+  themePreset: ThemePreset,
+  /** A pasted tweakcn export, if this centre has one. */
+  themeTokens: ThemeTokens.nullable(),
+  timezone: z.string(),
+  isActive: z.boolean(),
+  createdAt: z.coerce.date(),
+  /** Headline counts for the superadmin's one page — cheap group-bys. */
+  counts: z.object({
+    users: z.number().int().nonnegative(),
+    admins: z.number().int().nonnegative(),
+    queues: z.number().int().nonnegative(),
+    conversations: z.number().int().nonnegative(),
+    numbers: z.number().int().nonnegative(),
+  }),
+  /** Null until someone signs in. Lets the operator spot a dormant centre. */
+  lastLoginAt: z.coerce.date().nullable(),
+});
+export type OrgSummary = z.infer<typeof OrgSummary>;
+
+/**
+ * Creating an org and creating its first admin is one action, not two: an org
+ * with no admin is unreachable, and leaving that window open is how you get
+ * orphaned tenants nobody can log into.
+ */
+export const CreateOrgInput = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters').max(80),
+  /** Decides the queues, AI briefing and starter knowledge it is created with. */
+  industry: Industry.default('GENERIC'),
+  /** Omitted means "whatever suits the vertical" — see DEFAULT_PRESET_FOR_INDUSTRY. */
+  themePreset: ThemePreset.optional(),
+  slug: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/, 'Use lowercase letters, numbers and hyphens')
+    .optional(),
+  timezone: z.string().default('Asia/Dubai'),
+  admin: z.object({
+    name: z.string().min(2),
+    email: z.string().email(),
+    password: z.string().min(8, 'Password must be at least 8 characters'),
+    location: Location.default('DUBAI'),
+  }),
+});
+export type CreateOrgInput = z.infer<typeof CreateOrgInput>;
+
+export const UpdateOrgInput = z.object({
+  name: z.string().min(2).max(80).optional(),
+  timezone: z.string().optional(),
+  isActive: z.boolean().optional(),
+  themePreset: ThemePreset.optional(),
+  /** A pasted tweakcn export. Null clears it and falls back to the preset. */
+  themeTokens: ThemeTokens.nullable().optional(),
+});
+export type UpdateOrgInput = z.infer<typeof UpdateOrgInput>;
+
 /* ================================== users ================================= */
 
 export const CreateUserInput = z.object({
   email: z.string().email(),
   name: z.string().min(2),
   password: z.string().min(8, 'Password must be at least 8 characters'),
-  role: Role.default('AGENT'),
+  // AssignableRole, not Role: an org admin creating users must not be able to
+  // name SUPERADMIN and escalate out of their own tenant.
+  role: AssignableRole.default('AGENT'),
   location: Location,
   skills: z.array(Skill).min(1),
   extension: z.string().regex(/^\d{3,6}$/).optional(),
@@ -85,7 +164,15 @@ export type CreateUserInput = z.infer<typeof CreateUserInput>;
 export const UpdateUserInput = CreateUserInput.partial().omit({ password: true });
 export type UpdateUserInput = z.infer<typeof UpdateUserInput>;
 
-export const AgentSummary = SessionUser.extend({
+// Omits the org fields: this list is only ever read from inside one org, so
+// repeating the tenant id on every agent row would be noise.
+export const AgentSummary = SessionUser.omit({
+  orgId: true,
+  orgName: true,
+  orgIndustry: true,
+  orgThemePreset: true,
+  orgThemeTokens: true,
+}).extend({
   extension: z.string().nullable(),
   status: AgentStatus,
   statusSince: z.coerce.date(),
@@ -678,6 +765,229 @@ export type AgentScorecard = z.infer<typeof AgentScorecard>;
 
 /* ================================== crm =================================== */
 
+/* ----------------------------- manual dialling ---------------------------- */
+
+/**
+ * A telecaller placing a call themselves.
+ *
+ * Either an existing contact or a raw number — the second is allowed here and
+ * deliberately not on campaigns: a person choosing to ring one customer is a
+ * different act from loading a list into an automated dialer, and only the
+ * latter needs a consent basis written down.
+ */
+export const ManualCallInput = z
+  .object({
+    contactId: Cuid.optional(),
+    phoneE164: PhoneE164.optional(),
+    /** Used when dialling a number this centre has never spoken to. */
+    name: z.string().max(80).optional(),
+    /** Why they are calling. Written onto the conversation before it starts. */
+    note: z.string().max(500).optional(),
+  })
+  .refine((v) => Boolean(v.contactId ?? v.phoneE164), {
+    message: 'Give a contact or a number to dial',
+  });
+export type ManualCallInput = z.infer<typeof ManualCallInput>;
+
+export const ManualCallResult = z.object({
+  callId: Cuid,
+  conversationId: Cuid,
+  contactId: Cuid,
+  contactName: z.string().nullable(),
+  phoneE164: z.string(),
+});
+export type ManualCallResult = z.infer<typeof ManualCallResult>;
+
+/** One row of a telecaller's worklist. */
+export const CallableContact = z.object({
+  id: Cuid,
+  name: z.string().nullable(),
+  phoneE164: z.string().nullable(),
+  interest: z.string().nullable(),
+  totalConversations: z.number().int(),
+  lastContactedAt: z.coerce.date().nullable(),
+  /** Outcome of the last conversation, so a telecaller knows where they left off. */
+  lastOutcome: z.string().nullable(),
+  doNotCall: z.boolean(),
+});
+export type CallableContact = z.infer<typeof CallableContact>;
+
+/* ------------------------------- outbound --------------------------------- */
+
+export const CampaignSummary = z.object({
+  id: Cuid,
+  name: z.string(),
+  status: CampaignStatus,
+  opener: z.string(),
+  consentBasis: z.string(),
+  aiAgentId: Cuid,
+  aiAgentName: z.string().nullable(),
+  queueId: Cuid.nullable(),
+  queueName: z.string().nullable(),
+  fromNumber: z.string().nullable(),
+  maxConcurrent: z.number().int(),
+  windowStartHour: z.number().int(),
+  windowEndHour: z.number().int(),
+  daysOfWeek: z.array(z.number().int()),
+  maxAttempts: z.number().int(),
+  retryAfterMinutes: z.number().int(),
+  startedAt: z.coerce.date().nullable(),
+  completedAt: z.coerce.date().nullable(),
+  createdAt: z.coerce.date(),
+  /** Live counts, so the page can show progress without a second request. */
+  counts: z.object({
+    total: z.number().int(),
+    pending: z.number().int(),
+    calling: z.number().int(),
+    answered: z.number().int(),
+    noAnswer: z.number().int(),
+    exhausted: z.number().int(),
+    failed: z.number().int(),
+    suppressed: z.number().int(),
+  }),
+  /** Why the dialer is not placing calls right now, if it isn't. */
+  idleReason: z.string().nullable(),
+});
+export type CampaignSummary = z.infer<typeof CampaignSummary>;
+
+export const CreateCampaignInput = z.object({
+  name: z.string().min(2).max(80),
+  opener: z.string().min(10, 'The opener is what the assistant says first'),
+  /**
+   * Required, and deliberately not defaulted. Cold-calling a list you happen to
+   * have is what makes an outbound dialer a legal problem; writing down why you
+   * may call these people is the cheapest possible guard against it.
+   */
+  consentBasis: z.string().min(10, 'State why this centre may call these people'),
+  aiAgentId: Cuid,
+  queueId: Cuid.optional(),
+  fromNumberId: Cuid.optional(),
+  maxConcurrent: z.coerce.number().int().min(1).max(20).default(2),
+  windowStartHour: z.coerce.number().int().min(0).max(23).default(9),
+  windowEndHour: z.coerce.number().int().min(1).max(24).default(18),
+  daysOfWeek: z.array(z.coerce.number().int().min(1).max(7)).default([]),
+  maxAttempts: z.coerce.number().int().min(1).max(5).default(2),
+  retryAfterMinutes: z.coerce.number().int().min(5).max(10080).default(120),
+});
+export type CreateCampaignInput = z.infer<typeof CreateCampaignInput>;
+
+export const UpdateCampaignInput = CreateCampaignInput.partial().extend({
+  status: CampaignStatus.optional(),
+});
+export type UpdateCampaignInput = z.infer<typeof UpdateCampaignInput>;
+
+/** Targets are chosen from contacts this centre already knows. */
+export const AddCampaignTargetsInput = z.object({
+  contactIds: z.array(Cuid).min(1).max(1000),
+});
+export type AddCampaignTargetsInput = z.infer<typeof AddCampaignTargetsInput>;
+
+export const CampaignTargetRow = z.object({
+  id: Cuid,
+  contactId: Cuid,
+  contactName: z.string().nullable(),
+  phoneE164: z.string().nullable(),
+  status: TargetStatus,
+  attempts: z.number().int(),
+  lastAttemptAt: z.coerce.date().nullable(),
+  nextAttemptAt: z.coerce.date().nullable(),
+  conversationId: Cuid.nullable(),
+  lastError: z.string().nullable(),
+});
+export type CampaignTargetRow = z.infer<typeof CampaignTargetRow>;
+
+/* ------------------------------ CRM config -------------------------------- */
+
+/**
+ * Per-centre CRM credentials.
+ *
+ * A discriminated union rather than a bag of optional fields: Bitrix needs one
+ * webhook URL, Zoho needs an OAuth triple plus a region, and the two have no
+ * overlap. Validating them together as `Partial<everything>` is how you end up
+ * saving a Zoho client id with no refresh token and finding out at call time.
+ */
+export const BitrixCrmConfig = z.object({
+  provider: z.literal('bitrix'),
+  /** Bitrix24 → Developer resources → Inbound webhook. Contains its own secret. */
+  webhookUrl: z
+    .string()
+    .url('Must be the full inbound webhook URL')
+    .refine((u) => u.includes('/rest/'), 'A Bitrix inbound webhook URL contains /rest/'),
+});
+export type BitrixCrmConfig = z.infer<typeof BitrixCrmConfig>;
+
+export const ZohoCrmConfig = z.object({
+  provider: z.literal('zoho'),
+  region: ZohoRegion.default('com'),
+  clientId: z.string().min(10, 'Client ID looks too short'),
+  clientSecret: z.string().min(10, 'Client secret looks too short'),
+  /** Self-Client or Server-based app refresh token — it does not expire. */
+  refreshToken: z.string().min(10, 'Refresh token looks too short'),
+});
+export type ZohoCrmConfig = z.infer<typeof ZohoCrmConfig>;
+
+export const HubSpotCrmConfig = z.object({
+  provider: z.literal('hubspot'),
+  /** Private app token — Settings → Integrations → Private Apps in HubSpot. */
+  accessToken: z
+    .string()
+    .min(20, 'A HubSpot private app token is longer than this')
+    .refine((t) => t.startsWith('pat-'), 'Private app tokens start with "pat-"'),
+});
+export type HubSpotCrmConfig = z.infer<typeof HubSpotCrmConfig>;
+
+export const WebhookCrmConfig = z.object({
+  provider: z.literal('webhook'),
+  targetUrl: z.string().url('Must be a full https:// URL'),
+  /**
+   * Optional but strongly advised: without it the receiver cannot tell our
+   * posts from anyone else's.
+   */
+  signingSecret: z.string().min(16, 'Use at least 16 characters').optional(),
+});
+export type WebhookCrmConfig = z.infer<typeof WebhookCrmConfig>;
+
+/** No external CRM: sync still runs against the in-memory mock. */
+export const MockCrmConfig = z.object({ provider: z.literal('mock') });
+export type MockCrmConfig = z.infer<typeof MockCrmConfig>;
+
+export const CrmConfig = z.discriminatedUnion('provider', [
+  MockCrmConfig,
+  BitrixCrmConfig,
+  ZohoCrmConfig,
+  HubSpotCrmConfig,
+  WebhookCrmConfig,
+]);
+export type CrmConfig = z.infer<typeof CrmConfig>;
+
+/**
+ * What a settings page may read back.
+ *
+ * Secrets are never returned — only whether each one is set. Anything else and
+ * a centre's CRM credentials would be one GET away from every admin's browser
+ * history and every proxy log in between.
+ */
+export const CrmConfigView = z.object({
+  provider: CrmDriver,
+  /** True when this centre has saved its own config rather than inheriting. */
+  configured: z.boolean(),
+  /** Safe to show: identifies the portal without granting access. */
+  portalUrl: z.string().nullable(),
+  region: ZohoRegion.nullable(),
+  clientId: z.string().nullable(),
+  /** Host only, for the webhook driver — enough to recognise, not to call. */
+  targetHost: z.string().nullable(),
+  /** Whether this driver can show a call while it is still ringing. */
+  supportsLiveCall: z.boolean(),
+  hasSecret: z.boolean(),
+  hasRefreshToken: z.boolean(),
+  hasWebhookUrl: z.boolean(),
+  hasAccessToken: z.boolean(),
+  hasSigningSecret: z.boolean(),
+  updatedAt: z.coerce.date().nullable(),
+});
+export type CrmConfigView = z.infer<typeof CrmConfigView>;
+
 export const CrmConnectionDto = z.object({
   driver: z.string(),
   connected: z.boolean(),
@@ -686,6 +996,8 @@ export const CrmConnectionDto = z.object({
   pending: z.number().int(),
   failed: z.number().int(),
   succeeded24h: z.number().int(),
+  /** Null when the centre has saved nothing and is inheriting the deployment default. */
+  config: CrmConfigView.nullable(),
 });
 export type CrmConnectionDto = z.infer<typeof CrmConnectionDto>;
 

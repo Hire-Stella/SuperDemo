@@ -55,6 +55,12 @@ export const ApiEnv = z
     OLLAMA_BASE_URL: z.string().default('http://127.0.0.1:11434'),
     OLLAMA_MODEL: z.string().default('llama3.2'),
 
+    /**
+     * Encrypts tenant-supplied CRM credentials at rest. Required only once a
+     * centre saves its own CRM config; without it that request is refused
+     * rather than storing the credential in the clear.
+     */
+    CRM_SECRET_KEY: optionalStr,
     BITRIX_WEBHOOK_URL: optionalStr,
     BITRIX_INBOUND_TOKEN: optionalStr,
 

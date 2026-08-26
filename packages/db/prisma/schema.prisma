@@ -1,4 +1,19 @@
-// FIT-AI — single-tenant contact centre schema.
+// FIT-AI — multi-tenant contact centre schema.
+//
+// Tenancy: every tenant-owned row carries `orgId`. It is NOT a foreign key on
+// the leaf tables (only User and Setting relate to Organization) — 20-odd FKs to
+// one table buys referential integrity we don't need, because orgs are
+// deactivated rather than deleted, and costs a constrained write on every insert
+// in the call path. Isolation is enforced in one place instead: the tenant
+// Prisma extension in packages/db/src/tenant.ts injects `orgId` into every
+// where-clause and every create. See that file for what it does and does not
+// cover.
+//
+// `orgId String @default("")` rather than a required field: the default keeps it
+// optional in Prisma's generated create inputs, so the extension can supply it
+// at runtime without 50 call sites having to name it. A row that somehow escapes
+// the extension gets "" — which matches no organisation, so it is invisible
+// rather than visible to everyone. Fail closed.
 //
 // Design notes worth defending in review:
 //  * CallParticipant, not Call.agentId — the AI→human handoff IS the product,
@@ -31,6 +46,9 @@ enum Role {
   AGENT
   SUPERVISOR
   ADMIN
+  /// Platform operator, above any single contact centre. Belongs to no org
+  /// (User.orgId is null) and is the only role that can create them.
+  SUPERADMIN
 }
 
 enum Location {
@@ -144,16 +162,78 @@ enum SyncStatus {
   SKIPPED
 }
 
+enum CampaignStatus {
+  DRAFT
+  RUNNING
+  PAUSED
+  COMPLETED
+  CANCELLED
+}
+
+enum TargetStatus {
+  PENDING
+  /// Claimed by the dialer; a call is being placed or is live.
+  CALLING
+  ANSWERED
+  NO_ANSWER
+  /// Attempts exhausted without an answer.
+  EXHAUSTED
+  FAILED
+  /// Never call: the contact asked not to be, or has no consent basis.
+  SUPPRESSED
+}
+
 enum NumberStatus {
   AVAILABLE
   ASSIGNED
   RELEASED
 }
 
+/* ============================ organisations =============================== */
+
+/// A tenant — one contact centre. Everything a client's staff can see hangs off
+/// this row. Deactivated, never deleted: their calls and recordings stay
+/// attributable, exactly as for a departed agent.
+/// What kind of business a tenant is. Drives what gets provisioned at
+/// onboarding and how routing categories are labelled — never a code path.
+enum Industry {
+  EDUCATION
+  CLINIC
+  RESTAURANT
+  RETAIL
+  FITNESS
+  PROFESSIONAL
+  GENERIC
+}
+
+model Organization {
+  id        String   @id @default(cuid())
+  name      String
+  industry  Industry @default(GENERIC)
+  /// shadcn token overrides. `themePreset` names one of the built-in palettes;
+  /// `themeTokens` holds a pasted tweakcn export and wins over it when present.
+  themePreset String @default("default")
+  themeTokens Json?
+  /// URL-safe handle, unique across the platform. Stable once issued — the
+  /// superadmin can rename an org's display name without breaking anything.
+  slug      String   @unique
+  timezone  String   @default("Asia/Dubai")
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users    User[]
+  settings Setting?
+
+  @@index([isActive])
+}
+
 /* ========================= people & presence ============================= */
 
 model User {
   id           String   @id @default(cuid())
+  /// Null only for SUPERADMIN, which sits above every org.
+  orgId        String?
   email        String   @unique
   name         String
   passwordHash String
@@ -161,7 +241,7 @@ model User {
   location     Location
   timezone     String
   skills       Skill[]
-  extension    String?  @unique
+  extension    String?
   avatarColor  String   @default("#2563eb")
   /// Bitrix24 user id, so calls land on the right CRM user's timeline.
   bitrixUserId String?
@@ -170,6 +250,7 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  org              Organization?     @relation(fields: [orgId], references: [id])
   presence         AgentState?
   stateEvents      AgentStateEvent[]
   callParticipants CallParticipant[]
@@ -179,7 +260,12 @@ model User {
   messages         Message[]
   auditLogs        AuditLog[]
 
+  /// Email stays globally unique: sign-in takes an address and nothing else, so
+  /// two orgs sharing one would make the login ambiguous. Extensions are only
+  /// unique *within* an org — two centres both wanting ext 101 is normal.
+  @@unique([orgId, extension])
   @@index([role, isActive])
+  @@index([orgId, role, isActive])
 }
 
 model RefreshToken {
@@ -202,6 +288,7 @@ model RefreshToken {
 /// Current state — one row per agent, cheap to read for the live board.
 model AgentState {
   userId        String      @id
+  orgId         String      @default("")
   status        AgentStatus @default(OFFLINE)
   since         DateTime    @default(now())
   reason        String?
@@ -212,11 +299,13 @@ model AgentState {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([status])
+  @@index([orgId, status])
 }
 
 /// Append-only. Every transition. Source of truth for occupancy & adherence.
 model AgentStateEvent {
   id       BigInt      @id @default(autoincrement())
+  orgId    String      @default("")
   userId   String
   from     AgentStatus?
   to       AgentStatus
@@ -236,7 +325,8 @@ model AgentStateEvent {
 
 model Contact {
   id             String    @id @default(cuid())
-  phoneE164      String?   @unique
+  orgId          String    @default("")
+  phoneE164      String?
   name           String?
   email          String?
   courseInterest String?
@@ -244,11 +334,19 @@ model Contact {
   bitrixEntity   String?
   bitrixId       String?
   bitrixSyncedAt DateTime?
+  /// Set when someone asks not to be called again. The dialer refuses these
+  /// before it looks at anything else — an opt-out that can be overridden by a
+  /// campaign setting is not an opt-out.
+  doNotCall      Boolean   @default(false)
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
   conversations Conversation[]
+  campaignTargets CampaignTarget[]
 
+  /// The same caller may exist in two centres — a shared number is only a
+  /// duplicate within one org.
+  @@unique([orgId, phoneE164])
   @@index([bitrixEntity, bitrixId])
   @@index([name])
 }
@@ -257,6 +355,7 @@ model Contact {
 
 model Conversation {
   id          String             @id @default(cuid())
+  orgId       String             @default("")
   channel     Channel
   direction   Direction          @default(INBOUND)
   status      ConversationStatus @default(ACTIVE)
@@ -286,10 +385,13 @@ model Conversation {
   @@index([startedAt(sort: Desc)])
   @@index([handledById, startedAt(sort: Desc)])
   @@index([queueId, startedAt(sort: Desc)])
+  @@index([orgId, startedAt(sort: Desc)])
+  @@index([orgId, status, channel])
 }
 
 model Call {
   id             String    @id @default(cuid())
+  orgId          String    @default("")
   conversationId String    @unique
   /// Provider's id. Unique → redelivered carrier events are no-ops.
   providerCallId String    @unique
@@ -323,6 +425,11 @@ model Call {
   /// How many agents were offered this call before someone took it.
   offerCount Int @default(0)
 
+  /// Set when a telecaller dialled this call by hand rather than the AI or the
+  /// campaign dialer placing it. Drives the answer path (bridge the agent, no AI
+  /// leg) and makes "calls placed by X" answerable in reporting.
+  placedByUserId String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -333,11 +440,13 @@ model Call {
 
   @@index([state, ringingAt(sort: Desc)])
   @@index([ringingAt(sort: Desc)])
+  @@index([orgId, state, ringingAt(sort: Desc)])
 }
 
 /// One call, multiple participants over time. Models the handoff explicitly.
 model CallParticipant {
   id       String          @id @default(cuid())
+  orgId    String          @default("")
   callId   String
   kind     ParticipantKind
   userId   String?
@@ -354,6 +463,7 @@ model CallParticipant {
 /// Unified turn record — an AI voice turn and a WhatsApp message share a shape.
 model Message {
   id             String      @id @default(cuid())
+  orgId          String      @default("")
   conversationId String
   role           MessageRole
   text           String
@@ -375,6 +485,7 @@ model Message {
 
 model Recording {
   id         String    @id @default(cuid())
+  orgId      String    @default("")
   callId     String    @unique
   storageKey String
   durationMs Int
@@ -391,6 +502,7 @@ model Recording {
 
 model TranscriptSegment {
   id         BigInt          @id @default(autoincrement())
+  orgId      String          @default("")
   callId     String
   speaker    ParticipantKind
   startMs    Int
@@ -405,6 +517,7 @@ model TranscriptSegment {
 
 model AiSession {
   id             String @id @default(cuid())
+  orgId          String @default("")
   conversationId String @unique
   aiAgentId      String
 
@@ -437,6 +550,7 @@ model AiSession {
 
 model AiAgent {
   id           String  @id @default(cuid())
+  orgId        String  @default("")
   name         String
   greeting     String
   systemPrompt String
@@ -456,6 +570,7 @@ model AiAgent {
 
 model KnowledgeDoc {
   id        String   @id @default(cuid())
+  orgId     String   @default("")
   title     String
   category  Skill    @default(GENERAL)
   source    String   @default("manual")
@@ -470,6 +585,7 @@ model KnowledgeDoc {
 
 model KnowledgeChunk {
   id      String @id @default(cuid())
+  orgId   String @default("")
   docId   String
   ordinal Int
   content String
@@ -489,7 +605,8 @@ model KnowledgeChunk {
 
 model Queue {
   id            String          @id @default(cuid())
-  name          String          @unique
+  orgId         String          @default("")
+  name          String
   requiredSkill Skill
   slaSeconds    Int             @default(20)
   strategy      RoutingStrategy @default(LONGEST_IDLE)
@@ -501,9 +618,13 @@ model Queue {
   conversations Conversation[]
   numbers       PhoneNumber[]
   aiAgents      AiAgent[]
+
+  /// "Admissions" is a queue name every centre will want.
+  @@unique([orgId, name])
 }
 
 model QueueMembership {
+  orgId    String @default("")
   queueId  String
   userId   String
   /// Higher wins under SKILL_WEIGHTED routing.
@@ -516,12 +637,94 @@ model QueueMembership {
   @@index([userId])
 }
 
+/* ============================== outbound ================================= */
+
+/// An outbound calling campaign: who to call, what the AI opens with, and the
+/// pacing that keeps it defensible.
+///
+/// Pacing and the call window are on the campaign rather than global settings
+/// because two campaigns in the same centre legitimately differ — a "your
+/// certificate is ready" list can run all day at low concurrency, while a
+/// time-sensitive reminder wants a tighter window and more lines.
+model Campaign {
+  id        String         @id @default(cuid())
+  orgId     String         @default("")
+  name      String
+  status    CampaignStatus @default(DRAFT)
+
+  /// What the assistant says first. The AI agent supplies the rest of its
+  /// behaviour; only the opener is campaign-specific.
+  opener    String
+  /// Why this centre is allowed to call these people. Free text, required, and
+  /// recorded on every call — under UAE marketing rules "we had the number" is
+  /// not a basis, and a dialer that does not make you write it down invites
+  /// exactly that.
+  consentBasis String
+
+  aiAgentId      String
+  /// Where an escalated outbound call goes.
+  queueId        String?
+  /// The DID to present. Must belong to this centre.
+  fromNumberId   String?
+
+  /// Simultaneous live calls this campaign may hold.
+  maxConcurrent  Int @default(2)
+  /// Local-time window, inclusive start, exclusive end, in the org's timezone.
+  windowStartHour Int @default(9)
+  windowEndHour   Int @default(18)
+  /// 1 = Monday … 7 = Sunday. Empty means every day.
+  daysOfWeek     Int[]
+
+  maxAttempts        Int @default(2)
+  retryAfterMinutes  Int @default(120)
+
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  targets CampaignTarget[]
+
+  @@index([orgId, status])
+}
+
+/// One person on a campaign's list, and the outcome of calling them.
+model CampaignTarget {
+  id         String       @id @default(cuid())
+  orgId      String       @default("")
+  campaignId String
+  contactId  String
+  status     TargetStatus @default(PENDING)
+
+  attempts       Int       @default(0)
+  lastAttemptAt  DateTime?
+  /// When a retry becomes eligible. The dialer never picks a target before this.
+  nextAttemptAt  DateTime?
+  /// The conversation the successful attempt produced.
+  conversationId String?
+  lastError      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contact  Contact  @relation(fields: [contactId], references: [id])
+
+  /// One entry per person per campaign — re-importing a list must not double-call.
+  @@unique([campaignId, contactId])
+  /// The dialer's hot query: next eligible target for a campaign.
+  @@index([campaignId, status, nextAttemptAt])
+  @@index([orgId, status])
+}
+
 /* =========================== number inventory ============================ */
 
 /// Mocked DID stock in v1 — demonstrates virtual numbers replacing SIM cards.
 /// Real provisioning needs a TDRA-licensed UAE carrier.
 model PhoneNumber {
   id              String       @id @default(cuid())
+  orgId           String       @default("")
+  /// Globally unique: a real DID is assignable to exactly one centre, and two
+  /// orgs claiming the same number would make inbound routing ambiguous.
   e164            String       @unique
   label           String?
   country         String       @default("AE")
@@ -549,6 +752,7 @@ model PhoneNumber {
 /// then the worker drains. No dual-write bugs, no lost CRM pushes.
 model OutboxEvent {
   id          BigInt    @id @default(autoincrement())
+  orgId       String    @default("")
   aggregate   String
   aggregateId String
   type        String
@@ -566,6 +770,7 @@ model OutboxEvent {
 
 model CrmSyncLog {
   id         BigInt        @id @default(autoincrement())
+  orgId      String        @default("")
   direction  SyncDirection
   method     String
   entityType String
@@ -599,6 +804,10 @@ model ProcessedWebhook {
 /// Pre-aggregated so /analytics never scans Call. Rolled up incrementally on
 /// call completion and reconciled nightly.
 model CallMetricsDaily {
+  /// Part of the primary key, not just a filter: the org-wide rollup rows use
+  /// ""/"" for queueId/agentId, so without orgId two centres would collide on
+  /// the same day and silently sum each other's calls.
+  orgId   String   @default("")
   day     DateTime
   queueId String   @default("")
   agentId String   @default("")
@@ -614,12 +823,16 @@ model CallMetricsDaily {
   wrapMsTotal       BigInt @default(0)
   answeredCount     Int    @default(0)
 
-  @@id([day, queueId, agentId])
+  @@id([orgId, day, queueId, agentId])
   @@index([day])
+  @@index([orgId, day])
 }
 
 model AuditLog {
   id       BigInt   @id @default(autoincrement())
+  /// "" for platform-level actions (superadmin creating an org), since those
+  /// belong to no tenant.
+  orgId    String   @default("")
   actorId  String?
   action   String
   target   String
@@ -631,12 +844,15 @@ model AuditLog {
 
   @@index([at(sort: Desc)])
   @@index([actorId, at(sort: Desc)])
+  @@index([orgId, at(sort: Desc)])
 }
 
-/// Single-row settings table. Simpler than scattering config across env vars
-/// the client's admin needs to edit at runtime.
+/// One row per organisation. Was a literal singleton before tenancy; the shape
+/// is otherwise unchanged, so an admin's settings page still edits exactly the
+/// knobs it always did — just their own centre's.
 model Setting {
-  id                    String   @id @default("singleton")
+  id                    String   @id @default(cuid())
+  orgId                 String   @unique
   instituteName         String   @default("FIT Institute")
   instituteTimezone     String   @default("Asia/Dubai")
   recordingConsentText  String   @default("This call may be recorded for quality and training purposes.")
@@ -647,5 +863,22 @@ model Setting {
   /// Used for the cost-saving figure on the analytics page.
   agentHourlyCostUsd    Decimal  @db.Decimal(8, 2) @default(12.00)
   bitrixPortalUrl       String?
+
+  /// Per-centre CRM. Empty means "inherit the deployment's CRM_DRIVER", which is
+  /// how the seeded tenant keeps working without being reconfigured.
+  crmProvider           String   @default("")
+  /// Non-secret fields for whichever provider is selected (Zoho region and
+  /// client id, the webhook host). Shown on the settings page and used for
+  /// deep links. Shapeless on purpose: five providers with different fields
+  /// would otherwise mean five sets of mostly-null columns.
+  crmPublic             Json?
+  /// The provider's secrets as one AES-256-GCM blob — see
+  /// apps/api/src/shared/secret-box.ts. A leaked row must not be a working
+  /// credential, and adding a sixth provider must not need a migration.
+  crmSecretsEnc         String?
+  crmUpdatedAt          DateTime?
+
   updatedAt             DateTime @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 }

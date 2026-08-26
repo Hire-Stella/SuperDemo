@@ -14,7 +14,10 @@
       "default": "./dist/data/index.js"
     }
   },
-  "files": ["dist", "prisma"],
+  "files": [
+    "dist",
+    "prisma"
+  ],
   "scripts": {
     "generate": "prisma generate",
     "build": "prisma generate && tsc -p tsconfig.build.json",
@@ -25,7 +28,8 @@
     "studio": "dotenv -e ../../.env -- prisma studio",
     "reset": "dotenv -e ../../.env -- prisma migrate reset --force",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "demo:seed": "dotenv -e ../../.env -- tsx prisma/demo-data.ts"
   },
   "dependencies": {
     "@fit-ai/contracts": "workspace:*",

@@ -6,11 +6,48 @@ import { z } from 'zod';
  * Keep the string values stable: they are persisted.
  */
 
-export const Role = z.enum(['AGENT', 'SUPERVISOR', 'ADMIN']);
+export const Role = z.enum(['AGENT', 'SUPERVISOR', 'ADMIN', 'SUPERADMIN']);
 export type Role = z.infer<typeof Role>;
+
+/**
+ * Roles an org's own admin may hand out. SUPERADMIN is absent by construction:
+ * a tenant admin must not be able to mint a platform operator, and this is the
+ * list the API validates against rather than a check someone has to remember.
+ */
+export const AssignableRole = z.enum(['AGENT', 'SUPERVISOR', 'ADMIN']);
+export type AssignableRole = z.infer<typeof AssignableRole>;
+
+export const ROLE_LABELS: Record<Role, string> = {
+  AGENT: 'Agent',
+  SUPERVISOR: 'Supervisor',
+  ADMIN: 'Admin',
+  SUPERADMIN: 'Platform operator',
+};
 
 export const Location = z.enum(['DUBAI', 'INDIA', 'EGYPT']);
 export type Location = z.infer<typeof Location>;
+
+/** Verticals the platform onboards. See industries.ts for what each provisions. */
+export const Industry = z.enum([
+  'EDUCATION',
+  'CLINIC',
+  'RESTAURANT',
+  'RETAIL',
+  'FITNESS',
+  'PROFESSIONAL',
+  'GENERIC',
+]);
+export type Industry = z.infer<typeof Industry>;
+
+export const INDUSTRY_LABELS: Record<Industry, string> = {
+  EDUCATION: 'Education / training',
+  CLINIC: 'Clinic / healthcare',
+  RESTAURANT: 'Restaurant / hospitality',
+  RETAIL: 'Retail / e-commerce',
+  FITNESS: 'Gym / fitness',
+  PROFESSIONAL: 'Professional services',
+  GENERIC: 'Other',
+};
 
 /** Course categories FIT actually teaches — these double as routing skills. */
 export const Skill = z.enum(['MANAGEMENT', 'EDUCATION', 'FINANCE', 'LANGUAGE', 'GENERAL']);
@@ -59,7 +96,10 @@ export type CallState = z.infer<typeof CallState>;
  * silently impossible states in the analytics tables.
  */
 export const CALL_TRANSITIONS: Record<CallState, readonly CallState[]> = {
-  RINGING: ['AI_HANDLING', 'QUEUED', 'COMPLETED'],
+  // AGENT_TALKING direct from RINGING is the manual-dial case: a telecaller
+  // placed the call themselves, so there is no AI leg to hand over from and no
+  // queue to wait in — they are already on the line when it connects.
+  RINGING: ['AI_HANDLING', 'AGENT_TALKING', 'QUEUED', 'COMPLETED'],
   AI_HANDLING: ['ESCALATING', 'COMPLETED'],
   ESCALATING: ['QUEUED', 'COMPLETED'],
   QUEUED: ['AGENT_RINGING', 'COMPLETED'],
@@ -135,6 +175,38 @@ export type SyncDirection = z.infer<typeof SyncDirection>;
 export const SyncStatus = z.enum(['PENDING', 'SUCCESS', 'FAILED', 'SKIPPED']);
 export type SyncStatus = z.infer<typeof SyncStatus>;
 
+export const CampaignStatus = z.enum(['DRAFT', 'RUNNING', 'PAUSED', 'COMPLETED', 'CANCELLED']);
+export type CampaignStatus = z.infer<typeof CampaignStatus>;
+
+export const TargetStatus = z.enum([
+  'PENDING',
+  'CALLING',
+  'ANSWERED',
+  'NO_ANSWER',
+  'EXHAUSTED',
+  'FAILED',
+  'SUPPRESSED',
+]);
+export type TargetStatus = z.infer<typeof TargetStatus>;
+
+export const CAMPAIGN_STATUS_LABELS: Record<CampaignStatus, string> = {
+  DRAFT: 'Draft',
+  RUNNING: 'Running',
+  PAUSED: 'Paused',
+  COMPLETED: 'Completed',
+  CANCELLED: 'Cancelled',
+};
+
+export const TARGET_STATUS_LABELS: Record<TargetStatus, string> = {
+  PENDING: 'Waiting',
+  CALLING: 'Calling',
+  ANSWERED: 'Answered',
+  NO_ANSWER: 'No answer',
+  EXHAUSTED: 'Gave up',
+  FAILED: 'Failed',
+  SUPPRESSED: 'Suppressed',
+};
+
 export const NumberStatus = z.enum(['AVAILABLE', 'ASSIGNED', 'RELEASED']);
 export type NumberStatus = z.infer<typeof NumberStatus>;
 
@@ -148,8 +220,55 @@ export type MessagingDriver = z.infer<typeof MessagingDriver>;
 export const LlmDriver = z.enum(['scripted', 'claude', 'ollama']);
 export type LlmDriver = z.infer<typeof LlmDriver>;
 
-export const CrmDriver = z.enum(['mock', 'bitrix']);
+export const CrmDriver = z.enum(['mock', 'bitrix', 'zoho', 'hubspot', 'webhook']);
 export type CrmDriver = z.infer<typeof CrmDriver>;
+
+export const CRM_DRIVER_LABELS: Record<CrmDriver, string> = {
+  mock: 'None (simulated)',
+  bitrix: 'Bitrix24',
+  zoho: 'Zoho CRM',
+  hubspot: 'HubSpot',
+  webhook: 'Custom webhook',
+};
+
+/** Shown under the picker so an admin knows what they are choosing. */
+export const CRM_DRIVER_NOTES: Record<CrmDriver, string> = {
+  mock: 'No external CRM. Sync runs end to end against an in-process mock.',
+  bitrix: 'One inbound webhook URL. Shows calls live on the agent’s timeline.',
+  zoho: 'OAuth client plus refresh token. Calls appear when they end, not while ringing.',
+  hubspot: 'A private app token. Calls, notes and recordings on the contact record.',
+  webhook:
+    'Signed JSON posted to your own endpoint — reaches Salesforce, Pipedrive, Dynamics or a booking system via Zapier, Make or your own code. Cannot look a caller up, so contacts get an id we generate.',
+};
+
+/**
+ * Zoho hosts each region on its own domain and a token minted in one is
+ * rejected by the others, so the region is part of the credentials rather than
+ * something to guess.
+ */
+export const ZohoRegion = z.enum(['com', 'eu', 'in', 'au', 'jp', 'ca', 'sa']);
+export type ZohoRegion = z.infer<typeof ZohoRegion>;
+
+export const ZOHO_REGION_LABELS: Record<ZohoRegion, string> = {
+  com: 'zoho.com (US / global)',
+  eu: 'zoho.eu (Europe)',
+  in: 'zoho.in (India)',
+  au: 'zoho.com.au (Australia)',
+  jp: 'zoho.jp (Japan)',
+  ca: 'zohocloud.ca (Canada)',
+  sa: 'zoho.sa (Saudi Arabia)',
+};
+
+/** API and OAuth hosts per region. */
+export const ZOHO_HOSTS: Record<ZohoRegion, { api: string; accounts: string }> = {
+  com: { api: 'https://www.zohoapis.com', accounts: 'https://accounts.zoho.com' },
+  eu: { api: 'https://www.zohoapis.eu', accounts: 'https://accounts.zoho.eu' },
+  in: { api: 'https://www.zohoapis.in', accounts: 'https://accounts.zoho.in' },
+  au: { api: 'https://www.zohoapis.com.au', accounts: 'https://accounts.zoho.com.au' },
+  jp: { api: 'https://www.zohoapis.jp', accounts: 'https://accounts.zoho.jp' },
+  ca: { api: 'https://www.zohoapis.ca', accounts: 'https://accounts.zohocloud.ca' },
+  sa: { api: 'https://www.zohoapis.sa', accounts: 'https://accounts.zoho.sa' },
+};
 
 /* ------------------------------ display maps ------------------------------ */
 
@@ -160,6 +279,77 @@ export const SKILL_LABELS: Record<Skill, string> = {
   LANGUAGE: 'Languages',
   GENERAL: 'General',
 };
+
+/**
+ * Routing categories, named per vertical.
+ *
+ * `Skill` is five stable routing slots in the database. What a slot is *called*
+ * is a per-tenant presentation concern: FINANCE is "Fees & payments" to a
+ * training institute, "Billing & insurance" to a clinic, "Payments" to a
+ * restaurant. Renaming the enum itself would mean relabelling every existing
+ * tenant's rows to suit whichever vertical was onboarded most recently — so the
+ * slots stay put and the labels move.
+ *
+ * Known ceiling: five categories per centre. A tenant needing a sixth needs
+ * these to become per-org rows, which is a routing and analytics change rather
+ * than a label change. Recorded in NOT-IMPLEMENTED.md.
+ */
+export const CATEGORY_LABELS: Record<Industry, Record<Skill, string>> = {
+  EDUCATION: {
+    EDUCATION: 'Courses & admissions',
+    FINANCE: 'Fees & payments',
+    MANAGEMENT: 'Corporate training',
+    LANGUAGE: 'Language programmes',
+    GENERAL: 'General enquiries',
+  },
+  CLINIC: {
+    EDUCATION: 'Appointments',
+    FINANCE: 'Billing & insurance',
+    MANAGEMENT: 'Referrals & reports',
+    LANGUAGE: 'Interpreter requests',
+    GENERAL: 'General enquiries',
+  },
+  RESTAURANT: {
+    EDUCATION: 'Reservations',
+    FINANCE: 'Payments & invoices',
+    MANAGEMENT: 'Events & catering',
+    LANGUAGE: 'Delivery & takeaway',
+    GENERAL: 'General enquiries',
+  },
+  RETAIL: {
+    EDUCATION: 'Orders & tracking',
+    FINANCE: 'Refunds & payments',
+    MANAGEMENT: 'Wholesale & trade',
+    LANGUAGE: 'Returns & exchanges',
+    GENERAL: 'General enquiries',
+  },
+  FITNESS: {
+    EDUCATION: 'Memberships & classes',
+    FINANCE: 'Billing & renewals',
+    MANAGEMENT: 'Personal training',
+    LANGUAGE: 'Facilities & access',
+    GENERAL: 'General enquiries',
+  },
+  PROFESSIONAL: {
+    EDUCATION: 'New enquiries',
+    FINANCE: 'Invoices & accounts',
+    MANAGEMENT: 'Case & matter updates',
+    LANGUAGE: 'Document requests',
+    GENERAL: 'General enquiries',
+  },
+  GENERIC: {
+    EDUCATION: 'Sales & enquiries',
+    FINANCE: 'Billing',
+    MANAGEMENT: 'Accounts',
+    LANGUAGE: 'Support',
+    GENERAL: 'General enquiries',
+  },
+};
+
+/** What a routing category is called inside a given centre. */
+export function categoryLabel(industry: Industry | null | undefined, skill: Skill): string {
+  return CATEGORY_LABELS[industry ?? 'GENERIC'][skill];
+}
 
 export const ESCALATION_REASON_LABELS: Record<EscalationReason, string> = {
   CALLER_REQUESTED: 'Caller asked for a human',
@@ -180,6 +370,59 @@ export const DISPOSITION_LABELS: Record<Disposition, string> = {
   WRONG_NUMBER: 'Wrong number',
   SPAM: 'Spam',
 };
+
+/**
+ * Call outcomes, named per vertical.
+ *
+ * `Disposition` is a fixed set of slots in the database, and its values were
+ * written for a training institute — so a grocery's inbox showed "Existing
+ * student support" against a damaged-delivery call. Same treatment as the
+ * routing categories: the slots stay, the words move.
+ */
+export const DISPOSITION_LABELS_BY_INDUSTRY: Partial<
+  Record<Industry, Partial<Record<Disposition, string>>>
+> = {
+  RETAIL: {
+    ENROLMENT_INTEREST: 'Sales interest',
+    FEE_ENQUIRY: 'Price enquiry',
+    EXISTING_STUDENT_SUPPORT: 'Existing customer',
+  },
+  CLINIC: {
+    ENROLMENT_INTEREST: 'New patient',
+    FEE_ENQUIRY: 'Cost enquiry',
+    EXISTING_STUDENT_SUPPORT: 'Existing patient',
+  },
+  RESTAURANT: {
+    ENROLMENT_INTEREST: 'Booking interest',
+    FEE_ENQUIRY: 'Price enquiry',
+    EXISTING_STUDENT_SUPPORT: 'Existing booking',
+  },
+  FITNESS: {
+    ENROLMENT_INTEREST: 'Membership interest',
+    FEE_ENQUIRY: 'Price enquiry',
+    EXISTING_STUDENT_SUPPORT: 'Existing member',
+  },
+  PROFESSIONAL: {
+    ENROLMENT_INTEREST: 'New enquiry',
+    FEE_ENQUIRY: 'Fee enquiry',
+    EXISTING_STUDENT_SUPPORT: 'Existing client',
+  },
+  GENERIC: {
+    ENROLMENT_INTEREST: 'Sales interest',
+    EXISTING_STUDENT_SUPPORT: 'Existing customer',
+  },
+};
+
+/** What an outcome is called inside a given centre. */
+export function dispositionLabel(
+  industry: Industry | null | undefined,
+  disposition: Disposition,
+): string {
+  return (
+    DISPOSITION_LABELS_BY_INDUSTRY[industry ?? 'GENERIC']?.[disposition] ??
+    DISPOSITION_LABELS[disposition]
+  );
+}
 
 export const CALL_STATE_LABELS: Record<CallState, string> = {
   RINGING: 'Ringing',
