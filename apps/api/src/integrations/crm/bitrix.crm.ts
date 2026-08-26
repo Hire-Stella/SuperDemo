@@ -1,12 +1,10 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Logger } from '@nestjs/common';
 import type {
-  ApiEnv,
   CrmCallInput,
   CrmContactInput,
   CrmContactRef,
   CrmProvider,
 } from '@fit-ai/contracts';
-import { ENV } from '../../config/config.module';
 
 interface BitrixEnvelope<T> {
   result?: T;
@@ -29,31 +27,38 @@ interface BitrixEnvelope<T> {
  * Known limitation, stated rather than hidden: `imconnector.*` (pushing chat
  * into Bitrix Open Channels) only works in *application* context, so WhatsApp
  * threads cannot be pushed to Bitrix through a webhook. See NOT-IMPLEMENTED.md.
+ *
+ * Takes its webhook URL as a constructor argument rather than reading env,
+ * because the URL is now per centre: one client is on Bitrix, another on Zoho,
+ * and CrmResolver builds one of these per configured tenant.
  */
-@Injectable()
 export class BitrixCrm implements CrmProvider {
   readonly name = 'bitrix';
+  /** telephony.externalcall.register shows the call while it is ringing. */
+  readonly supportsLiveCall = true;
   private readonly log = new Logger(BitrixCrm.name);
   private readonly base: string;
+  private readonly webhookUrl: string;
 
-  constructor(@Inject(ENV) private readonly env: ApiEnv) {
+  constructor(config: { webhookUrl: string }) {
+    this.webhookUrl = config.webhookUrl;
     // Normalise to exactly one trailing slash so method concatenation is safe.
-    this.base = (this.env.BITRIX_WEBHOOK_URL ?? '').replace(/\/+$/, '') + '/';
+    this.base = this.webhookUrl.replace(/\/+$/, '') + '/';
   }
 
   /** `https://portal.bitrix24.ae/rest/1/token/` → `https://portal.bitrix24.ae` */
   get portalUrl(): string | null {
-    if (!this.env.BITRIX_WEBHOOK_URL) return null;
+    if (!this.webhookUrl) return null;
     try {
-      return new URL(this.env.BITRIX_WEBHOOK_URL).origin;
+      return new URL(this.webhookUrl).origin;
     } catch {
       return null;
     }
   }
 
   private async call<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-    if (!this.env.BITRIX_WEBHOOK_URL) {
-      throw new Error('BITRIX_WEBHOOK_URL is not configured');
+    if (!this.webhookUrl) {
+      throw new Error('No Bitrix webhook URL configured for this centre');
     }
 
     const res = await fetch(`${this.base}${method}`, {
@@ -137,7 +142,7 @@ export class BitrixCrm implements CrmProvider {
         PHONE: [{ VALUE: phone, VALUE_TYPE: 'WORK' }],
         EMAIL: input.email ? [{ VALUE: input.email, VALUE_TYPE: 'WORK' }] : undefined,
         COMMENTS: input.courseInterest ? `Interested in: ${input.courseInterest}` : undefined,
-        SOURCE_DESCRIPTION: input.source ?? 'FIT-AI contact centre',
+        SOURCE_DESCRIPTION: input.source ?? 'AI contact centre',
         OPENED: 'Y',
       },
       params: { REGISTER_SONET_EVENT: 'Y' },

@@ -19,6 +19,8 @@ import type {
 export class MockCrm implements CrmProvider {
   readonly name = 'mock';
   readonly portalUrl = 'https://mock.bitrix24.local';
+  /** The mock mimics Bitrix, which does support it. */
+  readonly supportsLiveCall = true;
 
   private readonly log = new Logger(MockCrm.name);
   private readonly contactsByPhone = new Map<string, CrmContactRef>();

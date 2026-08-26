@@ -12,6 +12,7 @@ import {
 import { z } from 'zod';
 import {
   type AiAgentDto,
+  CrmConfig,
   CreateUserInput,
   EscalationRules,
   type QueueDto,
@@ -22,8 +23,10 @@ import {
 } from '@fit-ai/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
+import { TenantContext } from '../tenancy/tenant-context.service';
 import { RoutingService } from '../calls/routing.service';
 import { CrmSyncService } from '../crm/crm-sync.service';
+import { CrmResolver } from '../integrations/crm/crm.resolver';
 import { OutboxService } from '../outbox/outbox.service';
 import { Roles } from '../auth/guards';
 import { ZodBody } from '../shared/zod.pipe';
@@ -45,6 +48,8 @@ export class AdminController {
     private readonly routing: RoutingService,
     private readonly crmSync: CrmSyncService,
     private readonly outbox: OutboxService,
+    private readonly tenants: TenantContext,
+    private readonly crmResolver: CrmResolver,
     @Inject(ENV) private readonly env: ApiEnv,
   ) {}
 
@@ -134,7 +139,9 @@ export class AdminController {
         timezone: TIMEZONES[body.location] ?? 'Asia/Dubai',
         skills: body.skills,
         extension: body.extension,
-        presence: { create: { status: 'OFFLINE' } },
+        // Nested creates are invisible to the tenant extension, so the org is
+        // named explicitly here. packages/db/src/tenant.ts explains why.
+        presence: { create: { orgId: this.tenants.requireOrgId(), status: 'OFFLINE' } },
       },
       select: { id: true, email: true, name: true, role: true, location: true },
     });
@@ -269,6 +276,31 @@ export class AdminController {
     return this.crmSync.testConnection();
   }
 
+  /**
+   * Choose this centre's CRM.
+   *
+   * ADMIN only, and never returns what it stored: the response is the same
+   * has-it-or-not view as the GET, so a credential cannot be read back out of
+   * the API once saved.
+   */
+  @Roles('ADMIN')
+  @Put('crm/config')
+  async saveCrmConfig(@ZodBody(CrmConfig) body: CrmConfig) {
+    const orgId = this.tenants.requireOrgId();
+    await this.crmResolver.save(orgId, body);
+    return this.crmResolver.view(orgId);
+  }
+
+  /** Revert to the deployment default, clearing stored credentials. */
+  @Roles('ADMIN')
+  @Delete('crm/config')
+  @HttpCode(200)
+  async clearCrmConfig() {
+    const orgId = this.tenants.requireOrgId();
+    await this.crmResolver.clear(orgId);
+    return this.crmResolver.view(orgId);
+  }
+
   @Roles('ADMIN', 'SUPERVISOR')
   @Get('crm/sync-log')
   crmSyncLog() {
@@ -301,7 +333,7 @@ export class AdminController {
 
   @Get('settings')
   async settings() {
-    const s = await this.prisma.setting.findUnique({ where: { id: 'singleton' } });
+    const s = await this.prisma.setting.findFirst();
     return {
       ...s,
       agentHourlyCostUsd: s ? Number(s.agentHourlyCostUsd) : 12,
@@ -340,6 +372,11 @@ export class AdminController {
     if (typeof body.agentHourlyCostUsd === 'number') {
       data.agentHourlyCostUsd = String(body.agentHourlyCostUsd);
     }
-    return this.prisma.setting.update({ where: { id: 'singleton' }, data });
+    // orgId is unique, so it is a valid identifier here — and naming it keeps
+    // this a single-row update rather than an updateMany the extension filters.
+    return this.prisma.setting.update({
+      where: { orgId: this.tenants.requireOrgId() },
+      data,
+    });
   }
 }

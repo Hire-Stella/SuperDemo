@@ -3,7 +3,8 @@ import type { ApiEnv, CrmProvider, CrmSyncLogRow, CrmConnectionDto } from '@fit-
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { OutboxService } from '../outbox/outbox.service';
-import { CRM_PROVIDER } from '../integrations/crm/crm.module';
+import { CrmResolver } from '../integrations/crm/crm.resolver';
+import { TenantContext } from '../tenancy/tenant-context.service';
 import { STORAGE_PROVIDER } from '../integrations/storage/storage.module';
 import { LocalStorage } from '../integrations/storage/storage.module';
 import { ENV } from '../config/config.module';
@@ -27,7 +28,8 @@ export class CrmSyncService implements OnModuleInit {
     private readonly realtime: RealtimeService,
     private readonly outbox: OutboxService,
     private readonly localStorage: LocalStorage,
-    @Inject(CRM_PROVIDER) private readonly crm: CrmProvider,
+    private readonly crmResolver: CrmResolver,
+    private readonly tenants: TenantContext,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
     @Inject(ENV) private readonly env: ApiEnv,
   ) {}
@@ -40,16 +42,8 @@ export class CrmSyncService implements OnModuleInit {
       await this.syncChatConversation(payload as { conversationId: string });
     });
 
-    // Record the portal URL so the UI can deep-link to Bitrix records.
-    void this.recordPortalUrl();
-  }
-
-  private async recordPortalUrl(): Promise<void> {
-    const portal = this.crm.portalUrl;
-    if (!portal) return;
-    await this.prisma.setting
-      .update({ where: { id: 'singleton' }, data: { bitrixPortalUrl: portal } })
-      .catch(() => undefined);
+    // The portal URL is per centre and written when a centre saves its CRM
+    // config (CrmResolver.save), so there is nothing to stamp globally here.
   }
 
   private async logSync(params: {
@@ -114,13 +108,17 @@ export class CrmSyncService implements OnModuleInit {
     }
 
     try {
+      // Resolved per call: this runs from an outbox handler, so the centre comes
+      // from the record being synced rather than from a request.
+      const crm = await this.crmResolver.forOrg(call.orgId);
+
       /* 1 — identify or create the caller */
-      const ref = await this.crm.findOrCreateContact({
+      const ref = await crm.findOrCreateContact({
         name: contact.name,
         phoneE164: contact.phoneE164,
         email: contact.email,
         courseInterest: contact.courseInterest,
-        source: 'FIT-AI contact centre',
+        source: 'AI contact centre',
       });
 
       await this.prisma.contact.update({
@@ -145,7 +143,7 @@ export class CrmSyncService implements OnModuleInit {
       const durationSeconds = Math.max(1, Math.round((call.totalMs ?? 0) / 1000));
       const abandoned = call.hangupCause === 'ABANDONED_IN_QUEUE';
 
-      const { crmCallId } = await this.crm.registerCall({
+      const { crmCallId } = await crm.registerCall({
         providerCallId: call.providerCallId,
         contact: ref,
         fromNumber: call.fromNumber,
@@ -157,7 +155,7 @@ export class CrmSyncService implements OnModuleInit {
         agentBitrixUserId: call.conversation.handledBy?.bitrixUserId ?? null,
       });
 
-      await this.crm.finishCall({
+      await crm.finishCall({
         crmCallId,
         durationSeconds,
         statusCode: abandoned ? '304' : '200',
@@ -182,14 +180,14 @@ export class CrmSyncService implements OnModuleInit {
           const MAX_INLINE = 8 * 1024 * 1024;
           if (call.recording.sizeBytes <= MAX_INLINE && this.storage.name === 'local') {
             const bytes = await this.localStorage.read(call.recording.storageKey);
-            await this.crm.attachRecording({
+            await crm.attachRecording({
               crmCallId,
               filename: `call-${call.id}.webm`,
               contentBase64: bytes.toString('base64'),
             });
           } else {
             const url = await this.storage.signedUrl(call.recording.storageKey, 7 * 86400);
-            await this.crm.attachRecording({
+            await crm.attachRecording({
               crmCallId,
               filename: `call-${call.id}.webm`,
               url,
@@ -244,7 +242,7 @@ export class CrmSyncService implements OnModuleInit {
         .filter((l) => l !== null)
         .join('\n');
 
-      const activity = await this.crm.logActivity({
+      const activity = await crm.logActivity({
         contact: ref,
         subject: `AI call — ${session?.detectedIntent ?? 'enquiry'} (${this.mmss(call.totalMs ?? 0)})`,
         description,
@@ -267,7 +265,7 @@ export class CrmSyncService implements OnModuleInit {
         bitrixId: ref.id,
       });
 
-      this.log.log(`synced call ${call.id} → ${this.crm.name} ${ref.entity} ${ref.id}`);
+      this.log.log(`synced call ${call.id} → ${crm.name} ${ref.entity} ${ref.id}`);
     } catch (error) {
       await this.logSync({
         method: 'call.sync',
@@ -305,11 +303,13 @@ export class CrmSyncService implements OnModuleInit {
     if (!conv?.contact?.phoneE164) return;
 
     try {
-      const ref = await this.crm.findOrCreateContact({
+      const crm = await this.crmResolver.forOrg(conv.orgId);
+
+      const ref = await crm.findOrCreateContact({
         name: conv.contact.name,
         phoneE164: conv.contact.phoneE164,
         courseInterest: conv.contact.courseInterest,
-        source: `FIT-AI ${conv.channel.toLowerCase()}`,
+        source: `AI contact centre — ${conv.channel.toLowerCase()}`,
       });
 
       await this.prisma.contact.update({
@@ -325,7 +325,7 @@ export class CrmSyncService implements OnModuleInit {
         })
         .join('\n');
 
-      const activity = await this.crm.logActivity({
+      const activity = await crm.logActivity({
         contact: ref,
         subject: `${conv.channel} conversation — ${conv.aiSession?.detectedIntent ?? 'enquiry'}`,
         description: [
@@ -385,23 +385,34 @@ export class CrmSyncService implements OnModuleInit {
       }),
     ]);
 
+    const orgId = this.tenants.orgId();
+    const crm = await this.crmResolver.forOrg(orgId);
+    const config = orgId ? await this.crmResolver.view(orgId) : null;
+
     return {
-      driver: this.crm.name,
-      connected: this.env.CRM_DRIVER === 'mock' ? true : Boolean(this.env.BITRIX_WEBHOOK_URL),
-      portalUrl: this.crm.portalUrl,
+      driver: crm.name,
+      // The mock is always "connected" — it is in-process. A real provider is
+      // connected once the centre has stored the credentials it needs.
+      connected:
+        crm.name === 'mock' ||
+        Boolean(config?.hasWebhookUrl) ||
+        Boolean(config?.hasRefreshToken),
+      portalUrl: crm.portalUrl,
       lastSyncAt: last?.createdAt ?? null,
       pending,
       failed,
       succeeded24h,
+      config,
     };
   }
 
   async testConnection() {
-    const result = await this.crm.testConnection();
+    const crm = await this.crmResolver.forOrg();
+    const result = await crm.testConnection();
     return {
       ok: result.ok,
-      driver: this.crm.name,
-      portalUrl: this.crm.portalUrl,
+      driver: crm.name,
+      portalUrl: crm.portalUrl,
       detail: result.detail,
       scopes: result.scopes,
     };
