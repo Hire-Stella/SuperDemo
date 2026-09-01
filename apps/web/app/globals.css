@@ -4,12 +4,12 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * FIT Institute theme — red and white.
+ * The platform's default theme — red and white.
  *
  * ┌──────────────────────────────────────────────────────────────────────────┐
- * │ THE BRAND RED IS ONE TOKEN: --brand-red / --brand-red-dark below.            │
- * │ Swap those two values and the whole app follows. If FIT send their real  │
- * │ brand hex, that is the only edit needed.                                 │
+ * │ THE BRAND RED IS ONE TOKEN: --brand-red / --brand-red-dark below.        │
+ * │ Swap those two values and the whole deployment follows. A tenant with no │
+ * │ theme of its own inherits this.                                          │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
  * A red brand in an operations dashboard creates one genuine design problem:
@@ -22,9 +22,9 @@
  *   · Green      → healthy / live / agent available
  *   · Purple     → AI-handled, so "the AI did this" never competes with brand red
  *
- * That leaves state legible while the app still looks unmistakably FIT. Every
- * state colour is paired with an icon or text label, so nothing depends on hue
- * alone — roughly one man in twelve cannot rely on red/green.
+ * That leaves state legible while the app still looks unmistakably branded.
+ * Every state colour is paired with an icon or text label, so nothing depends on
+ * hue alone — roughly one man in twelve cannot rely on red/green.
 
  * TENANT THEMES: the tokens below that carry brand identity are derived from
  * --primary with color-mix rather than from --brand-red directly. That is what
