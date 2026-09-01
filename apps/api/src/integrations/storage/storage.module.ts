@@ -2,7 +2,7 @@ import { Global, Inject, Injectable, Logger, Module } from '@nestjs/common';
 import { createHmac } from 'node:crypto';
 import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, normalize, resolve } from 'node:path';
-import type { ApiEnv, StorageProvider } from '@fit-ai/contracts';
+import type { ApiEnv, StorageProvider } from '@superdemo/contracts';
 import { ENV } from '../../config/config.module';
 
 export const STORAGE_PROVIDER = Symbol('STORAGE_PROVIDER');

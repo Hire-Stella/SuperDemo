@@ -16,7 +16,7 @@ import {
   YAxis,
 } from 'recharts';
 import { BarChart3, Download, PiggyBank } from 'lucide-react';
-import { dispositionLabel, type AnalyticsOverview } from '@fit-ai/contracts';
+import { dispositionLabel, type AnalyticsOverview } from '@superdemo/contracts';
 import { api, qs } from '@/lib/api';
 import { useUser } from '@/components/providers';
 import { dateRange, ESCALATION_LABEL, money, pct, seconds } from '@/lib/format';

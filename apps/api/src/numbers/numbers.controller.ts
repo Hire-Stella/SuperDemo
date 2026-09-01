@@ -5,7 +5,7 @@ import {
   PurchaseNumberInput,
   SearchNumbersQuery,
   UpdateNumberInput,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { NumbersService } from './numbers.service';
 import { Roles } from '../auth/guards';
 import { ZodBody, ZodQuery } from '../shared/zod.pipe';

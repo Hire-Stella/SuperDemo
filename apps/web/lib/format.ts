@@ -1,4 +1,4 @@
-import type { AgentStatus, CallState, Channel, EscalationReason } from '@fit-ai/contracts';
+import type { AgentStatus, CallState, Channel, EscalationReason } from '@superdemo/contracts';
 
 /** m:ss for durations under an hour, h:mm:ss above. */
 export function duration(ms: number | null | undefined): string {

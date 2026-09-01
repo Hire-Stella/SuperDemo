@@ -5,7 +5,7 @@ import {
   SendMessageInput,
   SimulateWhatsAppInput,
   type SessionUser,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { WhatsAppService } from './whatsapp.service';
 import { CurrentUser, Roles } from '../auth/guards';
 import { ZodBody } from '../shared/zod.pipe';

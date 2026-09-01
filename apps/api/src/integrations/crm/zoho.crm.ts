@@ -6,7 +6,7 @@ import {
   type CrmContactRef,
   type CrmProvider,
   type ZohoCrmConfig,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 
 interface ZohoRecord {
   id: string;

@@ -16,7 +16,7 @@ import {
   StartBrowserCallInput,
   TransferCallInput,
   type SessionUser,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { CallsService } from './calls.service';
 import { CurrentUser, Roles } from '../auth/guards';
 import { ZodBody } from '../shared/zod.pipe';

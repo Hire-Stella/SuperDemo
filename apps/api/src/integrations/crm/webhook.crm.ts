@@ -6,7 +6,7 @@ import type {
   CrmContactRef,
   CrmProvider,
   WebhookCrmConfig,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 
 /**
  * Generic outbound webhook — the escape hatch for every CRM nobody has written

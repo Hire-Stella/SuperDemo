@@ -1,6 +1,6 @@
 import { Controller, Get, Inject } from '@nestjs/common';
 import type { Redis } from 'ioredis';
-import type { ApiEnv } from '@fit-ai/contracts';
+import type { ApiEnv } from '@superdemo/contracts';
 import { PrismaService } from './prisma/prisma.service';
 import { REDIS } from './redis/redis.module';
 import { ENV } from './config/config.module';

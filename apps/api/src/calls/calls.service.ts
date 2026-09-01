@@ -18,7 +18,7 @@ import {
   type ScreenPopPayload,
   type TelephonyProvider,
   type TelephonySink,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { PresenceService } from '../presence/presence.service';
@@ -790,7 +790,7 @@ export class CallsService implements TelephonySink, OnModuleInit {
     callId: string;
     reason: EscalationReason;
     detail: string | null;
-    skill: import('@fit-ai/contracts').Skill;
+    skill: import('@superdemo/contracts').Skill;
     targetQueueId?: string;
   }): Promise<void> {
     const call = await this.prisma.call.findUniqueOrThrow({

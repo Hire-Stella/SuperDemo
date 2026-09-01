@@ -5,7 +5,7 @@ import {
   type KnowledgeSearchResult,
   Skill,
   UpsertKnowledgeDocInput,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { KnowledgeService } from './knowledge.service';
 import { Roles } from '../auth/guards';
 import { ZodBody, ZodQuery } from '../shared/zod.pipe';

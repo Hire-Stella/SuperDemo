@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
-import { parseApiEnv } from '@fit-ai/contracts';
+import { parseApiEnv } from '@superdemo/contracts';
 import { AppModule } from './app.module';
 import { OutboxService } from './outbox/outbox.service';
 

@@ -18,7 +18,7 @@ import type {
   AgentSummary,
   LiveOpsSnapshot,
   QueueDto,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { useSession, useUser } from '@/components/providers';
 import {

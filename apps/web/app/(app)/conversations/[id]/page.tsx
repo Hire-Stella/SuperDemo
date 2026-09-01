@@ -16,7 +16,7 @@ import {
   User,
   XCircle,
 } from 'lucide-react';
-import { DISPOSITION_LABELS, type ConversationDetail, type Disposition } from '@fit-ai/contracts';
+import { DISPOSITION_LABELS, type ConversationDetail, type Disposition } from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { useSession, useUser } from '@/components/providers';
 import {

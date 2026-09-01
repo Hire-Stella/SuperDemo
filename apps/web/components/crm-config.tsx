@@ -13,7 +13,7 @@ import {
   type CrmConfigView,
   type CrmDriver,
   type ZohoRegion,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { Badge, Button, Input, Select } from '@/components/composites';
 

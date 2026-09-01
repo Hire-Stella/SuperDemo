@@ -11,7 +11,7 @@
  * orchestrator decides for real at runtime.
  */
 
-import type { EscalationReason, Skill } from '@fit-ai/contracts';
+import type { EscalationReason, Skill } from '@superdemo/contracts';
 
 export interface ScenarioTurn {
   /** What the caller says. */

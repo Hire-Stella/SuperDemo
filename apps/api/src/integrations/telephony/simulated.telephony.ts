@@ -1,12 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { SCENARIOS, type CallScenario } from '@fit-ai/db/data';
+import { SCENARIOS, type CallScenario } from '@superdemo/db/data';
 import {
   type PlayAudioOptions,
   type TelephonyCallHandle,
   type TelephonyProvider,
   type TelephonySink,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 
 /**
  * Deterministic scenario runner.

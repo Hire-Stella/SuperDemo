@@ -1,7 +1,7 @@
 import { Controller, Get, HttpCode, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
-import { LoginInput, type LoginOutput, type SessionUser } from '@fit-ai/contracts';
+import { LoginInput, type LoginOutput, type SessionUser } from '@superdemo/contracts';
 import { AuthService } from './auth.service';
 import { CurrentUser, Public } from './guards';
 import { ZodBody } from '../shared/zod.pipe';

@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import type { ApiEnv } from '@fit-ai/contracts';
+import type { ApiEnv } from '@superdemo/contracts';
 import { ENV } from './config/config.module';
 import { PrismaService } from './prisma/prisma.service';
 import { PresenceService } from './presence/presence.service';

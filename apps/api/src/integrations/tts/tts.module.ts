@@ -1,5 +1,5 @@
 import { Global, Injectable, Logger, Module } from '@nestjs/common';
-import type { ApiEnv, TtsProvider } from '@fit-ai/contracts';
+import type { ApiEnv, TtsProvider } from '@superdemo/contracts';
 import { ENV } from '../../config/config.module';
 import { ElevenLabsService } from '../elevenlabs/elevenlabs.service';
 

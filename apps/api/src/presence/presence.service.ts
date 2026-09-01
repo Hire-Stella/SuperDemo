@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import type { AgentStatus, AgentSummary } from '@fit-ai/contracts';
+import type { AgentStatus, AgentSummary } from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 

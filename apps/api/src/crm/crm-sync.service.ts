@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
-import type { ApiEnv, CrmProvider, CrmSyncLogRow, CrmConnectionDto } from '@fit-ai/contracts';
+import type { ApiEnv, CrmProvider, CrmSyncLogRow, CrmConnectionDto } from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { OutboxService } from '../outbox/outbox.service';
@@ -8,7 +8,7 @@ import { TenantContext } from '../tenancy/tenant-context.service';
 import { STORAGE_PROVIDER } from '../integrations/storage/storage.module';
 import { LocalStorage } from '../integrations/storage/storage.module';
 import { ENV } from '../config/config.module';
-import type { StorageProvider } from '@fit-ai/contracts';
+import type { StorageProvider } from '@superdemo/contracts';
 
 /**
  * Pushes completed calls into the CRM, driven by the outbox.

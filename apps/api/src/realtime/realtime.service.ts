@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Rooms, type ServerToClientEvents } from '@fit-ai/contracts';
+import { Rooms, type ServerToClientEvents } from '@superdemo/contracts';
 import { RealtimeGateway } from './realtime.gateway';
 
 type EventName = keyof ServerToClientEvents;

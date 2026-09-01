@@ -1,5 +1,5 @@
 import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
-import { PrismaClient, tenantExtension } from '@fit-ai/db';
+import { PrismaClient, tenantExtension } from '@superdemo/db';
 import { TenantContext } from '../tenancy/tenant-context.service';
 
 @Injectable()

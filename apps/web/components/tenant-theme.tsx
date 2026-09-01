@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
-import { resolveThemeTokens, themeToCss, type ThemePreset, type ThemeTokens } from '@fit-ai/contracts';
+import { resolveThemeTokens, themeToCss, type ThemePreset, type ThemeTokens } from '@superdemo/contracts';
 
 const STYLE_ID = 'tenant-theme';
 

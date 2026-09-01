@@ -1,7 +1,7 @@
 'use client';
 
 import { io, type Socket } from 'socket.io-client';
-import type { ClientToServerEvents, ServerToClientEvents } from '@fit-ai/contracts';
+import type { ClientToServerEvents, ServerToClientEvents } from '@superdemo/contracts';
 import { getAccessToken } from './api';
 
 export type AppSocket = Socket<ServerToClientEvents, ClientToServerEvents>;

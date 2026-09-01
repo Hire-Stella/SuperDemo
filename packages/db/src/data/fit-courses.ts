@@ -13,7 +13,7 @@
  * └───────────────────────────────────────────────────────────────────────────┘
  */
 
-import type { Skill } from '@fit-ai/contracts';
+import type { Skill } from '@superdemo/contracts';
 
 export const INSTITUTE = {
   name: 'FIT Institute',

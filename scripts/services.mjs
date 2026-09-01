@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Local service manager for FIT-AI.
+ * Local service manager for SuperDemo.
  *
  * This machine has no Homebrew and no system package manager, so Postgres is
  * vendored: `embedded-postgres` ships genuine PostgreSQL 17 binaries and we run
@@ -226,7 +226,7 @@ const cmd = process.argv[2] ?? 'up';
 
 switch (cmd) {
   case 'up': {
-    console.log(c.bold('FIT-AI local services'));
+    console.log(c.bold('SuperDemo local services'));
     await pgUp();
     await redisUp();
     console.log(

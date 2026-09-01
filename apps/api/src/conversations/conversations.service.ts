@@ -1,12 +1,12 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
-import type { Prisma } from '@fit-ai/db';
+import type { Prisma } from '@superdemo/db';
 import type {
   ConversationDetail,
   ConversationListItem,
   ListConversationsQuery,
   StorageProvider,
   UpdateConversationInput,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_PROVIDER } from '../integrations/storage/storage.module';
 import { RealtimeService } from '../realtime/realtime.service';

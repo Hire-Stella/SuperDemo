@@ -3,7 +3,7 @@ import {
   type AgentSummary,
   SetPresenceInput,
   type SessionUser,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { PresenceService } from './presence.service';
 import { CurrentUser } from '../auth/guards';
 import { ZodBody } from '../shared/zod.pipe';

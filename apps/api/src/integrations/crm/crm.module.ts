@@ -1,5 +1,5 @@
 import { Global, Logger, Module } from '@nestjs/common';
-import type { ApiEnv, CrmProvider } from '@fit-ai/contracts';
+import type { ApiEnv, CrmProvider } from '@superdemo/contracts';
 import { ENV } from '../../config/config.module';
 import { MockCrm } from './mock.crm';
 import { BitrixCrm } from './bitrix.crm';

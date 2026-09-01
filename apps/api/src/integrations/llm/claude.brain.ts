@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 // The SDK's zod helper is built against the v4 API, which zod 3.25 ships
 // alongside the classic one. Scoped to this file; the rest of the codebase
-// (and @fit-ai/contracts) stays on the classic API.
+// (and @superdemo/contracts) stays on the classic API.
 import * as z from 'zod/v4';
 import type {
   ApiEnv,
@@ -11,7 +11,7 @@ import type {
   BrainResponse,
   ConversationTurn,
   LlmProvider,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { ENV } from '../../config/config.module';
 
 /**

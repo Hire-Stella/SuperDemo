@@ -1,6 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import type { ApiEnv } from '@fit-ai/contracts';
+import type { ApiEnv } from '@superdemo/contracts';
 import { ENV } from '../../config/config.module';
 
 const API = 'https://api.elevenlabs.io';

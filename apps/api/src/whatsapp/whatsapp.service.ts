@@ -1,12 +1,12 @@
 import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
-import { WHATSAPP_SCENARIOS, type WhatsAppScenario } from '@fit-ai/db/data';
+import { WHATSAPP_SCENARIOS, type WhatsAppScenario } from '@superdemo/db/data';
 import type {
   ApiEnv,
   InboundMessageEvent,
   MessagingProvider,
   MessagingSink,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { RealtimeService } from '../realtime/realtime.service';
 import { AiOrchestrator } from '../calls/ai-orchestrator.service';

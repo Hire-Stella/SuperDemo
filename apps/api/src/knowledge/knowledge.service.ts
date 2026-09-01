@@ -1,12 +1,12 @@
 import { Injectable, Logger, NotFoundException, type OnModuleInit } from '@nestjs/common';
-import { chunk, cosine, embed, expand, keywordsOf, tokenize } from '@fit-ai/db';
+import { chunk, cosine, embed, expand, keywordsOf, tokenize } from '@superdemo/db';
 import type {
   KnowledgeDocDto,
   KnowledgeRetriever,
   KnowledgeSearchResult,
   Skill,
   UpsertKnowledgeDocInput,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenancy/tenant-context.service';
 

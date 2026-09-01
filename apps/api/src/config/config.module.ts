@@ -1,5 +1,5 @@
 import { Global, Module } from '@nestjs/common';
-import { type ApiEnv, parseApiEnv } from '@fit-ai/contracts';
+import { type ApiEnv, parseApiEnv } from '@superdemo/contracts';
 
 export const ENV = Symbol('ENV');
 

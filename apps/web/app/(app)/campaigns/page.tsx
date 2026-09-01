@@ -13,7 +13,7 @@ import {
   type ContactSummary,
   type PhoneNumberDto,
   type QueueDto,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { dateTime } from '@/lib/format';
 import {

@@ -1,5 +1,5 @@
 {
-  "name": "@fit-ai/api",
+  "name": "@superdemo/api",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -14,8 +14,8 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.115.0",
-    "@fit-ai/contracts": "workspace:*",
-    "@fit-ai/db": "workspace:*",
+    "@superdemo/contracts": "workspace:*",
+    "@superdemo/db": "workspace:*",
     "@nestjs/common": "^11.0.5",
     "@nestjs/core": "^11.0.5",
     "@nestjs/jwt": "^11.0.0",

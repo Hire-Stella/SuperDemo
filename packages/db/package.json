@@ -1,5 +1,5 @@
 {
-  "name": "@fit-ai/db",
+  "name": "@superdemo/db",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/index.js",
@@ -29,10 +29,11 @@
     "reset": "dotenv -e ../../.env -- prisma migrate reset --force",
     "typecheck": "tsc -p tsconfig.build.json --noEmit",
     "clean": "rm -rf dist",
-    "demo:seed": "dotenv -e ../../.env -- tsx prisma/demo-data.ts"
+    "demo:seed": "dotenv -e ../../.env -- tsx prisma/demo-data.ts",
+    "backfill:sites": "dotenv -e ../../.env -- tsx prisma/backfill-sites.ts"
   },
   "dependencies": {
-    "@fit-ai/contracts": "workspace:*",
+    "@superdemo/contracts": "workspace:*",
     "@prisma/client": "^6.2.1"
   },
   "devDependencies": {

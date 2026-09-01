@@ -9,8 +9,8 @@ import type {
   EscalationReason,
   LiveOpsSnapshot,
   Location,
-} from '@fit-ai/contracts';
-import { LIVE_CALL_STATES } from '@fit-ai/contracts';
+} from '@superdemo/contracts';
+import { LIVE_CALL_STATES } from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { ENV } from '../config/config.module';

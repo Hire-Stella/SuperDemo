@@ -15,7 +15,7 @@ import {
 import {
   CRM_DRIVER_LABELS,
   type CrmDriver,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import type {
   AvailableNumberDto,
   CrmConnectionDto,
@@ -23,7 +23,7 @@ import type {
   PhoneNumberDto,
   QueueDto,
   TestCrmConnectionOutput,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { api, qs } from '@/lib/api';
 import { dateTime, money, phone } from '@/lib/format';
 import { CrmConfigPanel } from '@/components/crm-config';

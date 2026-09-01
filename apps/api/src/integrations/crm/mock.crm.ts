@@ -5,7 +5,7 @@ import type {
   CrmContactInput,
   CrmContactRef,
   CrmProvider,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 
 /**
  * Mock CRM — the default, so the platform runs with no Bitrix portal attached.

@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import type { Skill } from '@fit-ai/contracts';
+import type { Skill } from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { PresenceService } from '../presence/presence.service';
 

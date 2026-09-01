@@ -8,7 +8,7 @@ import {
   dispositionLabel,
   type Channel,
   type ConversationListItem,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { api, qs } from '@/lib/api';
 import { useUser } from '@/components/providers';
 import { useSession } from '@/components/providers';

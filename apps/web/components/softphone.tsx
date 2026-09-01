@@ -21,7 +21,7 @@ import {
   DISPOSITION_LABELS,
   type Disposition,
   type ScreenPopPayload,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { useSession, useUser } from './providers';
 import { Avatar, Badge, Button, Select, Textarea, cn } from './composites';

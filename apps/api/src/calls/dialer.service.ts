@@ -1,12 +1,12 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
-import type { ApiEnv } from '@fit-ai/contracts';
+import type { ApiEnv } from '@superdemo/contracts';
 import { ENV } from '../config/config.module';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenancy/tenant-context.service';
 import { CallsService } from './calls.service';
 import { TELEPHONY_PROVIDER } from '../integrations/telephony/telephony.module';
-import type { TelephonyProvider } from '@fit-ai/contracts';
+import type { TelephonyProvider } from '@superdemo/contracts';
 
 /** How often the dialer looks for work. */
 const TICK_MS = 5_000;

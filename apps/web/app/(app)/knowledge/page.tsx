@@ -3,7 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { BookOpen } from 'lucide-react';
-import { categoryLabel, type KnowledgeDocDto, type Skill } from '@fit-ai/contracts';
+import { categoryLabel, type KnowledgeDocDto, type Skill } from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { dateTime } from '@/lib/format';
 import { useUser } from '@/components/providers';

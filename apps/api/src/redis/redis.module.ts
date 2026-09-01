@@ -1,6 +1,6 @@
 import { Global, Inject, Module, type OnApplicationShutdown } from '@nestjs/common';
 import { Redis } from 'ioredis';
-import type { ApiEnv } from '@fit-ai/contracts';
+import type { ApiEnv } from '@superdemo/contracts';
 import { ENV } from '../config/config.module';
 
 export const REDIS = Symbol('REDIS');

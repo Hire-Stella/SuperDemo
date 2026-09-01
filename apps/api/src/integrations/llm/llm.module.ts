@@ -1,5 +1,5 @@
 import { Global, Logger, Module } from '@nestjs/common';
-import type { ApiEnv, LlmProvider } from '@fit-ai/contracts';
+import type { ApiEnv, LlmProvider } from '@superdemo/contracts';
 import { ENV } from '../../config/config.module';
 import { ScriptedBrain } from './scripted.brain';
 import { ClaudeBrain } from './claude.brain';

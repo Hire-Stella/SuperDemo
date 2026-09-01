@@ -1,9 +1,11 @@
 {
-  "name": "fit-ai",
+  "name": "superdemo",
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@11.17.0",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "turbo run dev --parallel",
     "build": "turbo run build",
@@ -14,12 +16,12 @@
     "services:down": "node scripts/services.mjs down",
     "services:status": "node scripts/services.mjs status",
     "services:reset": "node scripts/services.mjs reset",
-    "db:generate": "pnpm --filter @fit-ai/db generate",
-    "db:migrate": "pnpm --filter @fit-ai/db migrate",
-    "db:push": "pnpm --filter @fit-ai/db push",
-    "db:seed": "pnpm --filter @fit-ai/db seed",
-    "db:studio": "pnpm --filter @fit-ai/db studio",
-    "db:reset": "pnpm --filter @fit-ai/db reset",
+    "db:generate": "pnpm --filter @superdemo/db generate",
+    "db:migrate": "pnpm --filter @superdemo/db migrate",
+    "db:push": "pnpm --filter @superdemo/db push",
+    "db:seed": "pnpm --filter @superdemo/db seed",
+    "db:studio": "pnpm --filter @superdemo/db studio",
+    "db:reset": "pnpm --filter @superdemo/db reset",
     "setup": "pnpm install && pnpm services:up && pnpm db:generate && pnpm db:push && pnpm db:seed",
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\""
   },

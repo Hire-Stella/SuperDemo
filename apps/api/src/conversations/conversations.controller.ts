@@ -4,7 +4,7 @@ import {
   type ConversationListItem,
   ListConversationsQuery,
   UpdateConversationInput,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { ConversationsService } from './conversations.service';
 import { ZodBody, ZodQuery } from '../shared/zod.pipe';
 

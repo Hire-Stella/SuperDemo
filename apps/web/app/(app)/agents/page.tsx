@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Users } from 'lucide-react';
-import { categoryLabel, type AgentScorecard, type AgentSummary } from '@fit-ai/contracts';
+import { categoryLabel, type AgentScorecard, type AgentSummary } from '@superdemo/contracts';
 import { api, qs } from '@/lib/api';
 import { AGENT_STATUS_STYLE, dateRange, pct, seconds } from '@/lib/format';
 import { useUser } from '@/components/providers';

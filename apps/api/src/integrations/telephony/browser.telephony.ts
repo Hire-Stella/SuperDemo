@@ -6,7 +6,7 @@ import {
   type TelephonyCallHandle,
   type TelephonyProvider,
   type TelephonySink,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { RealtimeService } from '../../realtime/realtime.service';
 
 /**

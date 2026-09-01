@@ -27,7 +27,7 @@ import {
   type Disposition,
   type ManualCallResult,
   type PhoneNumberDto,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { api, qs } from '@/lib/api';
 import { dateTime } from '@/lib/format';
 import { useUser } from '@/components/providers';

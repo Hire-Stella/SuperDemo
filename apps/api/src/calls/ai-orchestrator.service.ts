@@ -8,7 +8,7 @@ import {
   type EscalationReason,
   type LlmProvider,
   type Skill,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { LLM_PROVIDER } from '../integrations/llm/llm.module';

@@ -9,7 +9,7 @@ import {
 import { z, type ZodTypeAny } from 'zod';
 
 /**
- * Validates a payload against a zod schema from @fit-ai/contracts.
+ * Validates a payload against a zod schema from @superdemo/contracts.
  *
  * The point of routing all validation through the shared schemas is that the
  * web app and the API cannot disagree about a shape — there is one definition,

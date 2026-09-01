@@ -3,7 +3,7 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
-import { parseApiEnv } from '@fit-ai/contracts';
+import { parseApiEnv } from '@superdemo/contracts';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {

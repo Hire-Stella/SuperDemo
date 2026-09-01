@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Sparkles, Search, Save } from 'lucide-react';
-import type { AiAgentDto, KnowledgeSearchResult } from '@fit-ai/contracts';
+import type { AiAgentDto, KnowledgeSearchResult } from '@superdemo/contracts';
 import { api, qs } from '@/lib/api';
 import { pct } from '@/lib/format';
 import {

@@ -6,8 +6,8 @@ import {
   type CrmDriver,
   type CrmProvider,
   type ZohoRegion,
-} from '@fit-ai/contracts';
-import { Prisma } from '@fit-ai/db';
+} from '@superdemo/contracts';
+import { Prisma } from '@superdemo/db';
 import { ENV } from '../../config/config.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContext } from '../../tenancy/tenant-context.service';

@@ -1,12 +1,12 @@
 import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { AE_NUMBER_STOCK, OTHER_NUMBER_STOCK } from '@fit-ai/db/data';
+import { AE_NUMBER_STOCK, OTHER_NUMBER_STOCK } from '@superdemo/db/data';
 import type {
   AvailableNumberDto,
   PhoneNumberDto,
   PurchaseNumberInput,
   SearchNumbersQuery,
   UpdateNumberInput,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 
 /**

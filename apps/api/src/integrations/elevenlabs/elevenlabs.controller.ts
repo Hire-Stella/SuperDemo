@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
-import type { ApiEnv } from '@fit-ai/contracts';
+import type { ApiEnv } from '@superdemo/contracts';
 import { ENV } from '../../config/config.module';
 import { Public, Roles } from '../../auth/guards';
 import { ElevenLabsService, type PostCallTranscription } from './elevenlabs.service';

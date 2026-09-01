@@ -3,7 +3,7 @@ import {
   NotImplementedByDriverError,
   type ApiEnv,
   type TelephonyProvider,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { ENV } from '../../config/config.module';
 import { SimulatedTelephony } from './simulated.telephony';
 import { BrowserTelephony } from './browser.telephony';

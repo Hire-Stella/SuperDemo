@@ -4,7 +4,7 @@ import type {
   CrmContactInput,
   CrmContactRef,
   CrmProvider,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 
 interface BitrixEnvelope<T> {
   result?: T;

@@ -6,8 +6,8 @@ import type {
   TelephonyCallHandle,
   TelephonyProvider,
   TelephonySink,
-} from '@fit-ai/contracts';
-import { NotImplementedByDriverError } from '@fit-ai/contracts';
+} from '@superdemo/contracts';
+import { NotImplementedByDriverError } from '@superdemo/contracts';
 import { ENV } from '../../config/config.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ElevenLabsService, type PostCallTranscription } from './elevenlabs.service';

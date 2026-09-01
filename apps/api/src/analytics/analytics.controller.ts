@@ -5,7 +5,7 @@ import {
   type AnalyticsOverview,
   AnalyticsRangeQuery,
   type LiveOpsSnapshot,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { AnalyticsService } from './analytics.service';
 import { Roles } from '../auth/guards';
 import { ZodQuery } from '../shared/zod.pipe';

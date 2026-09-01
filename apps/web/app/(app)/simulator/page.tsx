@@ -8,7 +8,7 @@ import type {
   BrowserCallTurnOutput,
   ScenarioDto,
   SimulateCallInput,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { Badge, Button, Card, Input, MockNotice, Select, Spinner, cn } from '@/components/composites';
 import { ElevenLabsCall } from '@/components/elevenlabs-call';

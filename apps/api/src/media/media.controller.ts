@@ -17,7 +17,7 @@ import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service';
 import { LocalStorage } from '../integrations/storage/storage.module';
 import { CurrentUser, Public } from '../auth/guards';
-import type { SessionUser } from '@fit-ai/contracts';
+import type { SessionUser } from '@superdemo/contracts';
 import { ZodQuery } from '../shared/zod.pipe';
 
 const RecordingQuery = z.object({

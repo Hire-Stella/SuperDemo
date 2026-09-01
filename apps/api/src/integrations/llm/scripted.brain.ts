@@ -4,7 +4,7 @@ import type {
   BrainResponse,
   ConversationTurn,
   LlmProvider,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 
 /**
  * Deterministic conversation brain.

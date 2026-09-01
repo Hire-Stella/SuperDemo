@@ -5,7 +5,7 @@ import type {
   CrmContactRef,
   CrmProvider,
   HubSpotCrmConfig,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 
 /**
  * HubSpot CRM via a private app token.

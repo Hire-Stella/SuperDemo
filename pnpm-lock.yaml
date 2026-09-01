@@ -32,12 +32,6 @@ importers:
       '@anthropic-ai/sdk':
         specifier: ^0.115.0
         version: 0.115.0(zod@3.25.76)
-      '@fit-ai/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      '@fit-ai/db':
-        specifier: workspace:*
-        version: link:../../packages/db
       '@nestjs/common':
         specifier: ^11.0.5
         version: 11.1.28(class-transformer@0.5.1)(class-validator@0.15.1)(reflect-metadata@0.2.2)(rxjs@7.8.2)(supports-color@8.1.1)
@@ -74,6 +68,12 @@ importers:
       '@socket.io/redis-adapter':
         specifier: ^8.3.0
         version: 8.3.0(socket.io-adapter@2.5.8(supports-color@8.1.1))(supports-color@8.1.1)
+      '@superdemo/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@superdemo/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       argon2:
         specifier: ^0.41.1
         version: 0.41.1
@@ -177,7 +177,7 @@ importers:
       '@elevenlabs/react':
         specifier: ^1.12.0
         version: 1.12.0(@types/dom-mediacapture-record@1.0.22)(react@19.2.8)
-      '@fit-ai/contracts':
+      '@superdemo/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
       '@tanstack/react-query':
@@ -275,12 +275,12 @@ importers:
 
   packages/db:
     dependencies:
-      '@fit-ai/contracts':
-        specifier: workspace:*
-        version: link:../contracts
       '@prisma/client':
         specifier: ^6.2.1
         version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
+      '@superdemo/contracts':
+        specifier: workspace:*
+        version: link:../contracts
     devDependencies:
       '@types/node':
         specifier: ^22.10.2

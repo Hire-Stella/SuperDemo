@@ -20,7 +20,7 @@ import {
   UpsertAiAgentInput,
   UpsertQueueInput,
   type Skill,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { TenantContext } from '../tenancy/tenant-context.service';
@@ -31,7 +31,7 @@ import { OutboxService } from '../outbox/outbox.service';
 import { Roles } from '../auth/guards';
 import { ZodBody } from '../shared/zod.pipe';
 import { ENV } from '../config/config.module';
-import type { ApiEnv } from '@fit-ai/contracts';
+import type { ApiEnv } from '@superdemo/contracts';
 
 /**
  * Configuration surfaces: queues, users, AI agents, CRM connection, settings.

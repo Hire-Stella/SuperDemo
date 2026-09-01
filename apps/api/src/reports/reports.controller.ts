@@ -1,6 +1,6 @@
 import { Controller, Get, Param, Res } from '@nestjs/common';
 import type { Response } from 'express';
-import { AnalyticsRangeQuery, ListConversationsQuery } from '@fit-ai/contracts';
+import { AnalyticsRangeQuery, ListConversationsQuery } from '@superdemo/contracts';
 import { ReportsService } from './reports.service';
 import { Roles } from '../auth/guards';
 import { ZodQuery } from '../shared/zod.pipe';
