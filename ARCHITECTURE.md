@@ -54,7 +54,7 @@ The `browser` driver is the whole trick: a genuinely voice-interactive AI phone 
 pnpm workspaces + Turborepo. Node 24, TypeScript 5.7, ESM.
 
 ```
-FIT-AI/                         the checkout directory, unchanged; the packages
+SuperDemo/                      github.com/Hire-Stella/SuperDemo; the packages
 │                               are @superdemo/* and the workspace is `superdemo`
 ├── apps/
 │   ├── web/                    Next.js 15 · App Router · React 19
