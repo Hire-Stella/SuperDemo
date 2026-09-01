@@ -1,4 +1,4 @@
-# FIT-AI — Architecture (LLD)
+# SuperDemo — Architecture (LLD)
 
 **Client:** FIT Institute, Dubai (JLT) — KHDA-approved training provider, ~3,700 students, 20+ diplomas across Management / Education / Finance / Language.
 **Vendor:** hirestella.ai
@@ -54,7 +54,8 @@ The `browser` driver is the whole trick: a genuinely voice-interactive AI phone 
 pnpm workspaces + Turborepo. Node 24, TypeScript 5.7, ESM.
 
 ```
-FIT-AI/
+FIT-AI/                         the checkout directory, unchanged; the packages
+│                               are @superdemo/* and the workspace is `superdemo`
 ├── apps/
 │   ├── web/                    Next.js 15 · App Router · React 19
 │   │   ├── app/

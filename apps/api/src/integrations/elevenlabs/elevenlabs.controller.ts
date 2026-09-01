@@ -181,7 +181,7 @@ export class ElevenLabsController {
       next: [
         `Set ELEVENLABS_AGENT_ID=${created.agent_id} in .env and restart the API.`,
         'In the ElevenLabs dashboard, store ELEVENLABS_BRIDGE_SECRET as a workspace secret ' +
-          'named FIT_BRIDGE_SECRET (the agent references it for the bridge and the escalate tool).',
+          'named SUPERDEMO_BRIDGE_SECRET (the agent references it for the bridge and the escalate tool).',
         `Point the post-call webhook at ${this.env.PUBLIC_BASE_URL}/api/elevenlabs/webhooks/post-call ` +
           'and use ELEVENLABS_WEBHOOK_SECRET as its signing secret.',
         'For a dialable phone line, import a Twilio number or connect a SIP trunk. ' +
@@ -311,7 +311,7 @@ export class ElevenLabsController {
     res.flushHeaders?.();
 
     const id = `chatcmpl-${randomUUID()}`;
-    const model = body?.model ?? 'fit-ai-orchestrator';
+    const model = body?.model ?? 'superdemo-orchestrator';
 
     const send = (delta: Record<string, unknown>, finish: string | null = null) => {
       res.write(

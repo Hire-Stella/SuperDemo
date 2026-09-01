@@ -48,6 +48,11 @@ export const TENANT_MODELS = new Set<string>([
   'Setting',
   'Campaign',
   'CampaignTarget',
+  'Site',
+  // Scoped despite arriving from an anonymous visitor: the public controller
+  // enters the tenant's context by slug before writing, so the extension is
+  // what stops a mistyped siteId depositing one centre's lead in another's.
+  'SiteLead',
 ]);
 
 /**

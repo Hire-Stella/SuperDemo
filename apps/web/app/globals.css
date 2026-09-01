@@ -7,7 +7,7 @@
  * FIT Institute theme — red and white.
  *
  * ┌──────────────────────────────────────────────────────────────────────────┐
- * │ THE BRAND RED IS ONE TOKEN: --fit-red / --fit-red-dark below.            │
+ * │ THE BRAND RED IS ONE TOKEN: --brand-red / --brand-red-dark below.            │
  * │ Swap those two values and the whole app follows. If FIT send their real  │
  * │ brand hex, that is the only edit needed.                                 │
  * └──────────────────────────────────────────────────────────────────────────┘
@@ -27,7 +27,7 @@
  * alone — roughly one man in twelve cannot rely on red/green.
 
  * TENANT THEMES: the tokens below that carry brand identity are derived from
- * --primary with color-mix rather than from --fit-red directly. That is what
+ * --primary with color-mix rather than from --brand-red directly. That is what
  * lets a per-tenant theme (packages/contracts/src/themes.ts) override --primary
  * and have the active nav pill, charts and sidebar follow it. Hardcoding the red
  * hue here left a pink nav item on a navy tenant.
@@ -35,8 +35,8 @@
 
 :root {
   /* ── the two values to change ────────────────────────────────────────── */
-  --fit-red: oklch(0.53 0.204 26);
-  --fit-red-dark: oklch(0.7 0.185 26);
+  --brand-red: oklch(0.53 0.204 26);
+  --brand-red-dark: oklch(0.7 0.185 26);
 
   --radius: 0.625rem;
 
@@ -49,7 +49,7 @@
   --popover: oklch(1 0 0);
   --popover-foreground: var(--foreground);
 
-  --primary: var(--fit-red);
+  --primary: var(--brand-red);
   --primary-foreground: oklch(0.99 0 0);
 
   --secondary: oklch(0.972 0.006 25);
@@ -108,7 +108,7 @@
 
   /* Lifted in lightness so the red still reads as red on a dark ground
      rather than collapsing to brown. */
-  --primary: var(--fit-red-dark);
+  --primary: var(--brand-red-dark);
   --primary-foreground: oklch(0.16 0.01 25);
 
   --secondary: oklch(0.262 0.011 25);
@@ -154,6 +154,18 @@
 @theme inline {
   --font-sans: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  /*
+   * Headline face for tenant landing pages. The dashboard does not use it — an
+   * operations UI wants one neutral face — but a marketing page carries its
+   * personality in the type, and the templates need a second voice for it.
+   *
+   * A local serif stack rather than a webfont: a landing page that silently
+   * falls back because a font CDN was unreachable is worse than one that never
+   * asked, and Georgia is a genuinely good editorial face that is already on
+   * every machine. Templates that want a sans headline set
+   * `--font-display-face` to the sans stack instead.
+   */
+  --font-display: var(--font-display-face, ui-serif, Georgia, 'Times New Roman', serif);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);

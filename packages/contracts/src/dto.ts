@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { ThemePreset, ThemeTokens } from './themes';
+import { isSafeLogoUrl } from './brand';
+import { SiteTemplate } from './sites';
 import { CrmDriver } from './enums';
 import { CampaignStatus, TargetStatus } from './enums';
 import {
@@ -34,6 +36,24 @@ export const PhoneE164 = z
   .regex(/^\+[1-9]\d{6,14}$/, 'Phone must be E.164, e.g. +971528876388');
 
 export const Cuid = z.string().min(1);
+
+/**
+ * A logo URL, or nothing.
+ *
+ * Validated rather than sanitised, because this string is written into an
+ * `<img src>` on a page served to anonymous visitors. Empty string is coerced to
+ * null so that clearing the field in a form means "use the monogram" instead of
+ * "point at nothing".
+ */
+export const LogoUrl = z
+  .string()
+  .trim()
+  .max(500)
+  .transform((v) => (v === '' ? null : v))
+  .nullable()
+  .refine((v) => v === null || isSafeLogoUrl(v), {
+    message: 'Use an http(s) URL or a path starting with /',
+  });
 
 export const Pagination = z.object({
   cursor: z.string().optional(),
@@ -70,6 +90,12 @@ export const SessionUser = z.object({
   /** This centre's theme, applied over globals.css. Null for SUPERADMIN. */
   orgThemePreset: ThemePreset.nullable(),
   orgThemeTokens: ThemeTokens.nullable(),
+  /**
+   * The centre's mark, shown in the app shell. Null means "draw the monogram
+   * fallback" rather than "show nothing" — see packages/contracts/src/brand.ts.
+   */
+  orgLogoUrl: z.string().nullable(),
+  orgTagline: z.string().nullable(),
   location: Location,
   timezone: z.string(),
   skills: z.array(Skill),
@@ -93,9 +119,16 @@ export const OrgSummary = z.object({
   themePreset: ThemePreset,
   /** A pasted tweakcn export, if this centre has one. */
   themeTokens: ThemeTokens.nullable(),
+  /** Null draws the monogram fallback — see brand.ts. */
+  logoUrl: z.string().nullable(),
+  tagline: z.string().nullable(),
   timezone: z.string(),
   isActive: z.boolean(),
   createdAt: z.coerce.date(),
+  /** The public landing page: which layout, and whether it is live. */
+  site: z
+    .object({ template: z.string(), isPublished: z.boolean(), leads: z.number().int() })
+    .nullable(),
   /** Headline counts for the superadmin's one page — cheap group-bys. */
   counts: z.object({
     users: z.number().int().nonnegative(),
@@ -120,6 +153,15 @@ export const CreateOrgInput = z.object({
   industry: Industry.default('GENERIC'),
   /** Omitted means "whatever suits the vertical" — see DEFAULT_PRESET_FOR_INDUSTRY. */
   themePreset: ThemePreset.optional(),
+  /**
+   * Identity. Both optional, and the whole point of the monogram fallback: a
+   * demo centre should be creatable from a name alone, because "find their logo
+   * first" is what stops you building six of them before a meeting.
+   */
+  logoUrl: LogoUrl.optional(),
+  tagline: z.string().trim().max(120).optional(),
+  /** Landing-page layout. Omitted follows the vertical — see sites.ts. */
+  siteTemplate: SiteTemplate.optional(),
   slug: z
     .string()
     .trim()
@@ -143,8 +185,21 @@ export const UpdateOrgInput = z.object({
   themePreset: ThemePreset.optional(),
   /** A pasted tweakcn export. Null clears it and falls back to the preset. */
   themeTokens: ThemeTokens.nullable().optional(),
+  /** Null clears the logo, which restores the monogram rather than blanking it. */
+  logoUrl: LogoUrl.optional(),
+  tagline: z.string().trim().max(120).nullable().optional(),
 });
 export type UpdateOrgInput = z.infer<typeof UpdateOrgInput>;
+
+/**
+ * Deleting a centre destroys everything in it, so the handle has to be typed
+ * back. Suspension is the reversible action and the one a real client gets;
+ * this exists because building demo tenants means discarding them.
+ */
+export const DeleteOrgInput = z.object({
+  confirmSlug: z.string().min(1, 'Type the handle to confirm'),
+});
+export type DeleteOrgInput = z.infer<typeof DeleteOrgInput>;
 
 /* ================================== users ================================= */
 
@@ -172,6 +227,8 @@ export const AgentSummary = SessionUser.omit({
   orgIndustry: true,
   orgThemePreset: true,
   orgThemeTokens: true,
+  orgLogoUrl: true,
+  orgTagline: true,
 }).extend({
   extension: z.string().nullable(),
   status: AgentStatus,

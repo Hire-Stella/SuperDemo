@@ -134,7 +134,14 @@ export const api = {
     request<T>(path, { method: 'PUT', body: body === undefined ? undefined : JSON.stringify(body) }),
   patch: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PATCH', body: body === undefined ? undefined : JSON.stringify(body) }),
-  del: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  // A body on DELETE is unusual but correct here: deleting a centre requires
+  // its handle typed back as confirmation, and a confirmation token belongs in
+  // the body rather than the URL where it would end up in access logs.
+  del: <T>(path: string, body?: unknown) =>
+    request<T>(path, {
+      method: 'DELETE',
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
   /** Multipart upload (recording capture from the browser call). */
   upload: <T>(path: string, form: FormData) =>
     request<T>(path, { method: 'POST', body: form }),

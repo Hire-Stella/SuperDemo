@@ -8,7 +8,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import argon2 from 'argon2';
 import { createHash, randomBytes } from 'node:crypto';
-import type { ApiEnv, SessionUser } from '@fit-ai/contracts';
+import type { ApiEnv, SessionUser } from '@superdemo/contracts';
 import { ENV } from '../config/config.module';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -44,7 +44,7 @@ export class AuthService {
     // unscoped — which it must be: the address is what tells us the org.
     const user = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase() },
-      include: { org: { select: { name: true, industry: true, isActive: true, themePreset: true, themeTokens: true } } },
+      include: { org: { select: { name: true, industry: true, isActive: true, themePreset: true, themeTokens: true, logoUrl: true, tagline: true } } },
     });
 
     // Verify against a dummy hash when the user is absent so the response time
@@ -81,6 +81,8 @@ export class AuthService {
       orgIndustry: user.org?.industry ?? null,
       orgThemePreset: (user.org?.themePreset as SessionUser['orgThemePreset']) ?? null,
       orgThemeTokens: (user.org?.themeTokens as SessionUser['orgThemeTokens']) ?? null,
+      orgLogoUrl: user.org?.logoUrl ?? null,
+      orgTagline: user.org?.tagline ?? null,
       location: user.location,
       timezone: user.timezone,
       skills: user.skills,
@@ -140,7 +142,7 @@ export class AuthService {
   ): Promise<{ user: SessionUser; accessToken: string; refreshToken: string }> {
     const existing = await this.prisma.refreshToken.findUnique({
       where: { tokenHash: hashToken(token) },
-      include: { user: { include: { org: { select: { name: true, industry: true, isActive: true, themePreset: true, themeTokens: true } } } } },
+      include: { user: { include: { org: { select: { name: true, industry: true, isActive: true, themePreset: true, themeTokens: true, logoUrl: true, tagline: true } } } } },
     });
 
     if (!existing) throw new UnauthorizedException('Invalid refresh token');
@@ -182,6 +184,8 @@ export class AuthService {
       orgThemePreset:
         (existing.user.org?.themePreset as SessionUser['orgThemePreset']) ?? null,
       orgThemeTokens: (existing.user.org?.themeTokens as SessionUser['orgThemeTokens']) ?? null,
+      orgLogoUrl: existing.user.org?.logoUrl ?? null,
+      orgTagline: existing.user.org?.tagline ?? null,
       location: existing.user.location,
       timezone: existing.user.timezone,
       skills: existing.user.skills,

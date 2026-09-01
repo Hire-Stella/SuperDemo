@@ -10,7 +10,7 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
-import type { Role, SessionUser } from '@fit-ai/contracts';
+import type { Role, SessionUser } from '@superdemo/contracts';
 import { AuthService } from './auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenancy/tenant-context.service';
@@ -94,7 +94,20 @@ export class JwtAuthGuard implements CanActivate {
     // request instead of whenever its users' tokens happen to expire.
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      include: { org: { select: { id: true, name: true, industry: true, isActive: true, themePreset: true, themeTokens: true } } },
+      include: {
+        org: {
+          select: {
+            id: true,
+            name: true,
+            industry: true,
+            isActive: true,
+            themePreset: true,
+            themeTokens: true,
+            logoUrl: true,
+            tagline: true,
+          },
+        },
+      },
     });
     if (!user || !user.isActive) throw new UnauthorizedException('Account unavailable');
 
@@ -129,6 +142,8 @@ export class JwtAuthGuard implements CanActivate {
       orgIndustry: user.org?.industry ?? null,
       orgThemePreset: (user.org?.themePreset as SessionUser['orgThemePreset']) ?? null,
       orgThemeTokens: (user.org?.themeTokens as SessionUser['orgThemeTokens']) ?? null,
+      orgLogoUrl: user.org?.logoUrl ?? null,
+      orgTagline: user.org?.tagline ?? null,
       location: user.location,
       timezone: user.timezone,
       skills: user.skills,

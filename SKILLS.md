@@ -1,4 +1,4 @@
-# FIT-AI — Skills & Stack Matrix
+# SuperDemo — Skills & Stack Matrix
 
 *"What do we actually need to build?"* — every capability the platform requires, the library or technique chosen for it, why that one, and whether it's in v1.
 
@@ -19,7 +19,7 @@ came out differently in practice, and the reasons matter more than the plan did:
 | wavesurfer.js waveform | **progress bar with the handoff marked** | Real waveform rendering needs decoded audio; the useful part for a supervisor is *where the AI handed off*, which this shows. wavesurfer is a drop-in upgrade. |
 | shadcn Radix `Select` everywhere | **native `<select>` styled with shadcn tokens** | Selects here live in dense table rows and the docked softphone. Native gives real keyboard behaviour, the OS picker on mobile, and no portal fighting the softphone's z-index. `components/ui/select.tsx` is installed for anywhere the richer picker is worth it. |
 | casl | **role guard + `@Roles()`** | Three roles and coarse rules. casl's cost is justified by row-level abilities, which single-tenant doesn't have yet. |
-| nestjs-zod | **own `ZodValidationPipe`** (~35 lines) | Same outcome, one fewer dependency, and it reuses `@fit-ai/contracts` verbatim. |
+| nestjs-zod | **own `ZodValidationPipe`** (~35 lines) | Same outcome, one fewer dependency, and it reuses `@superdemo/contracts` verbatim. |
 | nestjs-pino / terminus | **Nest logger + plain `/ready`** | `/ready` checks Postgres and Redis and reports active drivers, which is what a deploy gate needs. Structured logging is worth adding before production. |
 | BullMQ for wrap-up timers | **in-process timers** | BullMQ is installed and Redis is running, but wrap-up and ring timeouts are seconds-long and tied to a live socket — surviving a restart isn't meaningful for them. The **outbox** (which must survive) is durable in Postgres. |
 | husky / commitlint / ESLint / react-hook-form / papaparse / virtualisation | **not installed** | Deferred. `tsc --noEmit` passes on both apps and is wired as `pnpm typecheck`; the rest is polish that adds no capability. |

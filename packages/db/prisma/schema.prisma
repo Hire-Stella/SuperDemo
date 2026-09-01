@@ -1,4 +1,4 @@
-// FIT-AI — multi-tenant contact centre schema.
+// SuperDemo — multi-tenant contact centre schema.
 //
 // Tenancy: every tenant-owned row carries `orgId`. It is NOT a foreign key on
 // the leaf tables (only User and Setting relate to Organization) — 20-odd FKs to
@@ -214,6 +214,12 @@ model Organization {
   /// `themeTokens` holds a pasted tweakcn export and wins over it when present.
   themePreset String @default("default")
   themeTokens Json?
+  /// The centre's mark. Null is a supported state, not a missing value: a
+  /// monogram is drawn from the name instead, so a tenant created with a name
+  /// and nothing else still looks deliberate. See packages/contracts/src/brand.ts.
+  logoUrl   String?
+  /// One line under the name, on the landing page and in the app shell.
+  tagline   String?
   /// URL-safe handle, unique across the platform. Stable once issued — the
   /// superadmin can rename an org's display name without breaking anything.
   slug      String   @unique
@@ -224,8 +230,73 @@ model Organization {
 
   users    User[]
   settings Setting?
+  site     Site?
 
   @@index([isActive])
+}
+
+/// The centre's public landing page.
+///
+/// One per org, created with the org. `template` names a layout and the theme
+/// supplies the colour, which is why content is stored template-agnostically —
+/// switching layout must not lose anything anyone wrote. See
+/// packages/contracts/src/sites.ts for the content shape.
+model Site {
+  id          String  @id @default(cuid())
+  /// Not defaulted like the other tenant models: a Site is only ever created
+  /// alongside its org, by hand, the way Setting is.
+  orgId       String  @unique
+  template    String  @default("classic")
+  /// SiteStyle: surface, display face, corner radius, density. Orthogonal to
+  /// `template` on purpose — 4 layouts × 108 treatments × 8 themes, none of
+  /// which needs a template change. Null falls back to the vertical's default.
+  style       Json?
+  /// Unpublishing serves a 404 rather than hiding sections — a draft landing
+  /// page that is still reachable is worse than no landing page.
+  isPublished Boolean @default(true)
+  /// SiteContent: hero, highlights, services, proof, faq, contact, order.
+  content     Json
+  metaTitle       String?
+  metaDescription String?
+  /// Where a captured lead is queued. Null means capture-only: the contact is
+  /// created but nobody is dialled, which is the right default for a live client
+  /// and the wrong one for a demo, so the editor makes it a visible choice.
+  leadCampaignId  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  leads SiteLead[]
+}
+
+/// A callback request from a landing page.
+///
+/// Kept as its own row rather than only becoming a Contact: the contact record
+/// is what the dialler needs, but this is the evidence of consent — what was
+/// typed, from which page, when — and a contact that has been edited since no
+/// longer answers "what did they actually agree to".
+model SiteLead {
+  id        String  @id @default(cuid())
+  orgId     String  @default("")
+  siteId    String
+  name      String
+  phoneE164 String
+  email     String?
+  message   String?
+  /// "hero" | "contact" — which form on the page produced it.
+  source    String  @default("contact")
+  /// The contact this became, so the dialler and the inbox can reach them.
+  contactId String?
+  /// Set when the lead was queued to a campaign rather than only captured.
+  targetId  String?
+  /// Kept for abuse triage, not analytics. A public form is a public form.
+  userAgent String?
+  ipHash    String?
+  createdAt DateTime @default(now())
+
+  site Site @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
 }
 
 /* ========================= people & presence ============================= */

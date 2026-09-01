@@ -30,6 +30,7 @@ import { NumbersModule } from './numbers/numbers.module';
 import { WhatsAppModule } from './whatsapp/whatsapp.module';
 import { CrmSyncModule } from './crm/crm-sync.module';
 import { AdminModule } from './admin/admin.module';
+import { SitesModule } from './sites/sites.module';
 import { MediaModule } from './media/media.module';
 import { ReportsModule } from './reports/reports.module';
 import { HealthController } from './health.controller';
@@ -66,6 +67,7 @@ import { HealthController } from './health.controller';
     WhatsAppModule,
     CrmSyncModule,
     AdminModule,
+    SitesModule,
     MediaModule,
     ReportsModule,
 

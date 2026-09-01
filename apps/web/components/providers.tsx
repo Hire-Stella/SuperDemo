@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import { ThemeProvider } from 'next-themes';
 import { Toaster } from '@/components/ui/sonner';
 import { useRouter } from 'next/navigation';
-import type { LoginOutput, SessionUser } from '@fit-ai/contracts';
+import type { LoginOutput, SessionUser } from '@superdemo/contracts';
 import { api, getViewingOrg, setAccessToken, setViewingOrg } from '@/lib/api';
 import { connectSocket, disconnectSocket, type AppSocket } from '@/lib/socket';
 
@@ -30,6 +30,15 @@ interface SessionValue {
   viewOrg: (orgId: string | null) => void;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  /**
+   * Re-read the signed-in user from the server.
+   *
+   * The session carries the centre's name, mark and palette, which the shell
+   * renders — so a tenant admin who changes their own brand would otherwise keep
+   * seeing the old one until their access token happened to refresh, which looks
+   * exactly like the save having failed.
+   */
+  refreshSession: () => Promise<void>;
 }
 
 /** Where a role lands after signing in. */
@@ -130,6 +139,22 @@ function SessionProvider({ children }: { children: ReactNode }) {
     [attachSocket, router, viewOrg],
   );
 
+  const refreshSession = useCallback(async () => {
+    try {
+      const res = await fetch(`${api.baseUrl}/api/auth/refresh`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) return;
+      const body = (await res.json()) as LoginOutput;
+      setAccessToken(body.accessToken);
+      setUser(body.user);
+    } catch {
+      // A failed refresh here is not a sign-out: the caller's write already
+      // succeeded, and the existing token is still valid until it expires.
+    }
+  }, []);
+
   const logout = useCallback(async () => {
     if (heartbeat.current) clearInterval(heartbeat.current);
     await api.post('/auth/logout').catch(() => undefined);
@@ -142,8 +167,8 @@ function SessionProvider({ children }: { children: ReactNode }) {
   }, [router, viewOrg]);
 
   const value = useMemo(
-    () => ({ user, loading, socket, viewingOrgId, viewOrg, login, logout }),
-    [user, loading, socket, viewingOrgId, viewOrg, login, logout],
+    () => ({ user, loading, socket, viewingOrgId, viewOrg, login, logout, refreshSession }),
+    [user, loading, socket, viewingOrgId, viewOrg, login, logout, refreshSession],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
@@ -151,6 +176,33 @@ function SessionProvider({ children }: { children: ReactNode }) {
 
 /* -------------------------------- providers ------------------------------- */
 
+/**
+ * Light/dark, for every page including the public ones.
+ *
+ * Split out from `Providers` because a tenant landing page wants the theme —
+ * next-themes is what puts `.dark` on `<html>`, and without it a client's page
+ * would always render light — but must not mount a session. It shares the root
+ * layout with the dashboard, so anything left in that root is served to
+ * strangers.
+ */
+export function ThemeShell({ children }: { children: ReactNode }) {
+  return (
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      // Theme changes shouldn't animate every colour on the page at once.
+      disableTransitionOnChange
+    >
+      {children}
+    </ThemeProvider>
+  );
+}
+
+/**
+ * Session and data fetching. Mounted by the authenticated shell and by the
+ * login page — the only two places that have a user to hold.
+ */
 export function Providers({ children }: { children: ReactNode }) {
   // One client per mount. WebSocket events drive invalidation, so polling is
   // off by default and only used where a socket event doesn't exist.
@@ -173,20 +225,12 @@ export function Providers({ children }: { children: ReactNode }) {
   );
 
   return (
-    <ThemeProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      // Theme changes shouldn't animate every colour on the page at once.
-      disableTransitionOnChange
-    >
-      <QueryClientProvider client={queryClient}>
-        <SessionProvider>
-          {children}
-          {/* shadcn's Toaster reads the active theme, so toasts match. */}
-          <Toaster position="bottom-right" richColors closeButton />
-        </SessionProvider>
-      </QueryClientProvider>
-    </ThemeProvider>
+    <QueryClientProvider client={queryClient}>
+      <SessionProvider>
+        {children}
+        {/* shadcn's Toaster reads the active theme, so toasts match. */}
+        <Toaster position="bottom-right" richColors closeButton />
+      </SessionProvider>
+    </QueryClientProvider>
   );
 }

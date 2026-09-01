@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import type { AnalyticsRangeQuery, ListConversationsQuery } from '@fit-ai/contracts';
-import { DISPOSITION_LABELS, ESCALATION_REASON_LABELS } from '@fit-ai/contracts';
+import type { AnalyticsRangeQuery, ListConversationsQuery } from '@superdemo/contracts';
+import { DISPOSITION_LABELS, ESCALATION_REASON_LABELS } from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 import { ConversationsService } from '../conversations/conversations.service';
@@ -85,7 +85,7 @@ export class ReportsService {
       }
     }
 
-    lines.push('', '-'.repeat(60), `Generated ${fmt(new Date())} · FIT-AI contact centre`);
+    lines.push('', '-'.repeat(60), `Generated ${fmt(new Date())} · SuperDemo contact centre`);
 
     const who = (conv.contact?.name ?? 'unknown').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
     return {

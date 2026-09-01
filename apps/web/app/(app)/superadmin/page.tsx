@@ -4,23 +4,28 @@ import { Fragment, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Building2, Eye, Plus, ShieldCheck, UserPlus } from 'lucide-react';
+import { ExternalLink, Eye, Plus, ShieldCheck, Trash2, UserPlus } from 'lucide-react';
 import {
   DEFAULT_PRESET_FOR_INDUSTRY,
   INDUSTRY_LABELS,
   INDUSTRY_TEMPLATES,
   Industry as IndustryEnum,
+  SITE_TEMPLATES,
+  SiteTemplate as SiteTemplateEnum,
   THEME_PRESETS,
   ThemePreset as ThemePresetEnum,
+  defaultTemplateForIndustry,
+  type SiteTemplate,
   type ThemePreset,
   type CreateOrgInput,
   type Industry,
   type Location,
   type OrgSummary,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { dateTime } from '@/lib/format';
 import { useSession } from '@/components/providers';
+import { TenantLogo } from '@/components/tenant-logo';
 import {
   Badge,
   Button,
@@ -65,6 +70,10 @@ export default function SuperadminPage() {
   // Null means "follow the vertical" — the API picks, so an operator who does
   // not care about branding still gets something coherent.
   const [themePreset, setThemePreset] = useState<ThemePreset | null>(null);
+  /* Identity and landing page. Both null-means-derive, like themePreset. */
+  const [logoUrl, setLogoUrl] = useState('');
+  const [tagline, setTagline] = useState('');
+  const [siteTemplate, setSiteTemplate] = useState<SiteTemplate | null>(null);
   const [admin, setAdmin] = useState(BLANK_ADMIN);
   const [addingAdminTo, setAddingAdminTo] = useState<string | null>(null);
   const [newAdmin, setNewAdmin] = useState(BLANK_ADMIN);
@@ -115,6 +124,22 @@ export default function SuperadminPage() {
       void queryClient.invalidateQueries({ queryKey: ['platform-orgs'] });
       setAddingAdminTo(null);
       setNewAdmin(BLANK_ADMIN);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deleteOrg = useMutation({
+    mutationFn: ({ id, confirmSlug }: { id: string; confirmSlug: string }) =>
+      api.del<{ deleted: { name: string }; rows: Record<string, number> }>(
+        `/platform/orgs/${id}`,
+        // The handle is sent as the body's confirmation, which is what the API
+        // checks — the browser prompt is a courtesy, not the guard.
+        { confirmSlug },
+      ),
+    onSuccess: (res) => {
+      const rows = Object.values(res.rows).reduce((n, c) => n + c, 0);
+      toast.success(`${res.deleted.name} deleted — ${rows} rows removed`);
+      void queryClient.invalidateQueries({ queryKey: ['platform-orgs'] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -176,6 +201,9 @@ export default function SuperadminPage() {
                 slug: slug || slugify(name),
                 industry,
                 ...(themePreset ? { themePreset } : {}),
+                ...(logoUrl.trim() ? { logoUrl: logoUrl.trim() } : {}),
+                ...(tagline.trim() ? { tagline: tagline.trim() } : {}),
+                ...(siteTemplate ? { siteTemplate } : {}),
                 timezone,
                 admin: { ...admin, email: admin.email.trim().toLowerCase() },
               });
@@ -250,6 +278,54 @@ export default function SuperadminPage() {
               </Select>
             </label>
 
+            {/*
+              Identity, and both optional.
+
+              This is the block that makes a demo take a minute rather than an
+              afternoon: with no logo the platform draws a monogram from the
+              name, so the preview beside the field is what the centre will
+              actually look like everywhere — sidebar, landing page, browser tab.
+            */}
+            <label className="space-y-1 text-sm">
+              <span className="text-muted-foreground">Logo URL — optional</span>
+              <div className="flex items-center gap-2">
+                <TenantLogo name={name || 'New centre'} logoUrl={logoUrl} size={32} />
+                <Input
+                  value={logoUrl}
+                  onChange={(e) => setLogoUrl(e.target.value)}
+                  placeholder="Leave empty for a monogram"
+                />
+              </div>
+            </label>
+            <label className="space-y-1 text-sm">
+              <span className="text-muted-foreground">Tagline — optional</span>
+              <Input
+                value={tagline}
+                onChange={(e) => setTagline(e.target.value)}
+                placeholder="Family dentistry in Deira"
+              />
+            </label>
+
+            <label className="space-y-1 text-sm md:col-span-2">
+              <span className="text-muted-foreground">Landing page layout</span>
+              <Select
+                value={siteTemplate ?? ''}
+                onChange={(e) => setSiteTemplate((e.target.value || null) as SiteTemplate | null)}
+              >
+                <option value="">
+                  Suits the vertical ({SITE_TEMPLATES[defaultTemplateForIndustry(industry)].label})
+                </option>
+                {SiteTemplateEnum.options.map((t) => (
+                  <option key={t} value={t}>
+                    {SITE_TEMPLATES[t].label} — {SITE_TEMPLATES[t].bestFor}
+                  </option>
+                ))}
+              </Select>
+              <span className="block text-[11px] text-muted-foreground">
+                {SITE_TEMPLATES[siteTemplate ?? defaultTemplateForIndustry(industry)].note}
+              </span>
+            </label>
+
             {/* Says what the button will actually do, so the operator is not
                 guessing what a "clinic" gets. */}
             <div className="md:col-span-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-xs">
@@ -263,6 +339,14 @@ export default function SuperadminPage() {
                 {INDUSTRY_TEMPLATES[industry].knowledge.length} placeholder knowledge{' '}
                 {INDUSTRY_TEMPLATES[industry].knowledge.length === 1 ? 'document' : 'documents'} and
                 one phone number. The admin is enrolled in every queue so calls route on day one.
+              </p>
+              <p className="mt-1.5 text-muted-foreground">
+                Also a published landing page at{' '}
+                <strong className="font-medium text-foreground">
+                  /{slug || slugify(name) || 'handle'}
+                </strong>
+                , whose call button dials that number and whose callback form creates a contact in
+                this centre.
               </p>
             </div>
 
@@ -357,12 +441,44 @@ export default function SuperadminPage() {
                 <Fragment key={org.id}>
                   <tr>
                     <Td>
-                      <div className="flex items-center gap-2">
-                        <Building2 className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+                      <div className="flex items-center gap-2.5">
+                        {/*
+                          The centre's own mark, so the list reads as a portfolio
+                          of clients rather than rows of text.
+
+                          The monogram colour is passed explicitly here, unlike
+                          everywhere else: a monogram normally inherits
+                          `var(--primary)`, which is correct inside a centre but
+                          on this page is HireStella's own red — so every client
+                          came out the same colour in the one view whose job is
+                          comparing them.
+                        */}
+                        <TenantLogo
+                          name={org.name}
+                          logoUrl={org.logoUrl}
+                          size={28}
+                          monogramBackground={THEME_PRESETS[org.themePreset].swatch}
+                        />
                         <div className="min-w-0">
                           <p className="truncate font-medium">{org.name}</p>
                           <p className="truncate text-[11px] text-muted-foreground">
-                            {INDUSTRY_LABELS[org.industry]} · {org.slug}
+                            {INDUSTRY_LABELS[org.industry]} ·{' '}
+                            <a
+                              href={`/${org.slug}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
+                              title={
+                                org.site?.isPublished
+                                  ? 'Open the landing page'
+                                  : 'Landing page is unpublished'
+                              }
+                            >
+                              /{org.slug}
+                              <ExternalLink className="size-2.5" aria-hidden />
+                            </a>
+                            {org.site && !org.site.isPublished && ' · page unpublished'}
+                            {org.site && org.site.leads > 0 && ` · ${org.site.leads} web leads`}
                           </p>
                         </div>
                       </div>
@@ -466,6 +582,35 @@ export default function SuperadminPage() {
                           }}
                         >
                           {org.isActive ? 'Suspend' : 'Reactivate'}
+                        </Button>
+                        {/*
+                          Deleting is for discarding a demo, so it asks for the
+                          handle rather than a yes/no — the same confirmation the
+                          API insists on. Suspend is the reversible action and is
+                          what a real client should ever get.
+                        */}
+                        <Button
+                          variant="ghost"
+                          className="h-8 px-2 text-xs text-destructive hover:bg-destructive/10"
+                          disabled={deleteOrg.isPending}
+                          title="Delete this centre and everything in it"
+                          onClick={() => {
+                            const typed = window.prompt(
+                              `Delete ${org.name} permanently?\n\n` +
+                                `${org.counts.users} accounts, ${org.counts.conversations} conversations ` +
+                                `and its landing page will be destroyed. This cannot be undone — ` +
+                                `Suspend instead if you may want it back.\n\n` +
+                                `Type the handle "${org.slug}" to confirm:`,
+                            );
+                            if (typed === null) return;
+                            if (typed.trim() !== org.slug) {
+                              toast.error('That is not the handle — nothing was deleted');
+                              return;
+                            }
+                            deleteOrg.mutate({ id: org.id, confirmSlug: org.slug });
+                          }}
+                        >
+                          <Trash2 className="size-3.5" aria-hidden />
                         </Button>
                       </div>
                     </Td>

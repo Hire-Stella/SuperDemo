@@ -116,19 +116,19 @@ async function adopt() {
   // The platform operator: belongs to no org, so it is created here rather than
   // adopted. Same dev password as the seeded staff accounts.
   const existing = await prisma.$queryRawUnsafe(
-    `SELECT id FROM "User" WHERE email = 'super@fit-ai.com'`,
+    `SELECT id FROM "User" WHERE email = 'super@hirestella.com'`,
   );
   if (existing.length === 0) {
     const hash = await argon2.hash('Password123!', { type: argon2.argon2id });
     await prisma.$executeRawUnsafe(
       `INSERT INTO "User" (id, "orgId", email, name, "passwordHash", role, location,
          timezone, skills, "avatarColor", "isActive", "createdAt", "updatedAt")
-       VALUES (gen_random_uuid()::text, NULL, 'super@fit-ai.com', 'Platform Operator',
+       VALUES (gen_random_uuid()::text, NULL, 'super@hirestella.com', 'Platform Operator',
          $1, 'SUPERADMIN', 'DUBAI', 'Asia/Dubai', ARRAY['GENERAL']::"Skill"[],
          '#0f172a', true, now(), now())`,
       hash,
     );
-    console.log('  superadmin: super@fit-ai.com created');
+    console.log('  superadmin: super@hirestella.com created');
   } else {
     console.log('  superadmin: already present');
   }

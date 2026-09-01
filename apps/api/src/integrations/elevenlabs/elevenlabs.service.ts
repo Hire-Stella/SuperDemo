@@ -162,8 +162,8 @@ export class ElevenLabsService {
               llm: 'custom-llm',
               custom_llm: {
                 url: `${params.publicBaseUrl}/api/elevenlabs/llm`,
-                model_id: 'fit-ai-orchestrator',
-                api_key: { secret_id: 'FIT_BRIDGE_SECRET' },
+                model_id: 'superdemo-orchestrator',
+                api_key: { secret_id: 'SUPERDEMO_BRIDGE_SECRET' },
               },
               tools: [
                 {
@@ -176,7 +176,7 @@ export class ElevenLabsService {
                     url: `${params.publicBaseUrl}/api/elevenlabs/tools/escalate`,
                     method: 'POST',
                     request_headers: {
-                      Authorization: { secret_id: 'FIT_BRIDGE_SECRET' },
+                      Authorization: { secret_id: 'SUPERDEMO_BRIDGE_SECRET' },
                     },
                   },
                 },

@@ -2,8 +2,10 @@ import {
   BadRequestException,
   ConflictException,
   Controller,
+  Delete,
   Get,
   HttpCode,
+  Logger,
   NotFoundException,
   Param,
   Post,
@@ -11,20 +13,25 @@ import {
 } from '@nestjs/common';
 import {
   CreateOrgInput,
+  DeleteOrgInput,
   DEFAULT_PRESET_FOR_INDUSTRY,
   INDUSTRY_TEMPLATES,
   LOCATION_TIMEZONES,
   type OrgSummary,
   UpdateOrgInput,
-} from '@fit-ai/contracts';
-import { Prisma, chunk, embed, keywordsOf } from '@fit-ai/db';
+  defaultStyleForIndustry,
+  defaultTemplateForIndustry,
+  isReservedSlug,
+  siteContentForIndustry,
+} from '@superdemo/contracts';
+import { Prisma, chunk, embed, keywordsOf } from '@superdemo/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { TenantContext } from '../tenancy/tenant-context.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
 import { CurrentUser, Platform, Roles } from '../auth/guards';
 import { ZodBody } from '../shared/zod.pipe';
-import type { Industry, SessionUser, ThemePreset } from '@fit-ai/contracts';
+import type { Industry, SessionUser, ThemePreset } from '@superdemo/contracts';
 
 /**
  * The superadmin's entire surface — deliberately one controller for one page.
@@ -37,6 +44,8 @@ import type { Industry, SessionUser, ThemePreset } from '@fit-ai/contracts';
 @Roles('SUPERADMIN')
 @Controller('platform')
 export class PlatformController {
+  private readonly log = new Logger(PlatformController.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auth: AuthService,
@@ -52,16 +61,20 @@ export class PlatformController {
     // — including while the operator is viewing one of them, when the request
     // would otherwise carry an X-Org-Id and scope itself.
     return this.tenants.runAs(null, null, async () => {
-      const orgs = await this.prisma.organization.findMany({ orderBy: { createdAt: 'asc' } });
+      const orgs = await this.prisma.organization.findMany({
+        orderBy: { createdAt: 'asc' },
+        include: { site: { select: { template: true, isPublished: true } } },
+      });
 
-      // Four group-bys instead of 4×N queries: this page grows with the number
-      // of tenants, and a per-org round trip is how it would get slow first.
-      const [users, queues, conversations, numbers, lastLogins] = await Promise.all([
+      // Group-bys instead of N×per-org round trips: this page grows with the
+      // number of tenants, and a query per org is how it would get slow first.
+      const [users, queues, conversations, numbers, lastLogins, siteLeads] = await Promise.all([
         this.prisma.user.groupBy({ by: ['orgId', 'role'], _count: { _all: true } }),
         this.prisma.queue.groupBy({ by: ['orgId'], _count: { _all: true } }),
         this.prisma.conversation.groupBy({ by: ['orgId'], _count: { _all: true } }),
         this.prisma.phoneNumber.groupBy({ by: ['orgId'], _count: { _all: true } }),
         this.prisma.user.groupBy({ by: ['orgId'], _max: { lastLoginAt: true } }),
+        this.prisma.siteLead.groupBy({ by: ['orgId'], _count: { _all: true } }),
       ]);
 
       const sum = (
@@ -77,9 +90,18 @@ export class PlatformController {
         industry: org.industry,
         themePreset: org.themePreset as ThemePreset,
         themeTokens: (org.themeTokens as OrgSummary['themeTokens']) ?? null,
+        logoUrl: org.logoUrl,
+        tagline: org.tagline,
         timezone: org.timezone,
         isActive: org.isActive,
         createdAt: org.createdAt,
+        site: org.site
+          ? {
+              template: org.site.template,
+              isPublished: org.site.isPublished,
+              leads: sum(siteLeads, org.id),
+            }
+          : null,
         counts: {
           users: sum(users, org.id),
           admins: users
@@ -109,6 +131,13 @@ export class PlatformController {
   ) {
     const slug = body.slug ?? slugify(body.name);
     if (!slug) throw new BadRequestException('Could not derive a handle from that name');
+    // The handle is also the landing page's path, so it cannot collide with one
+    // of the dashboard's own routes — see RESERVED_SLUGS.
+    if (isReservedSlug(slug)) {
+      throw new BadRequestException(
+        `"${slug}" is reserved by the platform. Choose a different handle.`,
+      );
+    }
 
     return this.tenants.runAs(null, actor.id, async () => {
       const [slugTaken, emailTaken] = await Promise.all([
@@ -136,6 +165,11 @@ export class PlatformController {
             // like HireStella's marketing site.
             themePreset: body.themePreset ?? DEFAULT_PRESET_FOR_INDUSTRY[body.industry] ?? 'default',
             timezone: body.timezone,
+            // Both optional. A null logo is drawn as a monogram everywhere it
+            // appears, which is what makes a name the only thing this form
+            // truly needs — see packages/contracts/src/brand.ts.
+            logoUrl: body.logoUrl ?? null,
+            tagline: body.tagline ?? null,
           },
         });
 
@@ -252,6 +286,22 @@ export class PlatformController {
           },
         });
 
+        // A published landing page, in the same breath as the queues and the
+        // number. The page's call button dials the DID created above and its
+        // callback form writes into this centre's contacts, so a tenant that is
+        // thirty seconds old already demonstrates the whole loop — which is the
+        // only reason to ship a landing page from a contact-centre platform.
+        const siteTemplate = body.siteTemplate ?? defaultTemplateForIndustry(body.industry);
+        await tx.site.create({
+          data: {
+            orgId: created.id,
+            template: siteTemplate,
+            style: defaultStyleForIndustry(body.industry),
+            content: siteContentForIndustry(body.industry, body.name),
+            metaTitle: `${body.name}${body.tagline ? ` · ${body.tagline}` : ''}`,
+          },
+        });
+
         await tx.auditLog.create({
           data: {
             actorId: actor.id,
@@ -266,6 +316,7 @@ export class PlatformController {
                 queues: queues.length,
                 aiAgent: aiAgent.name,
                 knowledgeDocs: template.knowledge.length,
+                siteTemplate,
               },
             },
           },
@@ -277,6 +328,9 @@ export class PlatformController {
             queues: queues.map((q) => q.name),
             aiAgent: aiAgent.name,
             knowledgeDocs: template.knowledge.length,
+            siteTemplate,
+            /** Relative on purpose: the API does not know the web app's host. */
+            sitePath: `/${slug}`,
           },
         };
       });
@@ -332,6 +386,8 @@ export class PlatformController {
           timezone: body.timezone,
           isActive: body.isActive,
           themePreset: body.themePreset,
+          logoUrl: body.logoUrl,
+          tagline: body.tagline,
           // undefined leaves it alone; null clears a pasted export so the
           // preset takes over again.
           themeTokens:
@@ -359,6 +415,116 @@ export class PlatformController {
         isActive: org.isActive,
         themePreset: org.themePreset as ThemePreset,
       };
+    });
+  }
+
+  /**
+   * Delete a centre and everything in it.
+   *
+   * Suspending is the right answer for a real client — their history is
+   * evidence, and a mis-click must not be able to destroy it. This exists for
+   * the other case: building six demo tenants before a meeting means throwing
+   * five of them away afterwards, and without a delete they accumulate in the
+   * operator's list forever.
+   *
+   * The slug has to be typed back to confirm, so the destructive path cannot be
+   * reached by clicking one button.
+   *
+   * Deletion is explicit rather than relying on the database: only Setting and
+   * Site cascade from Organization. Every other tenant model carries a bare
+   * `orgId` column with no foreign key — deliberately, because a relation per
+   * model on a 25-model schema buys nothing the tenant extension does not
+   * already enforce — so dropping the org row alone would orphan all of it.
+   */
+  @Delete('orgs/:id')
+  async deleteOrg(
+    @Param('id') id: string,
+    @ZodBody(DeleteOrgInput) body: DeleteOrgInput,
+    @CurrentUser() actor: SessionUser,
+  ) {
+    return this.tenants.runAs(null, actor.id, async () => {
+      const org = await this.prisma.organization.findUnique({ where: { id } });
+      if (!org) throw new NotFoundException('Organisation not found');
+      if (body.confirmSlug !== org.slug) {
+        throw new BadRequestException(
+          `Type the centre's handle (${org.slug}) to confirm deletion`,
+        );
+      }
+
+      // Recorded before the deletion, because afterwards there is nothing left
+      // to say what was removed. Written at platform scope with no orgId, so it
+      // survives the org it describes.
+      await this.prisma.auditLog.create({
+        data: {
+          actorId: actor.id,
+          action: 'org.delete',
+          target: id,
+          metadata: {
+            name: org.name,
+            slug: org.slug,
+            industry: org.industry,
+            createdAt: org.createdAt.toISOString(),
+          },
+        },
+      });
+
+      const counts = await this.prisma.$transaction(async (tx) => {
+        const users = await tx.user.findMany({ where: { orgId: id }, select: { id: true } });
+        const userIds = users.map((u) => u.id);
+
+        // Children first. Most of these would cascade from their own parent, but
+        // listing them keeps the order independent of which cascades exist —
+        // and a missing row here shows up as a foreign-key error at once rather
+        // than as an orphan nobody notices.
+        const removed: Record<string, number> = {};
+        const del = async (label: string, run: () => Promise<{ count: number }>) => {
+          removed[label] = (await run()).count;
+        };
+
+        await del('transcriptSegments', () => tx.transcriptSegment.deleteMany({ where: { orgId: id } }));
+        await del('recordings', () => tx.recording.deleteMany({ where: { orgId: id } }));
+        await del('messages', () => tx.message.deleteMany({ where: { orgId: id } }));
+        await del('callParticipants', () => tx.callParticipant.deleteMany({ where: { orgId: id } }));
+        await del('aiSessions', () => tx.aiSession.deleteMany({ where: { orgId: id } }));
+        await del('calls', () => tx.call.deleteMany({ where: { orgId: id } }));
+        await del('conversations', () => tx.conversation.deleteMany({ where: { orgId: id } }));
+        await del('siteLeads', () => tx.siteLead.deleteMany({ where: { orgId: id } }));
+        await del('campaignTargets', () => tx.campaignTarget.deleteMany({ where: { orgId: id } }));
+        await del('campaigns', () => tx.campaign.deleteMany({ where: { orgId: id } }));
+        await del('knowledgeChunks', () => tx.knowledgeChunk.deleteMany({ where: { orgId: id } }));
+        await del('knowledgeDocs', () => tx.knowledgeDoc.deleteMany({ where: { orgId: id } }));
+        // Before Queue and AiAgent, which it points at.
+        await del('phoneNumbers', () => tx.phoneNumber.deleteMany({ where: { orgId: id } }));
+        await del('queueMemberships', () => tx.queueMembership.deleteMany({ where: { orgId: id } }));
+        await del('queues', () => tx.queue.deleteMany({ where: { orgId: id } }));
+        await del('aiAgents', () => tx.aiAgent.deleteMany({ where: { orgId: id } }));
+        await del('contacts', () => tx.contact.deleteMany({ where: { orgId: id } }));
+        await del('agentStateEvents', () => tx.agentStateEvent.deleteMany({ where: { orgId: id } }));
+        await del('agentStates', () => tx.agentState.deleteMany({ where: { orgId: id } }));
+        await del('metrics', () => tx.callMetricsDaily.deleteMany({ where: { orgId: id } }));
+        await del('crmSyncLogs', () => tx.crmSyncLog.deleteMany({ where: { orgId: id } }));
+        await del('outboxEvents', () => tx.outboxEvent.deleteMany({ where: { orgId: id } }));
+        await del('auditLogs', () => tx.auditLog.deleteMany({ where: { orgId: id } }));
+        // RefreshToken is a platform model keyed by user, not by org — it is the
+        // one thing here that orgId would not find. Signs out the whole staff.
+        await del('refreshTokens', () =>
+          tx.refreshToken.deleteMany({ where: { userId: { in: userIds } } }),
+        );
+        await del('users', () => tx.user.deleteMany({ where: { orgId: id } }));
+
+        // Setting and Site cascade from here.
+        await tx.organization.delete({ where: { id } });
+        return removed;
+      });
+
+      this.log.warn(
+        `deleted centre "${org.name}" (${org.slug}) and ${Object.values(counts).reduce(
+          (n, c) => n + c,
+          0,
+        )} rows`,
+      );
+
+      return { deleted: { id, name: org.name, slug: org.slug }, rows: counts };
     });
   }
 
@@ -424,7 +590,7 @@ export class PlatformController {
   }
 }
 
-/** "FIT-AI Contact Centre" → "fit-ai-contact-centre". */
+/** "Northside Dental Clinic" → "northside-dental-clinic". */
 function slugify(name: string): string {
   return name
     .toLowerCase()

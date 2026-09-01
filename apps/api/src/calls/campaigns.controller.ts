@@ -18,7 +18,7 @@ import {
   CreateCampaignInput,
   UpdateCampaignInput,
   type TargetStatus,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenancy/tenant-context.service';
 import { DialerService } from './dialer.service';
@@ -290,7 +290,20 @@ export class CampaignsController {
         where: { campaignId: id, status: { in: ['PENDING', 'CALLING'] } },
       });
       if (pending === 0) {
-        throw new BadRequestException('Add someone to call before starting this campaign');
+        /**
+         * One campaign legitimately starts empty: the one the centre's landing
+         * page feeds.
+         *
+         * Its targets arrive from visitors after it is running — and the site
+         * only queues into a RUNNING campaign, precisely so a visitor is never
+         * told "we will call you shortly" and then parked behind a paused list.
+         * Those two rules together make a web-lead campaign impossible to start
+         * unless this check knows about the exception.
+         */
+        const fedByWebsite = await this.prisma.site.count({ where: { leadCampaignId: id } });
+        if (fedByWebsite === 0) {
+          throw new BadRequestException('Add someone to call before starting this campaign');
+        }
       }
     }
 

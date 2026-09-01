@@ -1,4 +1,4 @@
-# FIT-AI — AI Contact Centre for FIT Institute
+# SuperDemo — AI Contact Centre for FIT Institute
 
 AI-first contact centre: inbound AI voice with warm handoff to human agents, a unified inbox
 across voice and WhatsApp, and synchronisation with the client's existing Bitrix24 CRM.
@@ -65,6 +65,68 @@ routing categories are re-labelled per vertical (`CATEGORY_LABELS`), so a clinic
 
 The platform's own name lives in `apps/web/lib/platform.ts` and reads
 `NEXT_PUBLIC_PLATFORM_NAME`, so a white-label deployment changes one value.
+
+A centre is created from a **name** and nothing else if you like. A logo is optional: where one
+is missing the platform draws a monogram from the centre's own name in its own brand colour
+(`packages/contracts/src/brand.ts`), so a tenant looks deliberate the moment it exists — in the
+sidebar, on its landing page and in the browser tab. That is the difference between building six
+demo centres before a meeting and building one.
+
+Deleting a centre is possible, and asks for its handle typed back. Suspension is the reversible
+action and the one a real client should ever get; deletion exists because demo tenants have to be
+thrown away. It removes every tenant row explicitly — only `Setting` and `Site` cascade from
+`Organization`, so relying on the database would orphan the rest.
+
+### A landing page per centre
+
+Every centre gets a public page at **`/{slug}`**, provisioned with the centre itself and editable
+from **Website** in its own sidebar.
+
+The point is not that anyone needs another website builder. It is that the page's call button
+dials the DID that was provisioned two seconds earlier, and its callback form creates a contact in
+that centre — optionally as a target on a campaign the dialer is working. One screen demonstrates
+the whole loop.
+
+* **Four layouts × eight palettes × 108 treatments** (`packages/contracts/src/sites.ts`), which is
+  3,456 combinations and the reason a demo need not look like the last demo. A *layout* decides what
+  is on the page; a *palette* is the tenant's theme; a *treatment* is four orthogonal axes — hero
+  surface (plain / tinted / ink / full brand), headline face (serif / sans / condensed), corner
+  radius and spacing. Six curated **Looks** pair them for you; every axis stays editable underneath.
+  Content is stored template-agnostically, so switching any of it never loses a sentence anyone
+  wrote.
+* **Treatments follow the palette, not the other way round.** Every hero surface is a `color-mix`
+  of the tenant's own `--primary`, emitted as `--site-hero-*` custom properties that the templates
+  read — so no template branches on colour and none of them can drift out of step with a theme. The
+  first version of `bold` had a near-black baked into it, which meant one layout in four ignored the
+  client's brand entirely; the token indirection exists to make that impossible.
+* **Starter copy per vertical.** A clinic's page talks about appointments and insurance, a gym's
+  about trial sessions and monthly terms, with the centre's name substituted in. Real copy, not
+  lorem, so a new tenant is presentable immediately.
+* **Server-rendered with its theme in the HTML**, so a visitor never watches a client's page turn
+  from HireStella red to their green.
+* **Sections reorder and hide** from a form. That is most of what a builder is used for at a
+  fraction of one; there is no block library, media pipeline or revision history, and the escape
+  hatch for a client with strong opinions is their real website.
+* **A live preview of the real page**, in an iframe beside the controls. Layout, palette and the
+  four axes travel as query parameters that the public route validates against its own enums, so
+  the preview is the same code a visitor gets rather than a second implementation that would drift.
+  Nothing is persisted and no copy is overridable, so the worst a hand-written URL can do is render
+  a page in one of its own supported looks — and a preview URL is `noindex`.
+
+Two things worth knowing about the lead path, because they are where a landing page stops being
+decoration and starts touching a client's data:
+
+* A request is **queued to the dialer only while the nominated campaign is RUNNING**. Telling a
+  visitor "we will call you shortly" and then parking them behind a paused list is worse than not
+  promising. (A campaign fed only by web leads legitimately starts empty, so the "add someone
+  before starting" check knows about that one exception.)
+* **A do-not-call flag is not revoked by a web form.** Anyone can type anyone's number into a
+  public page, so an opted-out number is recorded as a lead — the centre should see the enquiry —
+  and never dialled. A human decides, with the opt-out visible beside the request.
+
+Handles are checked against `RESERVED_SLUGS`: a centre called "Analytics" would otherwise take
+`/analytics` and have its page permanently shadowed by the dashboard's, with nothing anywhere to
+explain why. Suspending a centre takes its page down with it.
 
 ### Outbound campaigns
 
@@ -358,8 +420,8 @@ scripts/
 pnpm services:status     # are Postgres and Redis up
 pnpm services:reset      # wipe the cluster (then db:push && db:seed)
 pnpm db:studio           # browse the data
-pnpm --filter @fit-ai/api typecheck
-pnpm --filter @fit-ai/web typecheck
+pnpm --filter @superdemo/api typecheck
+pnpm --filter @superdemo/web typecheck
 ```
 
 Set `SIMULATOR_AUTOPILOT=true` to generate a scripted call every 45 seconds, so an unattended

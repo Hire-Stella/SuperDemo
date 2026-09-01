@@ -14,7 +14,7 @@ import {
   type ClientToServerEvents,
   type ServerToClientEvents,
   type SocketData,
-} from '@fit-ai/contracts';
+} from '@superdemo/contracts';
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -70,11 +70,17 @@ export class RealtimeGateway implements OnGatewayConnection, OnGatewayDisconnect
       }
 
       // Presence follows the socket: an agent with a live browser is reachable.
+      //
+      // updateMany for both, so a user with no AgentState row is a no-op rather
+      // than a throw. A SUPERADMIN is exactly that — it sits above every org and
+      // has no presence to track — and `update` on a missing row landed in the
+      // catch below, telling a platform operator their session was invalid on
+      // every page load when it was perfectly good.
       await this.prisma.agentState.updateMany({
         where: { userId: user.id, status: 'OFFLINE' },
         data: { status: 'AVAILABLE', since: new Date(), lastSeenAt: new Date() },
       });
-      await this.prisma.agentState.update({
+      await this.prisma.agentState.updateMany({
         where: { userId: user.id },
         data: { lastSeenAt: new Date() },
       });

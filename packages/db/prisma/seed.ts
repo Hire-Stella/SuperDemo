@@ -1,5 +1,5 @@
 /**
- * Seed FIT-AI with a realistic starting state:
+ * Seed SuperDemo with a realistic starting state:
  *   · 12 agents matching the client's actual team (Dubai 8, India 2, Egypt 2)
  *   · 4 queues mapped to FIT's published course categories
  *   · the FIT knowledge base (real course names, placeholder fees)
