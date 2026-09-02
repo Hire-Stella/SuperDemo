@@ -125,6 +125,14 @@ export const ApiEnv = z
      * for a local replay of a captured payload, where the signature cannot
      * match because the URL differs.
      */
+    /**
+     * API key used to SIGN browser access tokens. Not the auth token — Twilio
+     * will not accept that for a Voice grant, deliberately, because a token
+     * handed to a browser must be revocable without rotating account
+     * credentials. Create one under Account → API keys.
+     */
+    TWILIO_API_KEY_SID: optionalStr,
+    TWILIO_API_KEY_SECRET: optionalStr,
     TWILIO_VERIFY_SIGNATURE: z.coerce.boolean().default(true),
 
     PUBLIC_BASE_URL: optionalStr,

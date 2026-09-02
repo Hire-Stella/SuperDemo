@@ -104,6 +104,7 @@ export class CallsController {
       phoneE164: body.phoneE164,
       name: body.name,
       note: body.note,
+      softphone: body.softphone,
     });
   }
 

@@ -95,6 +95,14 @@ export interface TelephonyProvider {
      * (the browser softphone) ignore it.
      */
     agentNumber?: string;
+    /**
+     * Ring the agent's browser instead of a handset.
+     *
+     * Takes precedence over `agentNumber` when both are present: an agent
+     * sitting at a registered softphone is at their desk, and ringing their
+     * mobile as well would be the same call arriving twice.
+     */
+    agentClientId?: string;
   }): Promise<TelephonyCallHandle>;
 
   /** Called once at boot so a driver can register listeners / warm up. */

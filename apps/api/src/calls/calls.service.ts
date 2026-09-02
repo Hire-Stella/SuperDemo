@@ -379,6 +379,8 @@ export class CallsService implements TelephonySink, OnModuleInit {
     phoneE164?: string;
     name?: string;
     note?: string;
+    /** Ring the agent's registered browser rather than their handset. */
+    softphone?: boolean;
   }): Promise<{
     callId: string;
     conversationId: string;
@@ -443,7 +445,7 @@ export class CallsService implements TelephonySink, OnModuleInit {
      * arithmetic it is. Refused with the reason, because the person doing it is
      * testing and deserves to be told why it cannot work.
      */
-    if (agent?.phoneE164 && agent.phoneE164 === contact.phoneE164) {
+    if (!params.softphone && agent?.phoneE164 && agent.phoneE164 === contact.phoneE164) {
       throw new BadRequestException(
         'That is your own number. The bridge rings you first and then dials the customer, so ' +
           'calling yourself would find the line engaged — use a second phone as the destination.',
@@ -454,7 +456,11 @@ export class CallsService implements TelephonySink, OnModuleInit {
     const handle = await this.telephony.dial({
       fromNumber: fromNumber.e164,
       toNumber: contact.phoneE164,
-      ...(agent?.phoneE164 ? { agentNumber: agent.phoneE164 } : {}),
+      ...(params.softphone
+        ? { agentClientId: params.agentUserId }
+        : agent?.phoneE164
+          ? { agentNumber: agent.phoneE164 }
+          : {}),
     });
 
     const conversation = await this.prisma.conversation.create({

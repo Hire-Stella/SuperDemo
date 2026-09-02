@@ -93,7 +93,16 @@ export class TwilioTelephony implements TelephonyProvider {
     opener?: string;
     speed?: number;
     agentNumber?: string;
+    agentClientId?: string;
   }): Promise<TelephonyCallHandle> {
+    /*
+     * The browser wins when both are available.
+     *
+     * An agent at a registered softphone is sitting at their desk; ringing
+     * their mobile too would be one call arriving twice on two devices, and
+     * whichever they ignored would keep ringing.
+     */
+    const agentClient = params.agentClientId;
     const agentNumber = params.agentNumber ?? this.env.TWILIO_AGENT_FALLBACK_NUMBER;
 
     /*
@@ -107,7 +116,7 @@ export class TwilioTelephony implements TelephonyProvider {
      * phone. Twilio bills the attempt either way, so the refusal belongs where
      * the answer is certain.
      */
-    if (agentNumber === params.toNumber) {
+    if (!agentClient && agentNumber === params.toNumber) {
       /*
        * A bad request, not an unimplemented capability.
        *
@@ -123,7 +132,7 @@ export class TwilioTelephony implements TelephonyProvider {
       );
     }
 
-    if (!agentNumber) {
+    if (!agentClient && !agentNumber) {
       // Refused rather than defaulted. The alternative — dialling the customer
       // with no agent leg — is the failure mode described in the class comment.
       throw new NotImplementedByDriverError(
@@ -179,7 +188,9 @@ export class TwilioTelephony implements TelephonyProvider {
       : {};
 
     const call = await this.twilio.calls.create({
-      to: agentNumber,
+      // `client:<identity>` is Twilio's address for a registered browser
+      // device. Same call, different endpoint — everything below is unchanged.
+      to: agentClient ? `client:${agentClient}` : (agentNumber as string),
       from,
       twiml: bridge.toString(),
       ...callbacks,
@@ -195,7 +206,10 @@ export class TwilioTelephony implements TelephonyProvider {
       );
     }
 
-    this.log.log(`dial ${call.sid}: agent ${agentNumber} -> customer ${params.toNumber}`);
+    this.log.log(
+      `dial ${call.sid}: agent ${agentClient ? `browser:${agentClient}` : agentNumber} ` +
+        `-> customer ${params.toNumber}`,
+    );
     return { providerCallId: call.sid, mediaSessionId: null };
   }
 

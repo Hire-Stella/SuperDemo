@@ -31,6 +31,7 @@ import {
 import { api, qs } from '@/lib/api';
 import { dateTime } from '@/lib/format';
 import { useUser } from '@/components/providers';
+import { useSoftphone } from '@/components/softphone-device';
 import { Avatar, Badge, Button, Input, Select, cn } from '@/components/composites';
 
 /**
@@ -81,6 +82,32 @@ export default function TelecallerPage() {
   const [disposition, setDisposition] = useState<Disposition | null>(null);
   const [wrapNotes, setWrapNotes] = useState('');
   const [session, setSession] = useState({ placed: 0, connected: 0, talkMs: 0 });
+
+  /*
+   * Off by default, and remembered per browser.
+   *
+   * An agent who works from a handset should not have their laptop start
+   * ringing because they opened the page, and registering a device asks for the
+   * microphone — a permission prompt nobody asked for is how a screen loses
+   * trust. Opting in is one click and it sticks.
+   */
+  const [softphone, setSoftphone] = useState(false);
+  useEffect(() => {
+    try {
+      setSoftphone(localStorage.getItem('softphone') === '1');
+    } catch {
+      /* private window, or site data blocked — the default stands */
+    }
+  }, []);
+  const phone = useSoftphone(softphone);
+  const toggleSoftphone = useCallback((on: boolean) => {
+    setSoftphone(on);
+    try {
+      localStorage.setItem('softphone', on ? '1' : '0');
+    } catch {
+      /* not being able to remember it is not a reason to refuse the change */
+    }
+  }, []);
   const [worked, setWorked] = useState<Set<string>>(new Set());
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -135,7 +162,12 @@ export default function TelecallerPage() {
 
   /* -------------------------------- actions ------------------------------- */
   const dial = useMutation({
-    mutationFn: (body: { contactId?: string; phoneE164?: string; note?: string }) =>
+    mutationFn: (body: {
+      contactId?: string;
+      phoneE164?: string;
+      note?: string;
+      softphone?: boolean;
+    }) =>
       api.post<ManualCallResult>('/calls/manual', body),
     onSuccess: (res) => {
       setLive(res);
@@ -193,12 +225,19 @@ export default function TelecallerPage() {
 
   const placeCall = useCallback(() => {
     if (live || !canDial) return;
+    /*
+     * Only claim the softphone once it has actually registered. Sending the
+     * flag while the device is still connecting would have Twilio ring an
+     * endpoint that does not exist yet, and the call would fail with the agent
+     * looking at a screen that said it was ready.
+     */
+    const useBrowser = softphone && phone.ready;
     dial.mutate(
       selected
-        ? { contactId: selected.id, note: note || undefined }
-        : { phoneE164: composed, note: note || undefined },
+        ? { contactId: selected.id, note: note || undefined, softphone: useBrowser }
+        : { phoneE164: composed, note: note || undefined, softphone: useBrowser },
     );
-  }, [live, canDial, dial, selected, note, composed]);
+  }, [live, canDial, dial, selected, note, composed, softphone, phone.ready]);
 
   /* ---------------------------- keyboard control --------------------------- */
   // A telecaller works with one hand on the keyboard; these are the four
@@ -476,9 +515,41 @@ export default function TelecallerPage() {
                     />
                   </label>
 
+                  <label className="flex items-center justify-between gap-2 text-xs">
+                    <span className="text-muted-foreground">
+                      Talk in this browser
+                      {softphone && (
+                        <span
+                          className={cn(
+                            'ml-2 font-medium',
+                            phone.state === 'ready' || phone.state === 'on-call'
+                              ? 'text-emerald-600'
+                              : phone.state === 'error'
+                                ? 'text-destructive'
+                                : 'text-muted-foreground',
+                          )}
+                        >
+                          {phone.state === 'connecting'
+                            ? 'connecting…'
+                            : phone.state === 'error'
+                              ? (phone.error ?? 'failed')
+                              : phone.state === 'on-call'
+                                ? 'on call'
+                                : 'ready'}
+                        </span>
+                      )}
+                    </span>
+                    <input
+                      type="checkbox"
+                      className="size-4 accent-[var(--primary)]"
+                      checked={softphone}
+                      onChange={(e) => toggleSoftphone(e.target.checked)}
+                    />
+                  </label>
+
                   <Button
                     className="h-11 w-full text-sm"
-                    disabled={!canDial || dial.isPending}
+                    disabled={!canDial || dial.isPending || (softphone && !phone.ready)}
                     onClick={placeCall}
                   >
                     <PhoneCall className="size-4" aria-hidden />

@@ -1,10 +1,23 @@
-import { Controller, Headers, Inject, Logger, Post, Query, Req, Res } from '@nestjs/common';
+import {
+  BadRequestException,
+  Controller,
+  Get,
+  Headers,
+  Inject,
+  Logger,
+  Post,
+  Query,
+  Req,
+  Res,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { validateRequest } from 'twilio';
 import { twiml } from 'twilio';
 import type { ApiEnv } from '@superdemo/contracts';
 import { ENV } from '../../config/config.module';
-import { Public } from '../../auth/guards';
+import { CurrentUser, Public } from '../../auth/guards';
+import type { SessionUser } from '@superdemo/contracts';
+import { jwt as TwilioJwt } from 'twilio';
 import { TwilioTelephony } from './twilio.telephony';
 
 /**
@@ -35,6 +48,47 @@ export class TwilioController {
     @Inject(ENV) private readonly env: ApiEnv,
     private readonly driver: TwilioTelephony,
   ) {}
+
+
+  /**
+   * A short-lived credential the browser uses to register as a phone.
+   *
+   * Authenticated like any other route, and the identity is taken from the
+   * SESSION rather than a parameter — a token is permission to receive that
+   * agent's calls, so letting a caller name the identity would let anyone
+   * register as anyone and answer their calls.
+   *
+   * Signed with an API key rather than the account auth token. Twilio requires
+   * it, and the reason is worth keeping: a key can be revoked on its own, so a
+   * leaked browser token does not mean rotating the credentials every other
+   * integration depends on.
+   */
+  @Get('voice-token')
+  voiceToken(@CurrentUser() user: SessionUser): { token: string; identity: string; ttl: number } {
+    const { TWILIO_ACCOUNT_SID: acct, TWILIO_API_KEY_SID: key, TWILIO_API_KEY_SECRET: secret } =
+      this.env;
+    if (!acct || !key || !secret) {
+      throw new BadRequestException(
+        'The softphone needs TWILIO_API_KEY_SID and TWILIO_API_KEY_SECRET — create a key under ' +
+          'Account → API keys in the Twilio console',
+      );
+    }
+
+    // An hour: long enough for a shift's worth of calls without a reconnect,
+    // short enough that a token copied out of a browser expires the same day.
+    const ttl = 3600;
+    const token = new TwilioJwt.AccessToken(acct, key, secret, { identity: user.id, ttl });
+    token.addGrant(
+      new TwilioJwt.AccessToken.VoiceGrant({
+        // Incoming only. The browser never places calls itself — the server
+        // does, and rings the browser — so there is no outgoing application to
+        // grant and nothing this token can be used to dial with.
+        incomingAllow: true,
+      }),
+    );
+
+    return { token: token.toJwt(), identity: user.id, ttl };
+  }
 
   /**
    * The agent picked up. Connect the customer.

@@ -840,6 +840,15 @@ export const ManualCallInput = z
     name: z.string().max(80).optional(),
     /** Why they are calling. Written onto the conversation before it starts. */
     note: z.string().max(500).optional(),
+    /**
+     * Put the agent's half of the call in the browser instead of on a handset.
+     *
+     * Sent by the client rather than read from a saved preference, because only
+     * the browser knows whether its softphone actually finished registering.
+     * A stored "prefers softphone" flag would go on being true in a tab that
+     * had been closed, and the call would ring a device nobody was sitting at.
+     */
+    softphone: z.boolean().optional(),
   })
   .refine((v) => Boolean(v.contactId ?? v.phoneE164), {
     message: 'Give a contact or a number to dial',
