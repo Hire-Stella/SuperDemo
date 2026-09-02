@@ -105,6 +105,28 @@ export const ApiEnv = z
      * webhooks, server tools). Required for real calls — localhost is not
      * reachable from their infrastructure, so this needs a tunnel or a deploy.
      */
+    /* ── Twilio (real PSTN) ────────────────────────────────────────────────
+     * Used when TELEPHONY_DRIVER=twilio. The account SID and auth token come
+     * from the Twilio console; TWILIO_NUMBER is the voice-capable DID calls are
+     * placed from and must belong to that account.
+     */
+    TWILIO_ACCOUNT_SID: optionalStr,
+    TWILIO_AUTH_TOKEN: optionalStr,
+    TWILIO_NUMBER: optionalStr,
+    /**
+     * Rung when the telecaller has no phoneE164 of their own.
+     *
+     * A convenience for a demo on one handset, not a fallback to lean on: with
+     * it set, every agent's calls land on the same phone.
+     */
+    TWILIO_AGENT_FALLBACK_NUMBER: optionalStr,
+    /**
+     * Verify the X-Twilio-Signature on inbound webhooks. Only ever set false
+     * for a local replay of a captured payload, where the signature cannot
+     * match because the URL differs.
+     */
+    TWILIO_VERIFY_SIGNATURE: z.coerce.boolean().default(true),
+
     PUBLIC_BASE_URL: optionalStr,
 
     STORAGE_LOCAL_DIR: z.string().default('.storage'),
@@ -163,6 +185,27 @@ export const ApiEnv = z
           message:
             'PUBLIC_BASE_URL is required when TELEPHONY_DRIVER=elevenlabs — ElevenLabs must be able ' +
             'to reach the custom-LLM bridge and webhooks, and localhost is not reachable from their side',
+        });
+      }
+    }
+    if (env.TELEPHONY_DRIVER === 'twilio') {
+      for (const key of ['TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_NUMBER'] as const) {
+        if (!env[key]) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: [key],
+            message: `${key} is required when TELEPHONY_DRIVER=twilio`,
+          });
+        }
+      }
+      if (!env.PUBLIC_BASE_URL) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PUBLIC_BASE_URL'],
+          message:
+            'PUBLIC_BASE_URL is required when TELEPHONY_DRIVER=twilio — Twilio fetches the TwiML ' +
+            'that bridges the two legs and posts call status back, and localhost is not reachable ' +
+            'from their side. Use a tunnel in development.',
         });
       }
     }

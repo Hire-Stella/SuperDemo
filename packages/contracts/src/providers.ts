@@ -82,6 +82,19 @@ export interface TelephonyProvider {
     opener?: string;
     /** Scales scripted pauses on the simulated driver. Ignored by real ones. */
     speed?: number;
+    /**
+     * Where to put the human half of a manual call.
+     *
+     * Present only for a telecaller dialling by hand. A carrier driver rings
+     * this number FIRST and bridges the customer once it answers, so the agent
+     * never hears the customer's phone ring out — and, more importantly, the
+     * customer is not dialled at all unless a human is already on the line.
+     *
+     * A number rather than a user id on purpose: a driver is transport and must
+     * not reach the database to resolve one. Drivers that carry their own media
+     * (the browser softphone) ignore it.
+     */
+    agentNumber?: string;
   }): Promise<TelephonyCallHandle>;
 
   /** Called once at boot so a driver can register listeners / warm up. */

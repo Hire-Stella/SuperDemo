@@ -313,6 +313,13 @@ model User {
   timezone     String
   skills       Skill[]
   extension    String?
+  /// The handset a telecaller's own calls are bridged to, E.164.
+  ///
+  /// Null is the normal state: an agent who works in the browser softphone
+  /// never needs one. It is required only for the carrier bridge, where Twilio
+  /// rings this number first and connects the customer once it answers — so a
+  /// missing one is a clear refusal at dial time, not a silent no-op.
+  phoneE164    String?
   avatarColor  String   @default("#2563eb")
   /// Bitrix24 user id, so calls land on the right CRM user's timeline.
   bitrixUserId String?

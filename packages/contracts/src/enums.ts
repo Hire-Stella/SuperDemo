@@ -211,7 +211,7 @@ export const NumberStatus = z.enum(['AVAILABLE', 'ASSIGNED', 'RELEASED']);
 export type NumberStatus = z.infer<typeof NumberStatus>;
 
 /** Driver names, so config and audit rows share one vocabulary. */
-export const TelephonyDriver = z.enum(['simulated', 'browser', 'elevenlabs', 'livekit']);
+export const TelephonyDriver = z.enum(['simulated', 'browser', 'twilio', 'elevenlabs', 'livekit']);
 export type TelephonyDriver = z.infer<typeof TelephonyDriver>;
 
 export const MessagingDriver = z.enum(['mock', 'meta']);

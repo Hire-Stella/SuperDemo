@@ -26,6 +26,7 @@ import { RoutingService } from './routing.service';
 import { AiOrchestrator } from './ai-orchestrator.service';
 import { ENV } from '../config/config.module';
 import { TELEPHONY_PROVIDER } from '../integrations/telephony/telephony.module';
+import { TwilioTelephony } from '../integrations/telephony/twilio.telephony';
 import { SimulatedTelephony } from '../integrations/telephony/simulated.telephony';
 import { BrowserTelephony } from '../integrations/telephony/browser.telephony';
 import { ElevenLabsTelephony } from '../integrations/elevenlabs/elevenlabs.telephony';
@@ -67,6 +68,7 @@ export class CallsService implements TelephonySink, OnModuleInit {
     private readonly simulated: SimulatedTelephony,
     private readonly browser: BrowserTelephony,
     private readonly elevenlabs: ElevenLabsTelephony,
+    private readonly twilioDriver: TwilioTelephony,
     private readonly tenants: TenantContext,
     @Inject(TELEPHONY_PROVIDER) private readonly telephony: TelephonyProvider,
     @Inject(ENV) private readonly env: ApiEnv,
@@ -79,6 +81,7 @@ export class CallsService implements TelephonySink, OnModuleInit {
     this.simulated.attachSink(this);
     this.browser.attachSink(this);
     this.elevenlabs.attachSink(this);
+    this.twilioDriver.attachSink(this);
     // The ElevenLabs driver needs to call back into this service, but this
     // service already depends on it — hand the reference over here rather than
     // creating a constructor cycle.
@@ -416,10 +419,26 @@ export class CallsService implements TelephonySink, OnModuleInit {
     });
     if (!fromNumber) throw new BadRequestException('This centre has no number to call from');
 
+    /*
+     * Where the agent's half of the call goes.
+     *
+     * Only the carrier bridge needs this — a driver that carries its own media
+     * ignores it — but it is resolved here rather than in the driver, because a
+     * driver is transport and must not reach the database. `phoneE164` is null
+     * for an agent who works in the browser, which the driver turns into a
+     * refusal naming the fix rather than dialling the customer with nobody on
+     * the line.
+     */
+    const agent = await this.prisma.user.findUnique({
+      where: { id: params.agentUserId },
+      select: { phoneE164: true },
+    });
+
     const startedAt = new Date();
     const handle = await this.telephony.dial({
       fromNumber: fromNumber.e164,
       toNumber: contact.phoneE164,
+      ...(agent?.phoneE164 ? { agentNumber: agent.phoneE164 } : {}),
     });
 
     const conversation = await this.prisma.conversation.create({

@@ -7,6 +7,8 @@ import {
 import { ENV } from '../../config/config.module';
 import { SimulatedTelephony } from './simulated.telephony';
 import { BrowserTelephony } from './browser.telephony';
+import { TwilioTelephony } from './twilio.telephony';
+import { TwilioController } from './twilio.controller';
 import { ElevenLabsTelephony } from '../elevenlabs/elevenlabs.telephony';
 
 export const TELEPHONY_PROVIDER = Symbol('TELEPHONY_PROVIDER');
@@ -54,9 +56,11 @@ export class LiveKitTelephony implements TelephonyProvider {
 
 @Global()
 @Module({
+  controllers: [TwilioController],
   providers: [
     SimulatedTelephony,
     BrowserTelephony,
+    TwilioTelephony,
     LiveKitTelephony,
     {
       provide: TELEPHONY_PROVIDER,
@@ -64,6 +68,7 @@ export class LiveKitTelephony implements TelephonyProvider {
         env: ApiEnv,
         simulated: SimulatedTelephony,
         browser: BrowserTelephony,
+        twilioDriver: TwilioTelephony,
         elevenlabs: ElevenLabsTelephony,
         livekit: LiveKitTelephony,
       ): TelephonyProvider => {
@@ -75,6 +80,12 @@ export class LiveKitTelephony implements TelephonyProvider {
                 `custom-LLM bridge at ${env.PUBLIC_BASE_URL ?? '<PUBLIC_BASE_URL unset>'})`,
             );
             return elevenlabs;
+          case 'twilio':
+            log.log(
+              `telephony: twilio (real PSTN; a manual call rings the agent's handset first and ` +
+                `bridges the customer, with TwiML at ${env.PUBLIC_BASE_URL ?? '<PUBLIC_BASE_URL unset>'})`,
+            );
+            return twilioDriver;
           case 'browser':
             log.log('telephony: browser (real mic/speaker via Web Speech + WebRTC)');
             return browser;
@@ -89,13 +100,20 @@ export class LiveKitTelephony implements TelephonyProvider {
             return simulated;
         }
       },
-      inject: [ENV, SimulatedTelephony, BrowserTelephony, ElevenLabsTelephony, LiveKitTelephony],
+      inject: [
+        ENV,
+        SimulatedTelephony,
+        BrowserTelephony,
+        TwilioTelephony,
+        ElevenLabsTelephony,
+        LiveKitTelephony,
+      ],
     },
   ],
   // Both concrete mock drivers are exported so the simulator and browser-call
   // controllers can reach their driver-specific entrypoints regardless of which
   // one is currently the active TELEPHONY_PROVIDER. That means a demo can drive
   // scripted traffic while a live browser call is in progress.
-  exports: [TELEPHONY_PROVIDER, SimulatedTelephony, BrowserTelephony],
+  exports: [TELEPHONY_PROVIDER, SimulatedTelephony, BrowserTelephony, TwilioTelephony],
 })
 export class TelephonyModule {}
