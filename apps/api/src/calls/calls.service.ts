@@ -1118,7 +1118,29 @@ export class CallsService implements TelephonySink, OnModuleInit {
 
     await this.telephony.hangup(call.providerCallId, 'agent hangup');
     this.simulated.cancel(call.providerCallId);
-    await this.startWrapup(callId, agentId, 'AGENT_HANGUP');
+
+    /*
+     * Wrap-up only if there was a conversation to wrap up.
+     *
+     * This used to go straight to startWrapup, which is right for a call that
+     * was being talked on and wrong for every other state — and WRAPUP is not a
+     * legal successor to RINGING, so a telecaller cancelling a call the
+     * customer had not yet answered got "Illegal call transition RINGING →
+     * WRAPUP" and, worse, a Hang up button that could not hang up. The call sat
+     * ringing in their UI with no way out.
+     *
+     * The distinction is whether a disposition is owed. Nobody spoke on a call
+     * that never connected, so there is nothing to categorise and asking for a
+     * reason would be asking about a conversation that did not happen.
+     * `onCallerHangup` below already branches this way; this is the same rule
+     * applied to the agent's side.
+     */
+    if (call.state === 'AGENT_TALKING') {
+      await this.startWrapup(callId, agentId, 'AGENT_HANGUP');
+      return;
+    }
+
+    await this.complete(callId, 'AGENT_HANGUP');
   }
 
   /** Transfer a live call to another queue, re-running the offer loop. */
