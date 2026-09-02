@@ -434,6 +434,22 @@ export class CallsService implements TelephonySink, OnModuleInit {
       select: { phoneE164: true },
     });
 
+    /*
+     * The agent cannot be bridged to themselves.
+     *
+     * Tempting as a smoke test — ring my phone, then have it call my phone —
+     * but the second leg lands on a line that is already engaged, so it fails
+     * as a busy signal and reads like a broken integration rather than the
+     * arithmetic it is. Refused with the reason, because the person doing it is
+     * testing and deserves to be told why it cannot work.
+     */
+    if (agent?.phoneE164 && agent.phoneE164 === contact.phoneE164) {
+      throw new BadRequestException(
+        'That is your own number. The bridge rings you first and then dials the customer, so ' +
+          'calling yourself would find the line engaged — use a second phone as the destination.',
+      );
+    }
+
     const startedAt = new Date();
     const handle = await this.telephony.dial({
       fromNumber: fromNumber.e164,

@@ -4,6 +4,7 @@ import { NestFactory } from '@nestjs/core';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { parseApiEnv } from '@superdemo/contracts';
+import { DriverErrorFilter } from './shared/driver-error.filter';
 import { AppModule } from './app.module';
 
 async function bootstrap(): Promise<void> {
@@ -44,6 +45,8 @@ async function bootstrap(): Promise<void> {
     // silently downloads as "download.csv".
     exposedHeaders: ['content-disposition'],
   });
+
+  app.useGlobalFilters(new DriverErrorFilter());
 
   app.useGlobalPipes(
     new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: false }),

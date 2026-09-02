@@ -95,6 +95,26 @@ export class TwilioTelephony implements TelephonyProvider {
     agentNumber?: string;
   }): Promise<TelephonyCallHandle> {
     const agentNumber = params.agentNumber ?? this.env.TWILIO_AGENT_FALLBACK_NUMBER;
+
+    /*
+     * Checked here, not only in the service, because the agent number is not
+     * fully known until this line.
+     *
+     * The service compares the telecaller's own phoneE164 against the
+     * destination, which misses the case where the number came from
+     * TWILIO_AGENT_FALLBACK_NUMBER instead — and that is exactly the
+     * single-handset demo setup where somebody is most likely to dial their own
+     * phone. Twilio bills the attempt either way, so the refusal belongs where
+     * the answer is certain.
+     */
+    if (agentNumber === params.toNumber) {
+      throw new NotImplementedByDriverError(
+        'twilio',
+        `dial() bridging ${agentNumber} to itself — the agent is rung first and then the ` +
+          'customer, so this would find the line engaged. Use a different destination',
+      );
+    }
+
     if (!agentNumber) {
       // Refused rather than defaulted. The alternative — dialling the customer
       // with no agent leg — is the failure mode described in the class comment.
