@@ -1,4 +1,4 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, Logger } from '@nestjs/common';
 import twilio, { type Twilio, twiml as TwiML } from 'twilio';
 import {
   NotImplementedByDriverError,
@@ -108,10 +108,18 @@ export class TwilioTelephony implements TelephonyProvider {
      * the answer is certain.
      */
     if (agentNumber === params.toNumber) {
-      throw new NotImplementedByDriverError(
-        'twilio',
-        `dial() bridging ${agentNumber} to itself — the agent is rung first and then the ` +
-          'customer, so this would find the line engaged. Use a different destination',
+      /*
+       * A bad request, not an unimplemented capability.
+       *
+       * NotImplementedByDriverError renders as "Driver twilio does not
+       * implement dial()… see NOT-IMPLEMENTED.md", which tells a telecaller who
+       * mistyped a number that the product is missing a feature and sends them
+       * to a document about carrier licensing. Nothing is missing. They dialled
+       * themselves, and the fix is to type a different number.
+       */
+      throw new BadRequestException(
+        'That is the number this call would ring you on. You would be bridged to yourself and ' +
+          'find the line engaged — dial a different number.',
       );
     }
 
