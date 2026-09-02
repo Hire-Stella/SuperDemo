@@ -1,5 +1,5 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import twilio, { type Twilio } from 'twilio';
+import twilio, { type Twilio, twiml as TwiML } from 'twilio';
 import {
   NotImplementedByDriverError,
   type ApiEnv,
@@ -125,29 +125,67 @@ export class TwilioTelephony implements TelephonyProvider {
       );
     }
 
+    const from = this.env.TWILIO_NUMBER ?? params.fromNumber;
+
     /*
-     * `from` is our Twilio DID for both legs.
+     * The bridge TwiML is sent inline rather than fetched from us.
      *
-     * On the agent leg it is what their handset displays, so an agent learns to
-     * recognise the centre's own number rather than an unknown one. On the
-     * customer leg it is set again in the TwiML `callerId`, because Twilio will
-     * not present a number the account does not own — and presenting the
-     * agent's personal mobile to a customer would be worse than useless.
+     * It is a static instruction — dial this one number — so serving it over
+     * the public internet was pointless indirection, and it made a working
+     * phone call depend on our API being publicly reachable at the exact
+     * moment the agent picked up. In development behind a tunnel that is a real
+     * failure mode: the agent answers, the fetch fails, Twilio hangs up, and the
+     * customer is never dialled. Measured, and billed for.
+     *
+     * `callerId` is our DID again rather than the agent's handset: Twilio
+     * refuses a number the account does not own, and presenting an agent's
+     * personal mobile to a customer would be worse than useless.
      */
+    const bridge = new TwiML.VoiceResponse();
+    const dial = bridge.dial({
+      callerId: from,
+      // The customer's phone rings for this long. Shorter than the agent leg,
+      // because the agent is already committed and listening to it.
+      timeout: 25,
+      ...(this.env.PUBLIC_BASE_URL
+        ? { action: this.publicUrl('bridge-result'), method: 'POST' as const }
+        : {}),
+    });
+    dial.number(params.toNumber);
+
+    /*
+     * Status callbacks stay optional, and are attached only when we have a
+     * public address to receive them at.
+     *
+     * Losing them costs the outcome — whether the customer picked up — which
+     * downgrades reporting. It does not stop the call connecting, and a driver
+     * that refused to place calls because it could not be told about them
+     * afterwards would have the priorities backwards.
+     */
+    const callbacks = this.env.PUBLIC_BASE_URL
+      ? {
+          statusCallback: this.publicUrl('status'),
+          statusCallbackMethod: 'POST' as const,
+          statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
+        }
+      : {};
+
     const call = await this.twilio.calls.create({
       to: agentNumber,
-      from: this.env.TWILIO_NUMBER ?? params.fromNumber,
-      url: `${this.publicUrl('bridge')}?to=${encodeURIComponent(params.toNumber)}`,
-      method: 'POST',
-      statusCallback: this.publicUrl('status'),
-      statusCallbackMethod: 'POST',
-      // 'answered' is what tells us a human is on the line; the rest let a
-      // failed attempt close the call row instead of leaving it ringing.
-      statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
+      from,
+      twiml: bridge.toString(),
+      ...callbacks,
       // Long enough for a handset in a pocket, short enough that a dead number
       // does not hold a telecaller up.
       timeout: 30,
     });
+
+    if (!this.env.PUBLIC_BASE_URL) {
+      this.log.warn(
+        'PUBLIC_BASE_URL is unset: the call will connect, but Twilio cannot report how it ended, ' +
+          'so the outcome will not reach the inbox',
+      );
+    }
 
     this.log.log(`dial ${call.sid}: agent ${agentNumber} -> customer ${params.toNumber}`);
     return { providerCallId: call.sid, mediaSessionId: null };

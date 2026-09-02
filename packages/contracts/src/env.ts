@@ -198,16 +198,15 @@ export const ApiEnv = z
           });
         }
       }
-      if (!env.PUBLIC_BASE_URL) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['PUBLIC_BASE_URL'],
-          message:
-            'PUBLIC_BASE_URL is required when TELEPHONY_DRIVER=twilio — Twilio fetches the TwiML ' +
-            'that bridges the two legs and posts call status back, and localhost is not reachable ' +
-            'from their side. Use a tunnel in development.',
-        });
-      }
+      /*
+       * PUBLIC_BASE_URL is deliberately NOT required here.
+       *
+       * The bridge TwiML is sent inline, so a call connects without Twilio
+       * being able to reach us at all. What a public address buys is the status
+       * callbacks — whether the customer actually answered — which is reporting
+       * rather than function. Making it mandatory would have blocked real calls
+       * on a laptop for the sake of a field in the inbox.
+       */
     }
     if (env.STORAGE_DRIVER === 'r2' && !env.R2_BUCKET) {
       ctx.addIssue({
