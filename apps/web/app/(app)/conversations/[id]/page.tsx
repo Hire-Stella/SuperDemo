@@ -226,10 +226,27 @@ export default function ConversationDetailPage({
           {!c.recording && c.channel === 'VOICE' && (
             <Card title="Recording">
               <p className="p-4 text-sm text-muted-foreground">
-                No audio for this call. It was handled by the{' '}
-                <strong>{c.call?.driver ?? 'simulated'}</strong> driver, which has no media path —
-                the transcript below is complete. Calls placed through the browser or ElevenLabs do
-                capture audio.
+                {/*
+                 * Say what happened to THIS call, not what other drivers would
+                 * have done with it. Which driver carried a call is our
+                 * business, and an operator cannot choose one — the previous
+                 * wording named the driver and then recommended two others,
+                 * which reads as the product apologising for itself.
+                 *
+                 * The carrier case also has to be separated out. A bridged call
+                 * is two people talking over the phone network with nothing of
+                 * ours in the audio path, so there is no recording AND no
+                 * transcript. Saying "the transcript below is complete" about
+                 * an empty list was a claim that the silence was the whole
+                 * conversation.
+                 */}
+                {c.call?.driver === 'twilio'
+                  ? 'Connected over the phone network. The audio went directly between the two ' +
+                    'parties, so there is no recording and nothing was transcribed.'
+                  : c.messages.length > 0
+                    ? 'No audio was captured for this call. The transcript below is the full ' +
+                      'conversation.'
+                    : 'No audio was captured for this call, and nothing was transcribed.'}
               </p>
             </Card>
           )}
