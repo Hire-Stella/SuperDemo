@@ -299,6 +299,13 @@ model SiteLead {
   @@index([orgId, createdAt])
 }
 
+enum EvalReviewer {
+  /// Scored by a model against the transcript, unattended.
+  AUTO
+  /// A person listened and scored it. Overrides an AUTO score on the same call.
+  HUMAN
+}
+
 /* ========================= people & presence ============================= */
 
 model User {
@@ -344,6 +351,7 @@ model User {
   @@unique([orgId, extension])
   @@index([role, isActive])
   @@index([orgId, role, isActive])
+  callEvals CallEval[]
 }
 
 model RefreshToken {
@@ -465,6 +473,7 @@ model Conversation {
   @@index([queueId, startedAt(sort: Desc)])
   @@index([orgId, startedAt(sort: Desc)])
   @@index([orgId, status, channel])
+  callEval  CallEval?
 }
 
 model Call {
@@ -591,6 +600,47 @@ model TranscriptSegment {
   call Call @relation(fields: [callId], references: [id], onDelete: Cascade)
 
   @@index([callId, startMs])
+}
+
+/// How good the assistant's handling of one call was.
+///
+/// Separate from AiSession rather than more columns on it, because a score is
+/// a judgement ABOUT a session made later and possibly more than once — an
+/// automatic pass on every call, then a human overriding a few. Folding it in
+/// would mean a session row that changes meaning depending on who last touched
+/// it, and no way to say "the model scored this 82 and a supervisor disagreed".
+model CallEval {
+  id             String @id @default(cuid())
+  orgId          String @default("")
+  conversationId String @unique
+
+  /// 0-100. Derived from the four dimensions, stored rather than computed so a
+  /// change to the weighting does not silently rewrite history.
+  score Int
+
+  /// Was what it said actually right?
+  accuracy Int
+  /// Did it stay inside what it is allowed to say — no invented prices, no
+  /// promises the centre has not made? The dimension this product exists for.
+  policy Int
+  /// Did it hand over at the right moment: not clinging to a call it could not
+  /// finish, not escalating one it could have.
+  escalation Int
+  /// Did it sound like this centre.
+  tone Int
+
+  /// One sentence a supervisor can read. Not a transcript summary — a verdict.
+  note       String?
+  reviewer   EvalReviewer @default(AUTO)
+  reviewedById String?
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  reviewedBy   User?        @relation(fields: [reviewedById], references: [id])
+
+  @@index([orgId, createdAt(sort: Desc)])
+  @@index([orgId, score])
 }
 
 model AiSession {

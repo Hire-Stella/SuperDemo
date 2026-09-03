@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type {
+  EvalSummary,
   ActiveCallRow,
   AgentScorecard,
   AnalyticsOverview,
@@ -10,7 +11,7 @@ import type {
   LiveOpsSnapshot,
   Location,
 } from '@superdemo/contracts';
-import { LIVE_CALL_STATES } from '@superdemo/contracts';
+import { EVAL_DIMENSIONS, LIVE_CALL_STATES, evalBand } from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { OutboxService } from '../outbox/outbox.service';
 import { ENV } from '../config/config.module';
@@ -417,6 +418,109 @@ export class AnalyticsService {
   }
 
   /* ============================= scorecards ============================== */
+
+  /**
+   * How well the assistant is doing, and what it is costing.
+   *
+   * Deliberately reports `unscored` alongside `scored`. An average over the
+   * calls that happen to have been evaluated is a number that flatters itself —
+   * it silently excludes anything the scorer skipped — and a supervisor reading
+   * 91% needs to know whether that is 91% of everything or of a third of it.
+   */
+  async evals(query: AnalyticsRangeQuery): Promise<EvalSummary> {
+    const from = new Date(query.from);
+    from.setUTCHours(0, 0, 0, 0);
+    const to = new Date(query.to);
+    to.setUTCHours(23, 59, 59, 999);
+
+    const inRange = { conversation: { startedAt: { gte: from, lte: to } } };
+
+    const [rows, unscored, agg, costAgg] = await Promise.all([
+      this.prisma.callEval.findMany({
+        where: inRange,
+        select: {
+          score: true,
+          accuracy: true,
+          policy: true,
+          escalation: true,
+          tone: true,
+          note: true,
+          reviewer: true,
+          conversationId: true,
+          conversation: {
+            select: { startedAt: true, contact: { select: { name: true } } },
+          },
+        },
+        orderBy: { conversation: { startedAt: 'asc' } },
+      }),
+      // AI-handled calls in range with no eval attached. The denominator.
+      this.prisma.aiSession.count({
+        where: { conversation: { startedAt: { gte: from, lte: to }, callEval: null } },
+      }),
+      this.prisma.callEval.aggregate({
+        where: inRange,
+        _avg: { score: true, accuracy: true, policy: true, escalation: true, tone: true },
+      }),
+      this.prisma.aiSession.aggregate({
+        where: { conversation: { startedAt: { gte: from, lte: to } } },
+        _sum: { costUsd: true, inputTokens: true, outputTokens: true },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const avg = (v: number | null) => Math.round((v ?? 0) * 10) / 10;
+
+    const bands = { good: 0, watch: 0, poor: 0 };
+    for (const r of rows) bands[evalBand(r.score)] += 1;
+
+    // Averaged per day rather than per call, so one busy afternoon does not
+    // drown a week of quieter days in the trend line.
+    const byDay = new Map<string, { total: number; calls: number }>();
+    for (const r of rows) {
+      const day = r.conversation.startedAt.toISOString().slice(0, 10);
+      const cur = byDay.get(day) ?? { total: 0, calls: 0 };
+      cur.total += r.score;
+      cur.calls += 1;
+      byDay.set(day, cur);
+    }
+
+    const totalUsd = Number(costAgg._sum.costUsd ?? 0);
+    const calls = costAgg._count._all;
+
+    return {
+      scored: rows.length,
+      unscored,
+      humanReviewed: rows.filter((r) => r.reviewer === 'HUMAN').length,
+      avgScore: avg(agg._avg.score),
+      dimensions: EVAL_DIMENSIONS.map((d) => ({
+        key: d.key,
+        label: d.label,
+        avg: avg(agg._avg[d.key]),
+      })),
+      bands,
+      trend: [...byDay.entries()].map(([day, v]) => ({
+        day,
+        avg: Math.round((v.total / v.calls) * 10) / 10,
+        calls: v.calls,
+      })),
+      worst: [...rows]
+        .sort((a, b) => a.score - b.score)
+        .slice(0, 8)
+        .map((r) => ({
+          conversationId: r.conversationId,
+          contactName: r.conversation.contact?.name ?? null,
+          score: r.score,
+          note: r.note,
+          startedAt: r.conversation.startedAt,
+        })),
+      cost: {
+        totalUsd: Math.round(totalUsd * 10000) / 10000,
+        perCallUsd: calls > 0 ? Math.round((totalUsd / calls) * 100000) / 100000 : 0,
+        inputTokens: costAgg._sum.inputTokens ?? 0,
+        outputTokens: costAgg._sum.outputTokens ?? 0,
+      },
+    };
+  }
 
   async agentScorecards(query: AnalyticsRangeQuery): Promise<AgentScorecard[]> {
     const from = new Date(query.from);

@@ -6,6 +6,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownLeft, ArrowUpRight, CheckCircle2, Download, Inbox, MessageCircle, Phone, Search, Sparkles } from 'lucide-react';
 import {
   dispositionLabel,
+  evalBand,
   type Channel,
   type ConversationListItem,
 } from '@superdemo/contracts';
@@ -229,6 +230,24 @@ export default function ConversationsPage() {
                       {c.escalationReason && (
                         <span className="text-[11px] text-muted-foreground">
                           {ESCALATION_LABEL[c.escalationReason]}
+                        </span>
+                      )}
+                      {/*
+                       * Only shown when it is worth acting on. A green 94 on
+                       * every row is decoration that trains people to stop
+                       * reading the column; a 61 is the reason to open the call.
+                       */}
+                      {c.evalScore !== null && evalBand(c.evalScore) !== 'good' && (
+                        <span title="Assistant quality score">
+                          <Badge
+                            className={
+                              evalBand(c.evalScore) === 'poor'
+                                ? 'bg-destructive/10 text-destructive'
+                                : 'bg-amber-500/10 text-amber-600'
+                            }
+                          >
+                            {c.evalScore}
+                          </Badge>
                         </span>
                       )}
                     </div>

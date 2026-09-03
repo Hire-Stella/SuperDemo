@@ -166,6 +166,30 @@ export const Disposition = z.enum([
 ]);
 export type Disposition = z.infer<typeof Disposition>;
 
+export const EvalReviewer = z.enum(['AUTO', 'HUMAN']);
+export type EvalReviewer = z.infer<typeof EvalReviewer>;
+
+/** The four things a call is scored on. Order is the order they are shown in. */
+export const EVAL_DIMENSIONS = [
+  { key: 'accuracy', label: 'Accuracy', hint: 'Was what it said correct' },
+  { key: 'policy', label: 'Policy', hint: 'Stayed inside what it may say' },
+  { key: 'escalation', label: 'Escalation', hint: 'Handed over at the right moment' },
+  { key: 'tone', label: 'Tone', hint: 'Sounded like this centre' },
+] as const;
+export type EvalDimension = (typeof EVAL_DIMENSIONS)[number]['key'];
+
+/**
+ * Bands, so a number becomes a judgement.
+ *
+ * 85 is the pass mark and 70 the floor: below that a supervisor should be
+ * listening to the call, not reading a score.
+ */
+export function evalBand(score: number): 'good' | 'watch' | 'poor' {
+  if (score >= 85) return 'good';
+  if (score >= 70) return 'watch';
+  return 'poor';
+}
+
 export const RoutingStrategy = z.enum(['LONGEST_IDLE', 'ROUND_ROBIN', 'SKILL_WEIGHTED']);
 export type RoutingStrategy = z.infer<typeof RoutingStrategy>;
 

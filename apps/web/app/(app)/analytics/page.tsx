@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   Bar,
@@ -15,8 +16,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { BarChart3, Download, PiggyBank } from 'lucide-react';
-import { dispositionLabel, type AnalyticsOverview } from '@superdemo/contracts';
+import { BarChart3, Download, PiggyBank, ShieldCheck } from 'lucide-react';
+import {
+  dispositionLabel,
+  evalBand,
+  type AnalyticsOverview,
+  type EvalSummary,
+} from '@superdemo/contracts';
 import { api, qs } from '@/lib/api';
 import { useUser } from '@/components/providers';
 import { dateRange, ESCALATION_LABEL, money, pct, seconds } from '@/lib/format';
@@ -49,6 +55,11 @@ export default function AnalyticsPage() {
   const user = useUser();
   const [days, setDays] = useState('30');
   const range = dateRange(Number(days));
+
+  const evals = useQuery({
+    queryKey: ['analytics-evals', days],
+    queryFn: () => api.get<EvalSummary>(`/analytics/evals${qs(range)}`),
+  });
 
   const query = useQuery({
     queryKey: ['analytics', days],
@@ -313,9 +324,155 @@ export default function AnalyticsPage() {
         </div>
       </Card>
 
+      {/* ── assistant quality ─────────────────────────────────────────────── */}
+      {evals.data && evals.data.scored > 0 && (
+        <Card
+          className="mt-4"
+          title={
+            <span className="inline-flex items-center gap-2">
+              <ShieldCheck className="size-4" aria-hidden /> Assistant quality
+            </span>
+          }
+          subtitle={
+            /*
+             * The denominator is part of the headline, not a footnote.
+             *
+             * An average over only the calls that happen to have been scored
+             * flatters itself, and a supervisor reading 92 needs to know
+             * whether that is 92 across everything or across a third of it.
+             */
+            `${evals.data.scored} of ${evals.data.scored + evals.data.unscored} AI-handled calls scored` +
+            (evals.data.humanReviewed > 0
+              ? ` · ${evals.data.humanReviewed} reviewed by a person`
+              : '')
+          }
+        >
+          <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,20rem)_1fr]">
+            <div className="space-y-4">
+              <div className="flex items-baseline gap-3">
+                <span className="text-4xl font-semibold tnum">{evals.data.avgScore}</span>
+                <span className="text-sm text-muted-foreground">average score</span>
+              </div>
+
+              {/* Bands as one bar: the shape says more than three numbers. */}
+              <div>
+                <div className="flex h-2.5 overflow-hidden rounded-full bg-muted">
+                  {(
+                    [
+                      ['good', evals.data.bands.good, 'var(--chart-3)'],
+                      ['watch', evals.data.bands.watch, 'var(--chart-4)'],
+                      ['poor', evals.data.bands.poor, 'var(--destructive)'],
+                    ] as const
+                  ).map(([k, n, colour]) => (
+                    <div
+                      key={k}
+                      style={{ width: `${(n / Math.max(1, evals.data!.scored)) * 100}%`, background: colour }}
+                      title={`${n} ${k}`}
+                    />
+                  ))}
+                </div>
+                <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground">
+                  <span>{evals.data.bands.good} good (85+)</span>
+                  <span>{evals.data.bands.watch} watch</span>
+                  <span className={evals.data.bands.poor > 0 ? 'font-medium text-destructive' : ''}>
+                    {evals.data.bands.poor} poor (&lt;70)
+                  </span>
+                </div>
+              </div>
+
+              {/* Per dimension, weakest first — that is the one worth fixing. */}
+              <ul className="space-y-2 border-t border-border pt-3">
+                {[...evals.data.dimensions]
+                  .sort((a, b) => a.avg - b.avg)
+                  .map((dim) => (
+                    <li key={dim.key} className="flex items-center gap-3">
+                      <span className="w-20 shrink-0 text-xs text-muted-foreground">{dim.label}</span>
+                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${dim.avg}%`,
+                            background: dim.avg >= 85 ? 'var(--chart-3)' : 'var(--chart-4)',
+                          }}
+                        />
+                      </div>
+                      <span className="tnum w-9 text-right text-xs">{dim.avg}</span>
+                    </li>
+                  ))}
+              </ul>
+
+              <div className="grid grid-cols-2 gap-3 border-t border-border pt-3 text-xs">
+                <div>
+                  <p className="text-muted-foreground">AI spend</p>
+                  <p className="tnum mt-0.5 text-base font-medium">
+                    ${evals.data.cost.totalUsd.toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Per call</p>
+                  <p className="tnum mt-0.5 text-base font-medium">
+                    ${evals.data.cost.perCallUsd.toFixed(4)}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="h-44">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={evals.data.trend}>
+                    <CartesianGrid stroke={C.grid} strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: C.muted }} tickLine={false} />
+                    {/* Anchored at 50, not 0: the interesting range is the top
+                        half, and a 0-100 axis flattens every movement in it. */}
+                    <YAxis domain={[50, 100]} tick={{ fontSize: 11, fill: C.muted }} width={28} tickLine={false} />
+                    <Tooltip
+                      contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.grid}` }}
+                      formatter={(v: number) => [v, 'avg score']}
+                    />
+                    <Line type="monotone" dataKey="avg" stroke={C.ai} strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+
+              <div>
+                <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                  Worth listening to
+                </p>
+                <ul className="divide-y divide-border rounded-md border border-border">
+                  {evals.data.worst.slice(0, 5).map((w) => (
+                    <li key={w.conversationId}>
+                      <Link
+                        href={`/conversations/${w.conversationId}`}
+                        className="flex items-center gap-3 px-3 py-2 hover:bg-muted/50"
+                      >
+                        <Badge
+                          className={
+                            evalBand(w.score) === 'poor'
+                              ? 'bg-destructive/10 text-destructive'
+                              : 'bg-amber-500/10 text-amber-600'
+                          }
+                        >
+                          {w.score}
+                        </Badge>
+                        <span className="w-32 shrink-0 truncate text-xs">
+                          {w.contactName ?? 'Unknown'}
+                        </span>
+                        <span className="truncate text-[11px] text-muted-foreground">{w.note}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
         {/* per queue */}
-        <Card className="xl:col-span-2" title="By queue">
+  
+      <Card className="xl:col-span-2" title="By queue">
           <Table>
             <thead>
               <tr>

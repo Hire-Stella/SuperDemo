@@ -16,7 +16,13 @@ import {
   User,
   XCircle,
 } from 'lucide-react';
-import { DISPOSITION_LABELS, type ConversationDetail, type Disposition } from '@superdemo/contracts';
+import {
+  DISPOSITION_LABELS,
+  EVAL_DIMENSIONS,
+  evalBand,
+  type ConversationDetail,
+  type Disposition,
+} from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { useSession, useUser } from '@/components/providers';
 import {
@@ -402,6 +408,70 @@ export default function ConversationDetailPage({
           {c.aiSession && (
             <Card title="What the AI did" subtitle={`${c.aiSession.turns} turns`}>
               <dl className="space-y-2.5 p-4 text-sm">
+                {/*
+                 * The score sits above the summary on purpose. A supervisor
+                 * opening a call is asking "was this handled well?" before
+                 * "what was it about" — the summary answers the second.
+                 */}
+                {c.callEval && (
+                  <div className="rounded-md border border-border p-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-medium text-muted-foreground">
+                        Quality score
+                        {c.callEval.reviewer === 'HUMAN' && (
+                          <span className="ml-1.5 font-normal">· reviewed by a person</span>
+                        )}
+                      </span>
+                      <span
+                        className={cn(
+                          'tnum text-lg font-semibold',
+                          evalBand(c.callEval.score) === 'good'
+                            ? 'text-emerald-600'
+                            : evalBand(c.callEval.score) === 'watch'
+                              ? 'text-amber-600'
+                              : 'text-destructive',
+                        )}
+                      >
+                        {c.callEval.score}
+                      </span>
+                    </div>
+
+                    <ul className="mt-2 space-y-1">
+                      {EVAL_DIMENSIONS.map((dim) => {
+                        const v = c.callEval![dim.key];
+                        return (
+                          <li key={dim.key} className="flex items-center gap-2" title={dim.hint}>
+                            <span className="w-16 shrink-0 text-[11px] text-muted-foreground">
+                              {dim.label}
+                            </span>
+                            <div className="h-1 flex-1 overflow-hidden rounded-full bg-muted">
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${v}%`,
+                                  background:
+                                    v >= 85
+                                      ? 'var(--chart-3)'
+                                      : v >= 70
+                                        ? 'var(--chart-4)'
+                                        : 'var(--destructive)',
+                                }}
+                              />
+                            </div>
+                            <span className="tnum w-7 text-right text-[11px]">{v}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+
+                    {c.callEval.note && (
+                      <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+                        {c.callEval.note}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {c.aiSession.summary && (
                   <div>
                     <dt className="text-xs font-medium text-muted-foreground">Summary</dt>

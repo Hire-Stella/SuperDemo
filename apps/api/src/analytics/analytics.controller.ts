@@ -4,6 +4,7 @@ import {
   type AgentScorecard,
   type AnalyticsOverview,
   AnalyticsRangeQuery,
+  type EvalSummary,
   type LiveOpsSnapshot,
 } from '@superdemo/contracts';
 import { AnalyticsService } from './analytics.service';
@@ -29,6 +30,13 @@ export class AnalyticsController {
   @Get('overview')
   overview(@ZodQuery(AnalyticsRangeQuery) query: AnalyticsRangeQuery): Promise<AnalyticsOverview> {
     return this.analytics.overview(query);
+  }
+
+  /** Assistant quality and what it cost. Supervisors and up. */
+  @Roles('ADMIN', 'SUPERVISOR')
+  @Get('evals')
+  evals(@ZodQuery(AnalyticsRangeQuery) query: AnalyticsRangeQuery): Promise<EvalSummary> {
+    return this.analytics.evals(query);
   }
 
   @Roles('ADMIN', 'SUPERVISOR')

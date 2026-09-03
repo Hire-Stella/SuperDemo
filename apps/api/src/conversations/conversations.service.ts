@@ -17,6 +17,7 @@ const listInclude = {
   queue: { select: { name: true } },
   handledBy: { select: { name: true } },
   aiSession: true,
+  callEval: true,
   call: { select: { state: true, recording: { select: { id: true } } } },
   messages: { orderBy: { createdAt: 'desc' as const }, take: 1 },
   _count: { select: { messages: true } },
@@ -87,6 +88,7 @@ export class ConversationsService {
         queue: { select: { name: true } },
         handledBy: { select: { name: true } },
         aiSession: { include: { aiAgent: { select: { name: true } } } },
+        callEval: true,
         call: {
           include: {
             recording: true,
@@ -194,6 +196,18 @@ export class ConversationsService {
             costUsd: conv.aiSession.costUsd ? Number(conv.aiSession.costUsd) : null,
           }
         : null,
+      callEval: conv.callEval
+        ? {
+            score: conv.callEval.score,
+            accuracy: conv.callEval.accuracy,
+            policy: conv.callEval.policy,
+            escalation: conv.callEval.escalation,
+            tone: conv.callEval.tone,
+            note: conv.callEval.note,
+            reviewer: conv.callEval.reviewer,
+            createdAt: conv.callEval.createdAt,
+          }
+        : null,
       notes: conv.notes,
       tags: conv.tags,
     };
@@ -249,6 +263,7 @@ export class ConversationsService {
       startedAt: c.startedAt,
       endedAt: c.endedAt,
       disposition: c.disposition,
+      evalScore: c.callEval?.score ?? null,
       contact: c.contact
         ? {
             id: c.contact.id,

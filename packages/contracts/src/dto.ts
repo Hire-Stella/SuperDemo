@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { ThemePreset, ThemeTokens } from './themes';
 import { isSafeLogoUrl } from './brand';
 import { SiteTemplate } from './sites';
-import { CrmDriver } from './enums';
+import { CrmDriver, EvalReviewer } from './enums';
 import { CampaignStatus, TargetStatus } from './enums';
 import {
   AgentStatus,
@@ -367,8 +367,22 @@ export const ConversationListItem = z.object({
   callState: CallState.nullable(),
   hasRecording: z.boolean(),
   crmSynced: z.boolean(),
+  /** Overall eval score, when the call has been scored. */
+  evalScore: z.number().int().nullable(),
 });
 export type ConversationListItem = z.infer<typeof ConversationListItem>;
+
+export const CallEvalDto = z.object({
+  score: z.number().int(),
+  accuracy: z.number().int(),
+  policy: z.number().int(),
+  escalation: z.number().int(),
+  tone: z.number().int(),
+  note: z.string().nullable(),
+  reviewer: EvalReviewer,
+  createdAt: z.coerce.date(),
+});
+export type CallEvalDto = z.infer<typeof CallEvalDto>;
 
 export const ConversationDetail = ConversationListItem.extend({
   call: CallDto.nullable(),
@@ -376,6 +390,8 @@ export const ConversationDetail = ConversationListItem.extend({
   recording: RecordingDto.nullable(),
   transcript: z.array(TranscriptSegmentDto),
   aiSession: AiSessionDto.nullable(),
+  /** Quality score for this call, when it has been evaluated. */
+  callEval: CallEvalDto.nullable(),
   notes: z.string().nullable(),
   tags: z.array(z.string()),
 });
@@ -803,6 +819,41 @@ export const AnalyticsOverview = z.object({
   topCourses: z.array(z.object({ course: z.string(), enquiries: z.number().int() })),
 });
 export type AnalyticsOverview = z.infer<typeof AnalyticsOverview>;
+
+
+/** The evals rollup on the analytics page. */
+export const EvalSummary = z.object({
+  scored: z.number().int(),
+  /** AI-handled calls with no eval yet — the honest denominator. */
+  unscored: z.number().int(),
+  humanReviewed: z.number().int(),
+  avgScore: z.number(),
+  dimensions: z.array(z.object({ key: z.string(), label: z.string(), avg: z.number() })),
+  bands: z.object({
+    good: z.number().int(),
+    watch: z.number().int(),
+    poor: z.number().int(),
+  }),
+  /** Daily average, oldest first, for the trend line. */
+  trend: z.array(z.object({ day: z.string(), avg: z.number(), calls: z.number().int() })),
+  /** Worst-scoring calls, for the "listen to these" list. */
+  worst: z.array(
+    z.object({
+      conversationId: Cuid,
+      contactName: z.string().nullable(),
+      score: z.number().int(),
+      note: z.string().nullable(),
+      startedAt: z.coerce.date(),
+    }),
+  ),
+  cost: z.object({
+    totalUsd: z.number(),
+    perCallUsd: z.number(),
+    inputTokens: z.number().int(),
+    outputTokens: z.number().int(),
+  }),
+});
+export type EvalSummary = z.infer<typeof EvalSummary>;
 
 export const AgentScorecard = z.object({
   userId: Cuid,
