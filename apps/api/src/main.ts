@@ -55,10 +55,19 @@ async function bootstrap(): Promise<void> {
   // Drain in-flight calls rather than dropping them on redeploy.
   app.enableShutdownHooks();
 
-  await app.listen(env.API_PORT);
+  /*
+   * PORT beats API_PORT.
+   *
+   * Managed hosts inject PORT and route to whatever the process binds; one that
+   * binds something else fails its health check and is restarted forever with
+   * nothing in the log explaining it. Read here rather than in the schema so
+   * the value the process actually used is the value it prints below.
+   */
+  const port = Number(process.env['PORT'] ?? env.API_PORT);
+  await app.listen(port);
 
   const log = new Logger('Bootstrap');
-  log.log(`API listening on http://localhost:${env.API_PORT}/api`);
+  log.log(`API listening on http://localhost:${port}/api`);
   log.log(
     `drivers → telephony=${env.TELEPHONY_DRIVER} messaging=${env.MESSAGING_DRIVER} ` +
       `llm=${env.LLM_DRIVER} crm=${env.CRM_DRIVER} storage=${env.STORAGE_DRIVER}`,

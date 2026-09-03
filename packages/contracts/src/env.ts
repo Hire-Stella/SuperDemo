@@ -31,6 +31,15 @@ const int = (fallback: number) =>
 export const ApiEnv = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
+    /**
+     * The port to listen on.
+     *
+     * Every managed host — Railway, Render, Fly, Heroku — injects PORT and
+     * routes to whatever the process binds. A service that ignores it binds
+     * something else, fails its health check, and gets restarted forever with
+     * nothing in the logs to say why. So PORT wins when it is set, and
+     * API_PORT stays for local development where 3001 is the habit.
+     */
     API_PORT: int(3001),
     WEB_ORIGIN: z.string().url().default('http://localhost:3000'),
 
