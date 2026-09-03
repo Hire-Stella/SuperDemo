@@ -85,14 +85,23 @@ The container listens on `PORT`, which every host injects. Health check:
 
 ## 4. The web app
 
+**Set Root Directory to `apps/web` first.** Vercel Dashboard → Project →
+Settings → Build & Deployment → Root Directory. Without it the deploy fails with
+*"No Next.js version detected"*: Vercel looks for `next` in the package.json of
+the root directory, and the repo root is a workspace root that has none.
+
+Leave "Include files outside the root directory" ON — the app imports
+`@superdemo/contracts` and `@superdemo/db`, which resolve to their `dist`, so
+those packages have to be present and built.
+
 ```bash
 vercel link          # from the repo root
 vercel --prod
 ```
 
-`vercel.json` already builds the workspace packages before the app; the root
-directory is the repo root, not `apps/web`, because the app imports
-`@superdemo/*` as source.
+`apps/web/vercel.json` builds both workspace packages before `next build`. That
+order is not optional: both resolve through `main` to `dist`, so a plain
+`next build` fails on modules that have not been emitted yet.
 
 Environment on Vercel:
 

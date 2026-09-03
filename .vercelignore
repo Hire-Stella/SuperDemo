@@ -1,0 +1,17 @@
+# The vendored Postgres cluster — including a live unix socket the uploader
+# cannot read, which fails the deploy outright rather than being skipped.
+.data
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+dist-worker
+.turbo
+**/.turbo
+parity/out
+test-results
+.screenshots
+apps/backend
+*.log
