@@ -31,7 +31,8 @@
     "clean": "rm -rf dist",
     "demo:seed": "dotenv -e ../../.env -- tsx prisma/demo-data.ts",
     "backfill:sites": "dotenv -e ../../.env -- tsx prisma/backfill-sites.ts",
-    "backfill:evals": "dotenv -e ../../.env -- tsx prisma/backfill-evals.ts"
+    "backfill:evals": "dotenv -e ../../.env -- tsx prisma/backfill-evals.ts",
+    "backfill:outcomes": "dotenv -e ../../.env -- tsx prisma/backfill-outcomes.ts"
   },
   "dependencies": {
     "@superdemo/contracts": "workspace:*",

@@ -16,7 +16,7 @@
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
 import argon2 from 'argon2';
-import { DEMO_PACKS, TAMIL_FIRST, TAMIL_LAST, type DemoPack } from '../src/data/demo-packs';
+import { DEMO_PACKS, type DemoPack } from '../src/data/demo-packs';
 import { chunk, embed, keywordsOf } from '../src/embedding';
 import { withOrg } from '../src/tenant';
 
@@ -117,8 +117,15 @@ async function main() {
   });
 
   /* --------------------------------- staff -------------------------------- */
-  const users = [];
+  /*
+   * Start from whoever already works here, then add only the pack staff who are
+   * missing. Reading the pack alone would ignore an established centre's real
+   * team, and every escalated call in a top-up run would be handed to the
+   * handful of people whose addresses happen to match the pack.
+   */
+  const users = await prisma.user.findMany();
   for (const s of pack.staff) {
+    if (users.some((u) => u.email === s.email)) continue;
     const existing = await rawPrisma.user.findUnique({ where: { email: s.email } });
     if (existing) {
       users.push(existing);
@@ -284,6 +291,11 @@ async function main() {
     dailyMetrics.set(key, row);
   };
 
+  const isJunk = (e: DemoPack['exchanges'][number]) =>
+    e.disposition === 'WRONG_NUMBER' || e.disposition === 'SPAM';
+  const junkExchanges = pack.exchanges.filter(isJunk);
+  const realExchanges = pack.exchanges.filter((e) => !isJunk(e));
+
   let voice = 0;
   let whatsapp = 0;
   let outbound = 0;
@@ -298,10 +310,12 @@ async function main() {
     dayStart.setUTCDate(dayStart.getUTCDate() - d);
     const weekday = dayStart.getUTCDay();
 
-    // A grocery is busiest at the weekend — the opposite of an office, and the
-    // shape of the traffic chart is the first thing anyone looks at.
+    // The weekly shape comes from the pack: a grocery is busiest at the weekend,
+    // an admissions office is nearly shut, and that shape is the first thing
+    // anyone reads off the traffic chart.
     const isWeekend = weekday === 5 || weekday === 6;
-    const full = isWeekend ? int(18, 30) : int(10, 22);
+    const [volFrom, volTo] = isWeekend ? pack.volume.weekend : pack.volume.weekday;
+    const full = int(volFrom, volTo);
 
     // Today is only partly over, so scale to the hours actually elapsed rather
     // than inventing calls from the future.
@@ -326,7 +340,7 @@ async function main() {
       const startedAt = new Date(dayStart);
       startedAt.setUTCHours(hourLocal - 4, int(0, 59), int(0, 59), 0);
 
-      const name = `${pick(TAMIL_FIRST)} ${pick(TAMIL_LAST)}`;
+      const name = `${pick(pack.callerNames.first)} ${pick(pack.callerNames.last)}`;
       const phone = `+9715${pick(['0', '2', '4', '5', '6'])}${int(1000000, 9999999)}`;
       const contact =
         (await prisma.contact.findFirst({ where: { phoneE164: phone } })) ??
@@ -354,7 +368,9 @@ async function main() {
             startedAt,
             endedAt: new Date(startedAt.getTime() + int(120, 1500) * 1000),
             aiContained: !escalated,
-            disposition: escalated ? 'CALLBACK_REQUESTED' : 'INFO_PROVIDED',
+            disposition: escalated
+              ? pick(['CALLBACK_REQUESTED', 'LEAD_QUALIFIED', 'EXISTING_STUDENT_SUPPORT'] as const)
+              : pick(['INFO_PROVIDED', 'INFO_PROVIDED', 'FEE_ENQUIRY'] as const),
           },
         });
         await prisma.message.createMany({
@@ -386,7 +402,13 @@ async function main() {
             startedAt,
             endedAt,
             aiContained: answered && !escalates,
-            disposition: answered ? (escalates ? 'CALLBACK_REQUESTED' : 'INFO_PROVIDED') : null,
+            disposition: answered
+              ? escalates
+                ? pick(['CALLBACK_REQUESTED', 'LEAD_QUALIFIED'] as const)
+                : // A dialled list goes stale: some of these numbers have moved
+                  // on to somebody else entirely.
+                  pick(['INFO_PROVIDED', 'INFO_PROVIDED', 'NOT_INTERESTED', 'WRONG_NUMBER'] as const)
+              : null,
             notes: `Campaign: ${campaign.name}`,
           },
         });
@@ -435,12 +457,23 @@ async function main() {
       }
 
       /* -------------------------------- voice ------------------------------ */
-      const exchange = pick(pack.exchanges);
+      /*
+       * Junk is drawn from its own pool at a fixed low rate rather than taken
+       * uniformly with everything else. A pack lists a handful of wrong numbers
+       * so the outcome filter has rows behind it, and picking uniformly would
+       * turn that handful into a tenth of the centre's traffic — which also
+       * flatters the containment rate, since a robocall is trivially contained.
+       */
+      const exchange = junkExchanges.length > 0 && chance(0.04)
+        ? pick(junkExchanges)
+        : pick(realExchanges);
       const queue = queueBySkill.get(exchange.skill) ?? generalQueue;
       const escalates = exchange.escalates;
       const abandons = escalates && chance(0.08);
-      const aiTurns = int(2, 5);
-      const aiTalkMs = aiTurns * int(8000, 15000);
+      // Junk gets one turn and a short call: nobody argues with a robocall.
+      const junk = exchange.disposition === 'WRONG_NUMBER' || exchange.disposition === 'SPAM';
+      const aiTurns = junk ? 1 : int(2, 5);
+      const aiTalkMs = junk ? int(8000, 20_000) : aiTurns * int(8000, 15000);
       const queueWaitMs = escalates ? int(2000, 48000) : 0;
       const agentTalkMs = escalates && !abandons ? int(70_000, 380_000) : 0;
       const wrapMs = escalates && !abandons ? int(8000, 40000) : 0;
@@ -511,8 +544,10 @@ async function main() {
           escalationReason: escalates
             ? ((exchange.reason ?? 'HUMAN_ONLY_INTENT') as Prisma.AiSessionCreateInput['escalationReason'])
             : null,
-          detectedIntent: exchange.skill.toLowerCase(),
-          courseOfInterest: contact.courseInterest,
+          detectedIntent: junk ? exchange.disposition.toLowerCase() : exchange.skill.toLowerCase(),
+          // A wrong number has no interest in anything, whatever the contact
+          // row remembers from an earlier call.
+          courseOfInterest: junk ? null : contact.courseInterest,
           sentiment: Number((rnd() * 1.4 - 0.4).toFixed(2)),
           summary: `${exchange.caller} — ${escalates ? 'passed to a colleague.' : 'answered by the assistant.'}`,
           avgLatencyMs: int(320, 850),
@@ -571,13 +606,48 @@ async function main() {
         talkMsTotal: BigInt(row.talkMs), handleMsTotal: BigInt(row.handleMs),
         queueWaitMsTotal: BigInt(row.queueWaitMs), wrapMsTotal: BigInt(row.wrapMs),
       },
-      update: {},
+      /*
+       * Add to the day rather than leave it alone. This script is additive, so
+       * a centre that already has history gets new calls on days that already
+       * have a rollup row — and a no-op update would keep the KPI tiles and the
+       * agents page reporting the old, smaller day. Matches what the live path
+       * in analytics.service does per call.
+       */
+      update: {
+        calls: { increment: row.calls },
+        aiContained: { increment: row.aiContained },
+        escalated: { increment: row.escalated },
+        abandoned: { increment: row.abandoned },
+        answeredWithinSla: { increment: row.answeredWithinSla },
+        answeredCount: { increment: row.answered },
+        talkMsTotal: { increment: BigInt(row.talkMs) },
+        handleMsTotal: { increment: BigInt(row.handleMs) },
+        queueWaitMsTotal: { increment: BigInt(row.queueWaitMs) },
+        wrapMsTotal: { increment: BigInt(row.wrapMs) },
+      },
     });
   }
 
   /* --------------------------- shift history ------------------------------ */
-  // Without this the agents page shows people with no occupancy at all.
+  /*
+   * Without this the agents page shows people with no occupancy at all. Written
+   * once per agent, though: occupancy and adherence are sums over this
+   * append-only log, so a second run would have everyone logged in twice and
+   * show occupancy over 100%.
+   */
+  const shiftFrom = new Date();
+  shiftFrom.setUTCDate(shiftFrom.getUTCDate() - 8);
+  const alreadyOnShift = new Set(
+    (
+      await prisma.agentStateEvent.findMany({
+        where: { at: { gte: shiftFrom } },
+        select: { userId: true },
+        distinct: ['userId'],
+      })
+    ).map((e) => e.userId),
+  );
   for (const a of agents) {
+    if (alreadyOnShift.has(a.id)) continue;
     for (let d = 7; d >= 1; d--) {
       const login = new Date();
       login.setUTCDate(login.getUTCDate() - d);

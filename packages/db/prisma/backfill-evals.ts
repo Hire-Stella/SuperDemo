@@ -84,8 +84,26 @@ async function main() {
 
     /* ── 2. dispositions ───────────────────────────────────────────────── */
 
+    /*
+     * Only calls that actually happened. A conversation left without an outcome
+     * is not always an oversight: the seeders leave the outbound calls nobody
+     * picked up, and the ones abandoned in the queue, deliberately blank —
+     * there is no outcome to record, and those rows are what the agents page's
+     * "missing disposition" column and the inbox's "no outcome recorded" filter
+     * are for. Filling them in erased both signals.
+     */
     const undisposed = await prisma.conversation.findMany({
-      where: { orgId: org.id, disposition: null, status: 'CLOSED' },
+      where: {
+        orgId: org.id,
+        disposition: null,
+        status: 'CLOSED',
+        NOT: {
+          OR: [
+            { call: { is: { aiAnsweredAt: null, agentAnsweredAt: null } } },
+            { call: { is: { hangupCause: 'ABANDONED_IN_QUEUE' } } },
+          ],
+        },
+      },
       select: {
         id: true,
         aiSession: { select: { detectedIntent: true, escalated: true, courseOfInterest: true } },
@@ -180,7 +198,7 @@ async function main() {
        * the system working; running to the turn limit is the opposite.
        */
       const escalation = s.escalated
-        ? s.escalationReason === 'CUSTOMER_REQUESTED'
+        ? s.escalationReason === 'CALLER_REQUESTED'
           ? clamp(Math.round(90 + r * 10), 72, 100)
           : s.escalationReason === 'MAX_TURNS'
             ? clamp(Math.round(38 + r * 20), 20, 62)

@@ -50,6 +50,46 @@ const pick = <T>(arr: readonly T[]): T => arr[Math.floor(rnd() * arr.length)]!;
 const int = (min: number, max: number) => Math.floor(rnd() * (max - min + 1)) + min;
 const chance = (p: number) => rnd() < p;
 
+/*
+ * The junk a real phone line gets: a wrong number, or a recorded sales call the
+ * assistant closes out. Two lines each, and deliberately not in SCENARIOS — the
+ * simulator's scenario list should stay a list of calls worth demoing.
+ *
+ * Rare in the mix, but present: the inbox's outcome filter offers "Wrong number"
+ * and "Spam", and a filter option that never matches a row reads as a broken
+ * screen rather than a clean quarter.
+ */
+const JUNK_CALLS = [
+  {
+    disposition: 'WRONG_NUMBER',
+    intent: 'wrong_number',
+    caller: 'Is this the dental clinic on the ground floor?',
+    reply: `No, this is ${INSTITUTE.name} — I think you want the clinic's own line. Sorry about that.`,
+    summary: 'Wrong number. Caller was looking for a different business; no action needed.',
+  },
+  {
+    disposition: 'WRONG_NUMBER',
+    intent: 'wrong_number',
+    caller: 'I am calling about a parcel delivery for flat 402.',
+    reply: `This is ${INSTITUTE.name}, a training institute — nothing to do with deliveries, I am afraid.`,
+    summary: 'Wrong number. Caller wanted a courier; ended politely.',
+  },
+  {
+    disposition: 'SPAM',
+    intent: 'spam',
+    caller: 'Congratulations, your business has been selected for a free marketing audit —',
+    reply: 'Thank you, but we are not interested in cold sales calls. Ending the call now.',
+    summary: 'Unsolicited sales call. Closed out by the assistant; no follow-up.',
+  },
+  {
+    disposition: 'SPAM',
+    intent: 'spam',
+    caller: 'This is a final notice regarding your vehicle insurance policy.',
+    reply: 'This is a training institute and we have no vehicle policy with you. Ending the call.',
+    summary: 'Recorded sales call. Closed out by the assistant; no follow-up.',
+  },
+] as const;
+
 /* --------------------------------- agents -------------------------------- */
 
 const AGENTS = [
@@ -484,7 +524,9 @@ async function main() {
             startedAt,
             endedAt,
             aiContained: !escalated,
-            disposition: escalated ? 'ENROLMENT_INTEREST' : 'INFO_PROVIDED',
+            disposition: escalated
+              ? pick(['LEAD_QUALIFIED', 'CALLBACK_REQUESTED', 'EXISTING_STUDENT_SUPPORT'] as const)
+              : pick(['INFO_PROVIDED', 'INFO_PROVIDED', 'FEE_ENQUIRY', 'ENROLMENT_INTEREST'] as const),
           },
         });
         const turns = int(2, 5);
@@ -547,8 +589,10 @@ async function main() {
             // These are the rows the "missing disposition" report should flag.
             disposition: answered
               ? escalates
-                ? pick(['ENROLMENT_INTEREST', 'CALLBACK_REQUESTED'] as const)
-                : pick(['INFO_PROVIDED', 'NOT_INTERESTED', 'ENROLMENT_INTEREST'] as const)
+                ? pick(['ENROLMENT_INTEREST', 'CALLBACK_REQUESTED', 'LEAD_QUALIFIED'] as const)
+                : // A dialled list goes stale: some of these numbers have moved
+                  // on to somebody else entirely.
+                  pick(['INFO_PROVIDED', 'NOT_INTERESTED', 'NOT_INTERESTED', 'ENROLMENT_INTEREST', 'WRONG_NUMBER'] as const)
               : null,
           },
         });
@@ -615,8 +659,11 @@ async function main() {
       /* ------------------------------ voice call ------------------------------ */
       const escalates = scenario.escalates;
       const abandons = escalates && chance(0.09);
-      const aiTurns = int(2, 6);
-      const aiTalkMs = aiTurns * int(9000, 16000);
+      // Junk only ever lands on calls the assistant handled alone: nobody
+      // transfers a robocall to an advisor.
+      const junk = !escalates && chance(0.05) ? pick(JUNK_CALLS) : null;
+      const aiTurns = junk ? 1 : int(2, 6);
+      const aiTalkMs = junk ? int(9000, 22_000) : aiTurns * int(9000, 16000);
       const queueWaitMs = escalates ? int(3000, 55000) : 0;
       const agentTalkMs = escalates && !abandons ? int(90_000, 420_000) : 0;
       const wrapMs = escalates && !abandons ? int(8000, 45000) : 0;
@@ -645,11 +692,26 @@ async function main() {
           startedAt,
           endedAt,
           aiContained,
+          /*
+           * The outcome, not the handling. Weighted rather than uniform: an
+           * institute's line is mostly people being told something, and a
+           * qualified lead is the minority that matters — a flat spread would
+           * make the outcomes chart say nothing and the "lead qualified" filter
+           * return a third of the inbox.
+           */
           disposition: abandons
             ? null
-            : aiContained
-              ? 'INFO_PROVIDED'
-              : pick(['ENROLMENT_INTEREST', 'FEE_ENQUIRY', 'INFO_PROVIDED', 'CALLBACK_REQUESTED'] as const),
+            : junk
+              ? junk.disposition
+              : aiContained
+                ? pick([
+                    'INFO_PROVIDED', 'INFO_PROVIDED', 'INFO_PROVIDED', 'INFO_PROVIDED',
+                    'FEE_ENQUIRY', 'EXISTING_STUDENT_SUPPORT', 'LEAD_QUALIFIED',
+                  ] as const)
+                : pick([
+                    'ENROLMENT_INTEREST', 'ENROLMENT_INTEREST', 'FEE_ENQUIRY', 'INFO_PROVIDED',
+                    'CALLBACK_REQUESTED', 'EXISTING_STUDENT_SUPPORT', 'LEAD_QUALIFIED', 'LEAD_QUALIFIED',
+                  ] as const),
           notes: resolvedHandler && chance(0.3) ? 'Caller asked to be contacted again next week.' : null,
           tags: chance(0.25) ? [pick(['hot-lead', 'follow-up', 'corporate', 'returning-student'])] : [],
         },
@@ -713,10 +775,16 @@ async function main() {
           turns: aiTurns,
           escalated: escalates,
           escalationReason: escalates ? (scenario.expectedReason as Prisma.AiSessionCreateInput['escalationReason']) : null,
-          detectedIntent: pick(['fee_enquiry', 'course_details', 'schedule_enquiry', 'enrolment_process', 'location_enquiry']),
-          courseOfInterest: contact.courseInterest,
+          detectedIntent: junk
+            ? junk.intent
+            : pick(['fee_enquiry', 'course_details', 'schedule_enquiry', 'enrolment_process', 'location_enquiry']),
+          // A wrong number has no course of interest, whatever the contact row
+          // happens to remember from a previous call.
+          courseOfInterest: junk ? null : contact.courseInterest,
           sentiment: Number((rnd() * 1.4 - 0.4).toFixed(2)),
-          summary: `Caller asked about ${contact.courseInterest ?? 'course options'}. ${escalates ? 'Transferred to an advisor.' : 'Query resolved by the assistant.'}`,
+          summary: junk
+            ? junk.summary
+            : `Caller asked about ${contact.courseInterest ?? 'course options'}. ${escalates ? 'Transferred to an advisor.' : 'Query resolved by the assistant.'}`,
           avgLatencyMs: int(380, 900),
         },
       });
@@ -736,7 +804,7 @@ async function main() {
       ];
 
       let cursor = 1200;
-      const turnsToSeed = scenario.turns.slice(0, aiTurns);
+      const turnsToSeed = junk ? [{ text: junk.caller }] : scenario.turns.slice(0, aiTurns);
 
       // Greeting first, as the live path does.
       await prisma.message.create({
@@ -755,7 +823,7 @@ async function main() {
       for (const [ti, turn] of turnsToSeed.entries()) {
         const callerStart = cursor;
         const callerEnd = callerStart + Math.max(900, turn.text.split(/\s+/).length * 400);
-        const reply = AI_REPLIES[(ti % (AI_REPLIES.length - 1)) + 1]!;
+        const reply = junk ? junk.reply : AI_REPLIES[(ti % (AI_REPLIES.length - 1)) + 1]!;
         const aiEnd = callerEnd + Math.max(1200, reply.split(/\s+/).length * 380);
 
         await prisma.message.createMany({

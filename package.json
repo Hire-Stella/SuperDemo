@@ -20,6 +20,7 @@
     "db:migrate": "pnpm --filter @superdemo/db migrate",
     "db:push": "pnpm --filter @superdemo/db push",
     "db:seed": "pnpm --filter @superdemo/db seed",
+    "demo:seed": "pnpm --filter @superdemo/db demo:seed",
     "db:studio": "pnpm --filter @superdemo/db studio",
     "db:reset": "pnpm --filter @superdemo/db reset",
     "setup": "pnpm install && pnpm services:up && pnpm db:generate && pnpm db:push && pnpm db:seed",
