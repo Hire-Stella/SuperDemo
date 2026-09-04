@@ -1,10 +1,11 @@
-import { Controller, Get, HttpCode, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
+import { Controller, Get, HttpCode, Inject, Post, Req, Res, UnauthorizedException } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import type { Request, Response } from 'express';
-import { LoginInput, type LoginOutput, type SessionUser } from '@superdemo/contracts';
+import type { CookieOptions, Request, Response } from 'express';
+import { type ApiEnv, LoginInput, type LoginOutput, type SessionUser } from '@superdemo/contracts';
 import { AuthService } from './auth.service';
 import { CurrentUser, Public } from './guards';
 import { ZodBody } from '../shared/zod.pipe';
+import { ENV } from '../config/config.module';
 
 export const REFRESH_COOKIE = 'fitai_rt';
 
@@ -17,9 +18,53 @@ export const REFRESH_COOKIE = 'fitai_rt';
  */
 const REFRESH_COOKIE_PATH = '/api/auth';
 
+/** Hostname of a URL, or undefined if it is unset or unparseable. */
+function hostOf(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return undefined;
+  }
+}
+
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly auth: AuthService) {}
+  constructor(
+    private readonly auth: AuthService,
+    @Inject(ENV) private readonly env: ApiEnv,
+  ) {}
+
+  /**
+   * SameSite has to follow the deployment rather than be a constant.
+   *
+   * `strict` is correct when the dashboard and the API are one site, which is
+   * how development runs — both on localhost, different ports, still same-site.
+   * In production they are not: the dashboard is on vercel.app and the API on
+   * azurecontainerapps.io, different registrable domains, so the refresh cookie
+   * is cross-site and a `strict` cookie is never sent back.
+   *
+   * The symptom is worth recognising, because it does not look like a cookie
+   * problem: POST /api/auth/refresh returns 401 with no `cookie` header on the
+   * request at all, which reads as an expired session on every page load.
+   *
+   * `none` is only honoured alongside `secure`, so the two move together.
+   *
+   * Putting both halves on one registrable domain — app.example.com and
+   * api.example.com — is the better answer, and would let this go back to
+   * `lax`. Until then this keeps sessions working across the split.
+   */
+  private refreshCookieOptions(): CookieOptions {
+    const webHost = hostOf(this.env.WEB_ORIGIN);
+    const apiHost = hostOf(this.env.PUBLIC_BASE_URL);
+    const crossSite = Boolean(webHost && apiHost && webHost !== apiHost);
+    return {
+      httpOnly: true,
+      sameSite: crossSite ? 'none' : 'strict',
+      secure: crossSite || this.env.NODE_ENV === 'production',
+      path: REFRESH_COOKIE_PATH,
+    };
+  }
 
   /**
    * The refresh token lives in an httpOnly cookie so JavaScript — and therefore
@@ -27,13 +72,7 @@ export class AuthController {
    * app holds it in memory only.
    */
   private setRefreshCookie(res: Response, token: string): void {
-    res.cookie(REFRESH_COOKIE, token, {
-      httpOnly: true,
-      sameSite: 'strict',
-      secure: process.env.NODE_ENV === 'production',
-      path: REFRESH_COOKIE_PATH,
-      maxAge: 30 * 864e5,
-    });
+    res.cookie(REFRESH_COOKIE, token, { ...this.refreshCookieOptions(), maxAge: 30 * 864e5 });
   }
 
   private readRefreshCookie(req: Request): string | undefined {
@@ -83,7 +122,9 @@ export class AuthController {
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response): Promise<void> {
     const token = this.readRefreshCookie(req);
     if (token) await this.auth.revokeRefreshToken(token);
-    res.clearCookie(REFRESH_COOKIE, { path: REFRESH_COOKIE_PATH });
+    // Same attributes it was set with, otherwise the browser keeps it: a clear
+    // only matches on name, domain, path — and sameSite/secure must agree.
+    res.clearCookie(REFRESH_COOKIE, this.refreshCookieOptions());
   }
 
   @Get('me')
