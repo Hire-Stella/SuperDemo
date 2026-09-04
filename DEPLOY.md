@@ -95,17 +95,22 @@ Settings → Build & Deployment → Root Directory. Without it the deploy fails 
 the root directory, and the repo root is a workspace root that has none.
 
 Leave "Include files outside the root directory" ON — the app imports
-`@superdemo/contracts` and `@superdemo/db`, which resolve to their `dist`, so
-those packages have to be present and built.
+`@superdemo/contracts`, which resolves through `main` to its `dist`, so that
+package has to be present and built.
+
+Not `@superdemo/db`. The web app neither imports it nor declares it, and
+building it on Vercel only ran `prisma generate` for a client nothing there
+loads — which is what the "could not find your Prisma schema" warnings in the
+build log were. Dropped from the build command.
 
 ```bash
 vercel link          # from the repo root
 vercel --prod
 ```
 
-`apps/web/vercel.json` builds both workspace packages before `next build`. That
-order is not optional: both resolve through `main` to `dist`, so a plain
-`next build` fails on modules that have not been emitted yet.
+`apps/web/vercel.json` builds `@superdemo/contracts` before `next build`. That
+order is not optional: it resolves through `main` to `dist`, so a plain
+`next build` fails on a module that has not been emitted yet.
 
 Environment on Vercel:
 
