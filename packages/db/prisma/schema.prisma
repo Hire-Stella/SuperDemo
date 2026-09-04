@@ -134,6 +134,7 @@ enum HangupCause {
 }
 
 enum Disposition {
+  LEAD_QUALIFIED
   ENROLMENT_INTEREST
   INFO_PROVIDED
   CALLBACK_REQUESTED

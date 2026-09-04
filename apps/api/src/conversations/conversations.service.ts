@@ -42,7 +42,12 @@ export class ConversationsService {
       ...(query.channel ? { channel: query.channel } : {}),
       ...(query.direction ? { direction: query.direction } : {}),
       ...(query.status ? { status: query.status } : {}),
-      ...(query.disposition ? { disposition: query.disposition } : {}),
+      // `NONE` is a filter for the rows with no outcome recorded, not a value.
+      ...(query.disposition
+        ? query.disposition === 'NONE'
+          ? { disposition: null }
+          : { disposition: query.disposition }
+        : {}),
       ...(query.queueId ? { queueId: query.queueId } : {}),
       ...(query.agentId ? { handledById: query.agentId } : {}),
       ...(query.aiContained !== undefined ? { aiContained: query.aiContained } : {}),

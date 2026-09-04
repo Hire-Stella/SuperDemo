@@ -13,6 +13,7 @@ import {
   ConversationStatus,
   Direction,
   Disposition,
+  DispositionFilter,
   EscalationReason,
   HangupCause,
   Location,
@@ -402,7 +403,8 @@ export const ListConversationsQuery = Pagination.extend({
   /** Inbound vs outbound. The inbox is unified across both; this narrows it. */
   direction: Direction.optional(),
   status: ConversationStatus.optional(),
-  disposition: Disposition.optional(),
+  /** Outcome. `NONE` narrows to the rows with no outcome recorded. */
+  disposition: DispositionFilter.optional(),
   queueId: z.string().optional(),
   agentId: z.string().optional(),
   aiContained: z.coerce.boolean().optional(),

@@ -155,6 +155,7 @@ export type HangupCause = z.infer<typeof HangupCause>;
 
 /** How the call ended, from a business standpoint. Set during wrap-up. */
 export const Disposition = z.enum([
+  'LEAD_QUALIFIED',
   'ENROLMENT_INTEREST',
   'INFO_PROVIDED',
   'CALLBACK_REQUESTED',
@@ -165,6 +166,15 @@ export const Disposition = z.enum([
   'SPAM',
 ]);
 export type Disposition = z.infer<typeof Disposition>;
+
+/**
+ * What the inbox's outcome filter accepts: any disposition, plus `NONE` for the
+ * rows that have no outcome recorded. Those are a real category — a call nobody
+ * answered has nothing to record, and an unfilled wrap-up is a supervisor's
+ * problem — so they need to be reachable, not only excluded.
+ */
+export const DispositionFilter = z.union([Disposition, z.literal('NONE')]);
+export type DispositionFilter = z.infer<typeof DispositionFilter>;
 
 export const EvalReviewer = z.enum(['AUTO', 'HUMAN']);
 export type EvalReviewer = z.infer<typeof EvalReviewer>;
@@ -385,6 +395,7 @@ export const ESCALATION_REASON_LABELS: Record<EscalationReason, string> = {
 };
 
 export const DISPOSITION_LABELS: Record<Disposition, string> = {
+  LEAD_QUALIFIED: 'Lead qualified',
   ENROLMENT_INTEREST: 'Enrolment interest',
   INFO_PROVIDED: 'Information provided',
   CALLBACK_REQUESTED: 'Callback requested',
