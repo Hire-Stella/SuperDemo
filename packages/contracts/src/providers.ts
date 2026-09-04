@@ -391,12 +391,23 @@ export interface TranscriptTurnInput {
   confidence?: number;
 }
 
-/** Thrown by drivers that intentionally don't implement a capability. */
+/**
+ * Thrown by drivers that intentionally don't implement a capability, or that
+ * implement it and are not configured to carry it out.
+ *
+ * `detail` exists for the second case, which is the more common one in a live
+ * deployment and needs a different sentence: "not implemented" sends the reader
+ * to NOT-IMPLEMENTED.md, while "no number attached to the workspace" is
+ * something they can go and fix. DriverErrorFilter passes the message through to
+ * the client verbatim, so it has to be written for whoever clicked the button.
+ */
 export class NotImplementedByDriverError extends Error {
-  constructor(driver: string, capability: string) {
+  constructor(driver: string, capability: string, detail?: string) {
     super(
-      `Driver "${driver}" does not implement ${capability}. ` +
-        `See NOT-IMPLEMENTED.md for the production path.`,
+      detail
+        ? `Cannot ${capability} — ${detail}`
+        : `Driver "${driver}" does not implement ${capability}. ` +
+            `See NOT-IMPLEMENTED.md for the production path.`,
     );
     this.name = 'NotImplementedByDriverError';
   }
