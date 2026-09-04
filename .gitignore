@@ -12,6 +12,12 @@ out/
 # Recordings written by the local storage driver
 .storage/
 
+# Rendered Container App definition — holds real secret values. The template
+# (azure/containerapp.yaml) is checked in; the render of it never is.
+azure/*.local.yaml
+# Resource names and generated secrets remembered between deploy.sh runs.
+azure/.deploy.env
+
 # Python (apps/backend prototype scripts)
 .venv/
 __pycache__/

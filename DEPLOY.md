@@ -1,5 +1,9 @@
 # Deploying SuperDemo
 
+Host-agnostic. For Azure specifically — Container Apps, Postgres Flexible
+Server, a recordings share, and real calls through ElevenLabs on a Twilio
+number — follow **[AZURE-DEPLOY.md](AZURE-DEPLOY.md)** instead.
+
 Two halves, and they cannot both go to the same place.
 
 **The web app is a Next.js site and belongs on Vercel.** **The API cannot be
@@ -58,7 +62,7 @@ Environment — the ones without a default will stop it booting:
 ```
 DATABASE_URL=…                 # from step 1
 REDIS_URL=…                    # from step 2
-JWT_SECRET=…                   # openssl rand -base64 48
+JWT_ACCESS_SECRET=…            # openssl rand -base64 48
 JWT_REFRESH_SECRET=…           # a DIFFERENT one
 CRM_SECRET_KEY=…               # openssl rand -base64 32
 PUBLIC_BASE_URL=https://…      # this service's own public URL
