@@ -264,6 +264,20 @@ else
   # created below instead, which is the path a second app takes anyway.
   echo "  firewall opened for $MY_IP, so the schema push below works from here"
 fi
+# Two rules, two different callers, and --public-access only covers the first.
+# Without this the container starts, maps every route, then dies on the first
+# query with P1001 "Can't reach database server" — which reads like the server
+# is down rather than like a firewall.
+#
+# 0.0.0.0-0.0.0.0 is Azure's special case meaning "any Azure service", not "the
+# whole internet". It is what lets the Container App connect at all, since its
+# egress address is not stable enough to enumerate.
+if ! az postgres flexible-server firewall-rule list -g "$RG" -s "$PG" \
+     --query "[?name=='AllowAzureServices']" -o tsv 2>/dev/null | grep -q .; then
+  echo "  allowing Azure services to reach $PG"
+  az postgres flexible-server firewall-rule create -g "$RG" -s "$PG" \
+    -n AllowAzureServices --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0 -o none
+fi
 # One server, a database per app. Idempotent, and the path that runs when this
 # script is re-run with APP_NAME=superapp against the server SuperDemo made.
 # -n for the database, -s for the server. Not -d: that spelling is accepted by
@@ -380,13 +394,22 @@ cat <<EOF
 
 Next, in this order:
 
-1. Schema and demo data, from here:
+1. Schema and demo data, from here. The password lives in $STATE (mode 600) and
+   is deliberately not printed — this output ends up in terminal scrollback,
+   task logs and CI transcripts:
 
-     export DATABASE_URL='$DATABASE_URL'
-     pnpm --filter @superdemo/db push
-     pnpm --filter @superdemo/db seed
-     pnpm --filter @superdemo/db backfill:evals
-     pnpm --filter @superdemo/db backfill:outcomes
+     set -a; . $STATE; set +a
+     export DATABASE_URL="postgresql://superdemo:\${PG_PASSWORD}@${PG}.postgres.database.azure.com:5432/${PG_DB}?sslmode=require"
+
+   Then call the prisma CLI directly rather than the package scripts. Those wrap
+   it in 'dotenv -e ../../.env', which can reload your local database URL over
+   the top of the one you just exported:
+
+     cd packages/db
+     npx prisma db push --skip-generate
+     npx tsx prisma/seed.ts               # resets and owns the whole database
+     npx tsx prisma/backfill-evals.ts
+     npx tsx prisma/backfill-outcomes.ts
 
 2. Point Vercel at the API and redeploy — both are NEXT_PUBLIC_, so they are
    baked in at build time and this needs a deploy, not a restart:
