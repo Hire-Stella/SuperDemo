@@ -54,22 +54,45 @@ rather than re-pointing.
 
 ---
 
-## Which region, and why it is not uaenorth
+## Which region, and why it is neither of the obvious two
 
-`germanywestcentral`. The obvious choice for a Dubai-facing demo is `uaenorth`,
-and it is wrong here for two reasons.
+`westeurope` (Amsterdam). Both obvious answers are wrong, which is why this has
+a section.
 
-SuperApp (`ai-employees-v2`) shares this resource group and is already committed
-to the Frankfurt corridor, because its database is Neon `eu-central-1`. Its own
-`deploy/azure/provision.sh` puts it plainly: compute in Dubai with customer data
-in Frankfurt achieves nothing, and residency is a second deployment rather than
-a setting. One group means one region, and moving SuperApp's half is the
-expensive side of that trade.
+**Not `uaenorth`,** though it is the Dubai-facing choice and where the rest of
+this subscription runs. SuperApp (`ai-employees-v2`) shares this resource group
+and belongs in the Frankfurt corridor, next to its Neon `eu-central-1` database.
+Its own `deploy/azure/provision.sh` puts it plainly: compute in Dubai with
+customer data in Frankfurt achieves nothing, and residency is a second
+deployment rather than a setting.
 
-It is also the better half for SuperDemo. The latency that matters on a call is
-the API's round trip to ElevenLabs, not to the caller's handset — the carrier
-leg terminates at ElevenLabs, which then reaches this API over the public
-internet. Frankfurt is closer to that than Dubai is.
+It is also the wrong half of the trade for SuperDemo. The latency that matters
+on a call is this API's round trip to ElevenLabs, not to the caller's handset —
+the carrier leg terminates at ElevenLabs, which then reaches us over the public
+internet.
+
+**Not `germanywestcentral` either,** which is where that logic points. Postgres
+Flexible Server provisioning is restricted there on this subscription, and Azure
+will tell you so rather than failing at create time:
+
+```bash
+az postgres flexible-server list-skus -l germanywestcentral --query "[0].reason" -o tsv
+# Provisioning is restricted in this region. Please choose a different region.
+# For exceptions to this rule please open a support request with Issue type of
+# 'Service and subscription limits'.
+```
+
+Worth running for any region before you commit to it — it is a subscription
+property, not a global one, and it otherwise surfaces as `ERROR: The location is
+restricted from performing this operation` forty seconds into a deploy.
+`westeurope`, `northeurope`, `francecentral`, `swedencentral` and `uaenorth`
+were all open when this was written.
+
+Amsterdam is a few milliseconds from Frankfurt, so preferring it costs nothing.
+And a resource group's location is metadata for the group record only —
+resources inside may live in any region — so SuperApp's VM still provisions in
+`germanywestcentral`, where `Standard_B2s_v2` has no restrictions, and both apps
+stay in one group.
 
 If UAE residency ever becomes a real requirement, it is a second deployment of
 both halves with the database moved too, not a region flag.
@@ -104,7 +127,7 @@ index per app — so a future service that does want them costs nothing extra.
 
 | Need | Note |
 |---|---|
-| Azure subscription | `germanywestcentral` throughout — see the region note below |
+| Azure subscription | `westeurope` throughout — see the region note below |
 | Azure CLI | `python3 -m venv ~/.azure-cli && ~/.azure-cli/bin/pip install azure-cli` (no Homebrew on this machine) |
 | The existing Vercel project | Already linked: `.vercel/project.json` → `superdemo` |
 | ElevenLabs account | You already have the API key, agent id, bridge and webhook secrets in `.env` |
@@ -126,7 +149,7 @@ Everything below reads these. Set them once per shell.
 az login
 az account set --subscription "<your-subscription-id>"
 
-export LOC=germanywestcentral
+export LOC=westeurope
 export RG=rg-superdemo
 export SUFFIX=$RANDOM            # ACR and storage account names are global
 export ACR=acrsuperdemo$SUFFIX

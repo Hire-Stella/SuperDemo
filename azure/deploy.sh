@@ -51,15 +51,31 @@ fi
 # shellcheck disable=SC1090
 [[ -f $STATE ]] && source "$STATE"
 
-# germanywestcentral, not uaenorth. SuperApp (ai-employees-v2) is already
-# committed to the Frankfurt corridor because its Neon database is in
-# eu-central-1, and its own provision.sh makes the argument: compute in Dubai
-# with customer data in Frankfurt achieves nothing, and residency is a second
-# deployment rather than a setting. Both apps share one resource group, so they
-# share one region — and Frankfurt is the better half of the trade for
-# SuperDemo anyway, since its latency that matters is to ElevenLabs, not to the
-# caller's handset (the carrier leg terminates at ElevenLabs, not here).
-: "${LOC:=germanywestcentral}"
+# westeurope (Amsterdam), for a reason worth writing down because the obvious
+# choices are both wrong.
+#
+# Not uaenorth: SuperApp shares this resource group and belongs in the Frankfurt
+# corridor, next to its Neon eu-central-1 database. Its own provision.sh makes
+# the argument — compute in Dubai with customer data in Frankfurt achieves
+# nothing, and residency is a second deployment rather than a setting.
+#
+# Not germanywestcentral either, which is where that logic points: Postgres
+# Flexible Server provisioning is restricted there on this subscription. Azure
+# says so itself —
+#
+#   az postgres flexible-server list-skus -l germanywestcentral --query "[0].reason"
+#   "Provisioning is restricted in this region. Please choose a different region."
+#
+# Lifting it means a support request under "Service and subscription limits".
+# Amsterdam is a few milliseconds from Frankfurt and open, so it costs nothing
+# to prefer it. westeurope, northeurope, francecentral, swedencentral and
+# uaenorth were all open when this was written.
+#
+# A resource group's location is metadata for the group record only — resources
+# inside it may live in any region — so SuperApp's VM still goes in
+# germanywestcentral, where its own size has no restrictions, and both apps stay
+# in the one group.
+: "${LOC:=westeurope}"
 
 # Persisted on first run. A fresh $RANDOM each time would provision a second
 # copy of everything and leave the first orphaned.
@@ -221,8 +237,16 @@ fi
 
 # ── 1. resource group ────────────────────────────────────────────────────────
 say "resource group"
-# The tag is what the ownership check above reads on a re-run.
-az group create -n "$RG" -l "$LOC" --tags createdBy=superdemo-deploy stack="$STACK" -o none
+# Create only if absent. A group's location is immutable, so passing -l for one
+# that already exists fails with InvalidResourceGroupLocation the moment $LOC
+# changes — which it does, because the region a resource goes in and the region
+# the group record lives in are different questions. The tag is what the
+# ownership check above reads on a re-run.
+if az group show -n "$RG" -o none 2>/dev/null; then
+  skip "$RG ($(az group show -n "$RG" --query location -o tsv))"
+else
+  az group create -n "$RG" -l "$LOC" --tags createdBy=superdemo-deploy stack="$STACK" -o none
+fi
 
 # ── 2. postgres ──────────────────────────────────────────────────────────────
 say "postgres"
@@ -234,7 +258,10 @@ else
     -g "$RG" -n "$PG" -l "$LOC" \
     --tier Burstable --sku-name Standard_B1ms --storage-size 32 --version 16 \
     --admin-user superdemo --admin-password "$PG_PASSWORD" \
-    --database-name "$PG_DB" --public-access "$MY_IP" -o none
+    --public-access "$MY_IP" --yes -o none
+  # No --database-name here: as of azure-cli 2.90 that flag is only accepted
+  # alongside --node-count, for elastic clusters. The per-app database is
+  # created below instead, which is the path a second app takes anyway.
   echo "  firewall opened for $MY_IP, so the schema push below works from here"
 fi
 # One server, a database per app. Idempotent, and the path that runs when this
