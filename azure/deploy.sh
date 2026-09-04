@@ -51,17 +51,70 @@ fi
 # shellcheck disable=SC1090
 [[ -f $STATE ]] && source "$STATE"
 
-: "${LOC:=uaenorth}"
-: "${RG:=rg-superdemo}"
+# germanywestcentral, not uaenorth. SuperApp (ai-employees-v2) is already
+# committed to the Frankfurt corridor because its Neon database is in
+# eu-central-1, and its own provision.sh makes the argument: compute in Dubai
+# with customer data in Frankfurt achieves nothing, and residency is a second
+# deployment rather than a setting. Both apps share one resource group, so they
+# share one region — and Frankfurt is the better half of the trade for
+# SuperDemo anyway, since its latency that matters is to ElevenLabs, not to the
+# caller's handset (the carrier leg terminates at ElevenLabs, not here).
+: "${LOC:=germanywestcentral}"
+
 # Persisted on first run. A fresh $RANDOM each time would provision a second
 # copy of everything and leave the first orphaned.
 : "${SUFFIX:=$RANDOM}"
-: "${ACR:=acrsuperdemo$SUFFIX}"
-: "${ST:=stsuperdemo$SUFFIX}"
-: "${PG:=pg-superdemo-$SUFFIX}"
-: "${REDIS:=redis-superdemo-$SUFFIX}"
-: "${CAE:=cae-superdemo}"
-: "${APP:=superdemo-api}"
+
+# ── two layers, on purpose ───────────────────────────────────────────────────
+#
+# SHARED, named for the stack: the resource group, the Container Apps
+# environment, the registry, the Postgres server, Redis and the storage account.
+#
+# What SuperApp actually shares of this is the resource group and the region —
+# it runs on its own VM (deploy/azure/ in ai-employees-v2), its database is Neon
+# eu-central-1, and its Redis is a container in its own compose file. So the
+# Postgres server and Redis below are SuperDemo's in practice. They are still
+# built to take a second app: a Container Apps environment is the unit meant to
+# be shared, and one Postgres server with a database each beats two servers, so
+# a third app that does want them costs nothing extra.
+#
+# PER-APP, named for the app: the container app, its database, its file share,
+# its image repository and its Redis database index. Adding SuperApp is this
+# same script with APP_NAME=superapp; nothing in the shared layer is recreated.
+#
+# Everything still lives in a group this script owns. These subscriptions have
+# production in them — voice-ai-prod, rg-crm-hirestella — and a deploy that
+# reaches into a shared group or reuses somebody else's name is how a demo takes
+# production down with it.
+#
+# ORG is an optional owner tag so the names read the way the subscription already
+# does: ORG=hirestella gives rg-super-hirestella, next to rg-crm-hirestella.
+: "${STACK:=super}"
+: "${ORG:=}"
+: "${APP_NAME:=superdemo}"
+
+STACK_NAME="${STACK}${ORG:+-$ORG}"
+# Storage and registry names are alphanumeric-only; storage caps at 24 chars, so
+# trim before the suffix is appended rather than after.
+FLAT="$(printf '%s%s' "$STACK" "$ORG" | tr -cd '[:alnum:]' | tr '[:upper:]' '[:lower:]' | cut -c1-13)"
+
+# shared
+: "${RG:=rg-$STACK_NAME}"
+: "${ACR:=acr${FLAT}${SUFFIX}}"
+: "${ST:=st${FLAT}${SUFFIX}}"
+: "${PG:=psql-$STACK_NAME-$SUFFIX}"
+: "${REDIS:=redis-$STACK_NAME-$SUFFIX}"
+: "${CAE:=cae-$STACK_NAME}"
+
+# per-app
+: "${APP:=ca-$APP_NAME-api}"
+: "${PG_DB:=$APP_NAME}"
+: "${SHARE:=$APP_NAME-recordings}"
+: "${IMAGE_REPO:=$APP_NAME-api}"
+# Azure Cache for Redis gives 16 databases even on Basic. One per app keeps the
+# BullMQ queues and the pub/sub channels from colliding without either app
+# needing a key prefix in code.
+: "${REDIS_DB:=0}"
 : "${TAG:=$(date -u +%Y%m%d%H%M%S)}"
 
 # Secrets: generated once, then reused from $STATE.
@@ -104,6 +157,9 @@ save_state() {
   cat > "$STATE" <<EOF
 # Written by azure/deploy.sh. Holds secrets — gitignored, do not commit.
 : "\${LOC:=$LOC}"
+: "\${STACK:=$STACK}"
+: "\${ORG:=$ORG}"
+: "\${APP_NAME:=$APP_NAME}"
 : "\${RG:=$RG}"
 : "\${SUFFIX:=$SUFFIX}"
 : "\${ACR:=$ACR}"
@@ -126,10 +182,47 @@ echo "subscription : $(az account show --query name -o tsv)"
 echo "region       : $LOC"
 echo "resource grp : $RG"
 echo "suffix       : $SUFFIX   (reused from $STATE on re-runs)"
+echo "app          : $APP_NAME"
+echo
+echo "shared by every app in this stack:"
+for pair in "resource group:$RG" "container env:$CAE" "registry:$ACR" \
+            "postgres:$PG" "redis:$REDIS" "storage:$ST"; do
+  printf '  %-15s %s\n' "${pair%%:*}" "${pair#*:}"
+done
+echo
+echo "just for $APP_NAME:"
+for pair in "container app:$APP" "database:$PG_DB" "file share:$SHARE" \
+            "image:$IMAGE_REPO:$TAG" "redis db:$REDIS_DB"; do
+  printf '  %-15s %s\n' "${pair%%:*}" "${pair#*:}"
+done
+echo
+echo "nothing outside these lists is created, read or modified."
+
+# Refuse to touch a resource group somebody else owns. Every resource below is
+# created inside $RG, so an existing group that this script did not create is
+# the one case where "create if absent" is not safe — the group may hold
+# production, and a later `az group delete` on it would take that with it.
+if az group show -n "$RG" -o none 2>/dev/null; then
+  owner="$(az group show -n "$RG" --query "tags.createdBy" -o tsv 2>/dev/null || true)"
+  if [[ "$owner" != "superdemo-deploy" ]]; then
+    echo >&2
+    echo "Resource group $RG already exists and was not created by this script." >&2
+    echo "Refusing to add resources to a group somebody else owns. Either pass a" >&2
+    echo "different name (RG=... or STACK=...) or tag it createdBy=superdemo-deploy." >&2
+    exit 1
+  fi
+fi
+
+if [[ "${DRY_RUN:-}" == "1" ]]; then
+  echo
+  echo "DRY_RUN=1 — stopping before creating anything."
+  exit 0
+fi
 
 # ── 1. resource group ────────────────────────────────────────────────────────
 say "resource group"
-az group create -n "$RG" -l "$LOC" -o none
+# The tag is what the ownership check above reads on a re-run.
+az group create -n "$RG" -l "$LOC" --tags createdBy=superdemo-deploy stack="$STACK" -o none
 
 # ── 2. postgres ──────────────────────────────────────────────────────────────
 say "postgres"
@@ -141,10 +234,16 @@ else
     -g "$RG" -n "$PG" -l "$LOC" \
     --tier Burstable --sku-name Standard_B1ms --storage-size 32 --version 16 \
     --admin-user superdemo --admin-password "$PG_PASSWORD" \
-    --database-name superdemo --public-access "$MY_IP" -o none
+    --database-name "$PG_DB" --public-access "$MY_IP" -o none
   echo "  firewall opened for $MY_IP, so the schema push below works from here"
 fi
-DATABASE_URL="postgresql://superdemo:${PG_PASSWORD}@${PG}.postgres.database.azure.com:5432/superdemo?sslmode=require"
+# One server, a database per app. Idempotent, and the path that runs when this
+# script is re-run with APP_NAME=superapp against the server SuperDemo made.
+if ! az postgres flexible-server db show -g "$RG" -s "$PG" -d "$PG_DB" -o none 2>/dev/null; then
+  echo "  creating database $PG_DB on $PG"
+  az postgres flexible-server db create -g "$RG" -s "$PG" -d "$PG_DB" -o none
+fi
+DATABASE_URL="postgresql://superdemo:${PG_PASSWORD}@${PG}.postgres.database.azure.com:5432/${PG_DB}?sslmode=require"
 
 # ── 3. redis ─────────────────────────────────────────────────────────────────
 say "redis"
@@ -159,7 +258,7 @@ fi
 REDIS_KEY="$(az redis list-keys -g "$RG" -n "$REDIS" --query primaryKey -o tsv)"
 # rediss:// on 6380 — the second s is TLS. A redis:// URL on this port hangs
 # rather than failing cleanly.
-REDIS_URL="rediss://:${REDIS_KEY}@${REDIS}.redis.cache.windows.net:6380"
+REDIS_URL="rediss://:${REDIS_KEY}@${REDIS}.redis.cache.windows.net:6380/${REDIS_DB}"
 
 # ── 4. recordings share ──────────────────────────────────────────────────────
 say "recordings share"
@@ -168,7 +267,7 @@ if az storage account show -g "$RG" -n "$ST" -o none 2>/dev/null; then
 else
   az storage account create -g "$RG" -n "$ST" -l "$LOC" --sku Standard_LRS -o none
 fi
-az storage share-rm create -g "$RG" --storage-account "$ST" -n recordings --quota 5 -o none
+az storage share-rm create -g "$RG" --storage-account "$ST" -n "$SHARE" --quota 5 -o none
 ST_KEY="$(az storage account keys list -g "$RG" -n "$ST" --query '[0].value' -o tsv)"
 
 # ── 5. image ─────────────────────────────────────────────────────────────────
@@ -179,8 +278,8 @@ fi
 # Built in Azure on amd64, not locally: the Dockerfile copies the generated
 # Prisma client out of the build stage because those engines are
 # architecture-specific, so an arm64 build would ship the wrong ones.
-echo "  building superdemo-api:$TAG (context is ~8 MB)"
-az acr build -r "$ACR" -t "superdemo-api:$TAG" -f Dockerfile . -o none
+echo "  building $IMAGE_REPO:$TAG (context is ~8 MB)"
+az acr build -r "$ACR" -t "$IMAGE_REPO:$TAG" -f Dockerfile . -o none
 ACR_PASSWORD="$(az acr credential show -n "$ACR" --query 'passwords[0].value' -o tsv)"
 
 # ── 6. container apps environment ────────────────────────────────────────────
@@ -191,10 +290,10 @@ else
   az containerapp env create -g "$RG" -n "$CAE" -l "$LOC" -o none
 fi
 az containerapp env storage set \
-  -g "$RG" -n "$CAE" --storage-name recordings \
+  -g "$RG" -n "$CAE" --storage-name "$SHARE" \
   --azure-file-account-name "$ST" \
   --azure-file-account-key "$ST_KEY" \
-  --azure-file-share-name recordings \
+  --azure-file-share-name "$SHARE" \
   --access-mode ReadWrite -o none
 ENV_ID="$(az containerapp env show -g "$RG" -n "$CAE" --query id -o tsv)"
 
@@ -203,7 +302,7 @@ ENV_ID="$(az containerapp env show -g "$RG" -n "$CAE" --query id -o tsv)"
 # the app does. So: create with a placeholder, read the hostname back, render
 # again, update. The runbook has you do this by hand; here it is automatic.
 say "app"
-export LOCATION="$LOC" ENV_ID ACR ACR_PASSWORD TAG \
+export LOCATION="$LOC" ENV_ID ACR ACR_PASSWORD TAG IMAGE_REPO SHARE \
   DATABASE_URL REDIS_URL JWT_ACCESS_SECRET JWT_REFRESH_SECRET CRM_SECRET_KEY \
   WEB_ORIGIN ELEVENLABS_API_KEY ELEVENLABS_AGENT_ID \
   ELEVENLABS_BRIDGE_SECRET ELEVENLABS_WEBHOOK_SECRET

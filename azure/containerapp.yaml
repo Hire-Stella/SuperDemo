@@ -55,7 +55,7 @@ properties:
   template:
     containers:
       - name: api
-        image: __ACR__.azurecr.io/superdemo-api:__TAG__
+        image: __ACR__.azurecr.io/__IMAGE_REPO__:__TAG__
         resources:
           cpu: 0.5
           memory: 1.0Gi
@@ -135,6 +135,9 @@ properties:
       minReplicas: 1
       maxReplicas: 1
     volumes:
+      # `name` is local to this app; `storageName` is the environment-level link,
+      # which carries the app name so SuperDemo and SuperApp mount their own
+      # shares from the one storage account.
       - name: recordings
         storageType: AzureFile
-        storageName: recordings
+        storageName: __SHARE__

@@ -54,12 +54,58 @@ rather than re-pointing.
 
 ---
 
+## Which region, and why it is not uaenorth
+
+`germanywestcentral`. The obvious choice for a Dubai-facing demo is `uaenorth`,
+and it is wrong here for two reasons.
+
+SuperApp (`ai-employees-v2`) shares this resource group and is already committed
+to the Frankfurt corridor, because its database is Neon `eu-central-1`. Its own
+`deploy/azure/provision.sh` puts it plainly: compute in Dubai with customer data
+in Frankfurt achieves nothing, and residency is a second deployment rather than
+a setting. One group means one region, and moving SuperApp's half is the
+expensive side of that trade.
+
+It is also the better half for SuperDemo. The latency that matters on a call is
+the API's round trip to ElevenLabs, not to the caller's handset — the carrier
+leg terminates at ElevenLabs, which then reaches this API over the public
+internet. Frankfurt is closer to that than Dubai is.
+
+If UAE residency ever becomes a real requirement, it is a second deployment of
+both halves with the database moved too, not a region flag.
+
+---
+
+## What is shared with SuperApp
+
+One resource group and one region. That is the whole of it, and it is worth
+being precise because the layout suggests more:
+
+| | SuperDemo | SuperApp |
+|---|---|---|
+| Compute | Container Apps | A VM running `docker-compose` |
+| Database | Postgres Flexible Server, in this group | Neon `eu-central-1` |
+| Redis | Azure Cache, in this group | A container in its own compose file |
+| Registry | ACR, in this group | Builds on the box — could pull from this ACR instead |
+
+SuperApp keeps its VM deliberately: `evolution` publishes no ports and
+`evolution-instances` holds Baileys session state on a volume, both of which are
+free on a compose network and awkward on a managed container runtime. Its
+scripts live in `ai-employees-v2/deploy/azure/` and are run separately; pass
+them `RESOURCE_GROUP=rg-super-hirestella` so both land in the same place.
+
+The Postgres server and Redis this script creates are therefore SuperDemo's in
+practice. They are still shaped to take a second app — a database and a Redis
+index per app — so a future service that does want them costs nothing extra.
+
+---
+
 ## Before you start
 
 | Need | Note |
 |---|---|
-| Azure subscription | `uaenorth` used throughout; any region works |
-| Azure CLI | Not installed on this machine — `brew install azure-cli` |
+| Azure subscription | `germanywestcentral` throughout — see the region note below |
+| Azure CLI | `python3 -m venv ~/.azure-cli && ~/.azure-cli/bin/pip install azure-cli` (no Homebrew on this machine) |
 | The existing Vercel project | Already linked: `.vercel/project.json` → `superdemo` |
 | ElevenLabs account | You already have the API key, agent id, bridge and webhook secrets in `.env` |
 | Twilio account | You already have the SID and auth token. A number is the one thing to buy |
@@ -80,7 +126,7 @@ Everything below reads these. Set them once per shell.
 az login
 az account set --subscription "<your-subscription-id>"
 
-export LOC=uaenorth
+export LOC=germanywestcentral
 export RG=rg-superdemo
 export SUFFIX=$RANDOM            # ACR and storage account names are global
 export ACR=acrsuperdemo$SUFFIX
