@@ -266,9 +266,12 @@ else
 fi
 # One server, a database per app. Idempotent, and the path that runs when this
 # script is re-run with APP_NAME=superapp against the server SuperDemo made.
-if ! az postgres flexible-server db show -g "$RG" -s "$PG" -d "$PG_DB" -o none 2>/dev/null; then
+# -n for the database, -s for the server. Not -d: that spelling is accepted by
+# neither subcommand, and on `db show` it fails in a way the `if` reads as
+# "database absent", so the error only surfaces one line later on create.
+if ! az postgres flexible-server db show -g "$RG" -s "$PG" -n "$PG_DB" -o none 2>/dev/null; then
   echo "  creating database $PG_DB on $PG"
-  az postgres flexible-server db create -g "$RG" -s "$PG" -d "$PG_DB" -o none
+  az postgres flexible-server db create -g "$RG" -s "$PG" -n "$PG_DB" -o none
 fi
 DATABASE_URL="postgresql://superdemo:${PG_PASSWORD}@${PG}.postgres.database.azure.com:5432/${PG_DB}?sslmode=require"
 
@@ -300,13 +303,30 @@ ST_KEY="$(az storage account keys list -g "$RG" -n "$ST" --query '[0].value' -o 
 # ── 5. image ─────────────────────────────────────────────────────────────────
 say "image"
 if ! az acr show -n "$ACR" -o none 2>/dev/null; then
-  az acr create -g "$RG" -n "$ACR" --sku Basic --admin-enabled true -o none
+  az acr create -g "$RG" -n "$ACR" -l "$LOC" --sku Basic --admin-enabled true -o none
 fi
 # Built in Azure on amd64, not locally: the Dockerfile copies the generated
 # Prisma client out of the build stage because those engines are
 # architecture-specific, so an arm64 build would ship the wrong ones.
-echo "  building $IMAGE_REPO:$TAG (context is ~8 MB)"
-az acr build -r "$ACR" -t "$IMAGE_REPO:$TAG" -f Dockerfile . -o none
+# Build from a clean export of HEAD rather than the working tree.
+#
+# `az acr build` walks the directory to pack a tar before .dockerignore is ever
+# consulted, so the vendored local Postgres cluster under .data/pg stops it
+# dead — a Unix socket is not a file it can archive:
+#
+#   ERROR: tarfile: unsupported type ./.data/pg/.s.PGSQL.55432
+#
+# Exporting HEAD sidesteps that and buys something better than a workaround:
+# the image can only contain committed code, so a stray .env, a local recording
+# or a half-finished edit cannot end up inside it.
+CTX="$(mktemp -d)"
+trap 'rm -rf "$CTX"' EXIT
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "  note: working tree is dirty — building HEAD ($(git rev-parse --short HEAD)), not your edits"
+fi
+git archive --format=tar HEAD | tar -x -C "$CTX"
+echo "  building $IMAGE_REPO:$TAG from $(git rev-parse --short HEAD) ($(du -sh "$CTX" | cut -f1))"
+az acr build -r "$ACR" -t "$IMAGE_REPO:$TAG" -f Dockerfile "$CTX" -o none
 ACR_PASSWORD="$(az acr credential show -n "$ACR" --query 'passwords[0].value' -o tsv)"
 
 # ── 6. container apps environment ────────────────────────────────────────────
