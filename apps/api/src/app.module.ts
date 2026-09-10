@@ -20,6 +20,8 @@ import { LlmModule } from './integrations/llm/llm.module';
 import { StorageModule } from './integrations/storage/storage.module';
 import { TelephonyModule } from './integrations/telephony/telephony.module';
 import { CrmModule } from './integrations/crm/crm.module';
+import { DograhModule } from './integrations/dograh/dograh.module';
+import { EnrichmentModule } from './integrations/enrichment/enrichment.module';
 import { ElevenLabsModule } from './integrations/elevenlabs/elevenlabs.module';
 import { ElevenLabsController } from './integrations/elevenlabs/elevenlabs.controller';
 import { TtsModule } from './integrations/tts/tts.module';
@@ -58,6 +60,8 @@ import { HealthController } from './health.controller';
     TtsModule,
     TelephonyModule,
     CrmModule,
+    DograhModule,
+    EnrichmentModule,
 
     // Domain
     CallsModule,
