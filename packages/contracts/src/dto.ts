@@ -163,6 +163,22 @@ export const CreateOrgInput = z.object({
   tagline: z.string().trim().max(120).optional(),
   /** Landing-page layout. Omitted follows the vertical — see sites.ts. */
   siteTemplate: SiteTemplate.optional(),
+  /**
+   * The client's real website.
+   *
+   * Optional, and the centre is created identically without it — the vertical
+   * template still provides queues, an agent, knowledge and a page. Supplied,
+   * it queues an enrichment that reads the site and regenerates the landing
+   * copy and the voice agent from what it actually says. See
+   * packages/contracts/src/enrichment.ts for why that is not part of this
+   * request.
+   */
+  websiteUrl: z
+    .string()
+    .trim()
+    .url('Give a full URL, e.g. https://example.com')
+    .max(300)
+    .optional(),
   slug: z
     .string()
     .trim()

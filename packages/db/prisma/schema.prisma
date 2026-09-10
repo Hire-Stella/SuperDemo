@@ -221,6 +221,10 @@ model Organization {
   logoUrl   String?
   /// One line under the name, on the landing page and in the app shell.
   tagline   String?
+  /// The client's real website, if the operator supplied one at onboarding.
+  /// Kept after enrichment so the page and agent can be regenerated when their
+  /// site changes — the alternative is asking for the URL a second time.
+  websiteUrl String?
   /// URL-safe handle, unique across the platform. Stable once issued — the
   /// superadmin can rename an org's display name without breaking anything.
   slug      String   @unique
@@ -1006,6 +1010,39 @@ model Setting {
   /// credential, and adding a sixth provider must not need a migration.
   crmSecretsEnc         String?
   crmUpdatedAt          DateTime?
+
+  /// Dograh (self-hosted voice agents) behind this centre's landing page.
+  /// Null means not connected, and the page falls back to a plain `tel:` link.
+  /// Deliberately not a TELEPHONY_DRIVER: see packages/contracts/src/dograh.ts.
+  dograhBaseUrl         String?
+  /// DograhPublic: workflow id and name, the minted embed token, the domains
+  /// Dograh will honour it on, and which of the two call paths the page offers.
+  /// The embed token lives here rather than in the encrypted blob because it is
+  /// rendered into public HTML — Dograh gates it on domain, not on secrecy.
+  dograhPublic          Json?
+  /// The Dograh API key as one AES-256-GCM blob — see shared/secret-box.ts.
+  /// This one *is* a bearer credential for the client's whole voice platform.
+  /// Null means inherit DOGRAH_API_KEY, the way an unset crmProvider inherits
+  /// CRM_DRIVER.
+  dograhSecretsEnc      String?
+  dograhUpdatedAt       DateTime?
+
+  /// Website-to-centre enrichment: scrape the client's site, then generate the
+  /// landing-page copy and the Dograh agent brief from what it says.
+  ///
+  /// A status rather than a boolean, because this is the one part of onboarding
+  /// that is slow and can fail on somebody else's infrastructure — a fetch of a
+  /// stranger's site, an LLM call, and a workflow build on the client's Dograh.
+  /// The centre is created and usable before any of it runs, so an operator
+  /// needs to see which stage it reached and why it stopped.
+  /// none | queued | running | ready | failed
+  enrichStatus          String   @default("none")
+  /// The URL this enrichment actually read, which may differ from the org's
+  /// current websiteUrl once somebody edits it.
+  enrichSourceUrl       String?
+  /// The last failure, shown to the operator verbatim. Never a stack trace.
+  enrichError           String?
+  enrichedAt            DateTime?
 
   updatedAt             DateTime @updatedAt
 

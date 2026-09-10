@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DograhWidgetDto } from './dograh';
 import { Industry } from './enums';
 import { ThemePreset, ThemeTokens } from './themes';
 
@@ -24,9 +25,24 @@ import { ThemePreset, ThemeTokens } from './themes';
  * wrote.
  */
 
-export const SiteTemplate = z.enum(['classic', 'split', 'bold', 'directory']);
+export const SiteTemplate = z.enum(['solaris', 'sentira', 'knotch', 'nudge']);
 export type SiteTemplate = z.infer<typeof SiteTemplate>;
 
+/**
+ * One template, deliberately.
+ *
+ * This used to be four layouts × 108 treatments, on the theory that a demo
+ * should not look like the last demo. In practice every new tenant needed
+ * somebody to choose, and the choice was between four in-house layouts that
+ * all looked in-house. A single ported design that is already finished beats
+ * four that need taste applied — so the picker is gone and the enum has one
+ * member.
+ *
+ * It is still an enum and still a `Record`, so adding the second ported design
+ * is the same two-step as before (see
+ * apps/web/components/site/templates/types.ts) and the compiler still refuses
+ * a half-added one.
+ */
 export interface SiteTemplateDefinition {
   label: string;
   /** What this layout is for, shown beside the picker. */
@@ -36,25 +52,25 @@ export interface SiteTemplateDefinition {
 }
 
 export const SITE_TEMPLATES: Record<SiteTemplate, SiteTemplateDefinition> = {
-  classic: {
-    label: 'Classic',
-    note: 'Centred hero, three highlights, then services and FAQ. Reads as established.',
-    bestFor: 'Institutes, professional services, anything selling trust',
+  solaris: {
+    label: 'Solaris',
+    note: 'Bright sky hero, oversized grotesk headline, lime accents, soft cards.',
+    bestFor: 'Consumer services — homes, health, anything friendly',
   },
-  split: {
-    label: 'Split capture',
-    note: 'Callback form sits inside the hero, above the fold. Built to convert.',
-    bestFor: 'Anywhere the goal is a phone number, not a brochure',
+  sentira: {
+    label: 'Sentira',
+    note: 'Near-black with an enormous serif display. Quiet everywhere else.',
+    bestFor: 'Studios and consultancies — anyone selling judgement',
   },
-  bold: {
-    label: 'Bold',
-    note: 'Full-bleed dark hero, oversized type, a stat band and little else.',
-    bestFor: 'Gyms, retail, consumer brands with something to shout',
+  knotch: {
+    label: 'Knotch',
+    note: 'Pure black slab inset in the viewport, starfield, tight sans display.',
+    bestFor: 'Technical services and AI — anyone selling capability',
   },
-  directory: {
-    label: 'Directory',
-    note: 'Hours, address and phone first. Facts above persuasion.',
-    bestFor: 'Clinics and restaurants, where visitors arrive already decided',
+  nudge: {
+    label: 'Nudge',
+    note: 'White blueprint grid, ultra-heavy left-ranged headline, flat colour chips.',
+    bestFor: 'Creative and trades — anyone whose pitch is personality',
   },
 };
 
@@ -284,42 +300,42 @@ export const SITE_LOOKS: SiteLook[] = [
     key: 'establishment',
     label: 'Establishment',
     note: 'Serif on a quiet tint. Institutes, chambers, clinics with a history.',
-    template: 'classic',
+    template: 'solaris',
     style: { surface: 'tint', display: 'serif', corners: 'sharp', density: 'airy' },
   },
   {
     key: 'showroom',
     label: 'Showroom',
     note: 'Dark hero, brand-tinted, big numbers. Gyms and consumer brands.',
-    template: 'bold',
+    template: 'solaris',
     style: { surface: 'ink', display: 'sans', corners: 'soft', density: 'regular' },
   },
   {
     key: 'statement',
     label: 'Statement',
     note: 'Condensed type on full brand colour. Impossible to mistake for anyone else.',
-    template: 'bold',
+    template: 'solaris',
     style: { surface: 'brand', display: 'wide', corners: 'sharp', density: 'regular' },
   },
   {
     key: 'conversion',
     label: 'Conversion',
     note: 'Form above the fold, tight and plain. Built to collect numbers.',
-    template: 'split',
+    template: 'solaris',
     style: { surface: 'tint', display: 'sans', corners: 'round', density: 'compact' },
   },
   {
     key: 'frontdesk',
     label: 'Front desk',
     note: 'Hours and phone first, nothing in the way. Clinics and restaurants.',
-    template: 'directory',
+    template: 'solaris',
     style: { surface: 'plain', display: 'sans', corners: 'soft', density: 'compact' },
   },
   {
     key: 'boutique',
     label: 'Boutique',
     note: 'Serif on brand colour, generous spacing. Salons, hospitality, private practice.',
-    template: 'directory',
+    template: 'solaris',
     style: { surface: 'brand', display: 'serif', corners: 'round', density: 'airy' },
   },
 ];
@@ -410,12 +426,17 @@ export function isReservedSlug(slug: string): boolean {
  * by leaving it out of `sections`, and reordered by moving it, which is where
  * most of a builder's perceived flexibility lives at none of its cost.
  */
-export const SiteSection = z.enum(['highlights', 'services', 'proof', 'faq', 'contact']);
+export const SiteSection = z.enum(['highlights', 'services', 'steps', 'gallery', 'testimonials', 'pricing', 'comparison', 'proof', 'faq', 'contact']);
 export type SiteSection = z.infer<typeof SiteSection>;
 
 export const SITE_SECTION_LABELS: Record<SiteSection, string> = {
   highlights: 'Highlights',
   services: 'What we do',
+  steps: 'How it works',
+  gallery: 'Photographs',
+  testimonials: 'What clients say',
+  pricing: 'Pricing',
+  comparison: 'Before and after',
   proof: 'Proof',
   faq: 'Questions',
   contact: 'Get in touch',
@@ -459,6 +480,82 @@ export const SiteContent = z.object({
     )
     .max(8)
     .default([]),
+  /**
+   * A numbered "how it works" sequence.
+   *
+   * Its own section rather than reused highlights, because the two answer
+   * different questions — highlights are reasons to trust you, steps are what
+   * happens after someone rings. Layouts that have no place for a sequence
+   * simply leave `steps` out of `sections`, which is the same way every other
+   * section is opted into.
+   *
+   * Defaults to empty: a centre whose site does not describe a process should
+   * not get an invented one.
+   */
+  steps: z
+    .array(
+      z.object({
+        title: z.string().min(1).max(60),
+        body: z.string().max(200).default(''),
+      }),
+    )
+    .max(6)
+    .default([]),
+  /**
+   * Photographs from the client's own site.
+   *
+   * Full-page clones need image bands — a case-study row, a split about
+   * section — and one `og:image` does not fill them. The scraper collects the
+   * large images off the pages it reads, so a gallery is the business's own
+   * photography rather than stock. Absent, the bands are omitted.
+   */
+  gallery: z.array(z.string().max(400)).max(8).default([]),
+  /**
+   * Attributed quotes, only where the site actually publishes them.
+   *
+   * Never generated. A fabricated testimonial is a claim in a named person's
+   * mouth on a client's own site, which is the one category of invention that
+   * cannot be walked back.
+   */
+  testimonials: z
+    .array(
+      z.object({
+        quote: z.string().min(1).max(400),
+        author: z.string().max(60),
+        role: z.string().max(80).default(''),
+      }),
+    )
+    .max(6)
+    .default([]),
+  /**
+   * Price tiers, only where the site publishes them.
+   *
+   * Same rule as testimonials and for the same reason: a made-up price is a
+   * number a customer will hold the client to.
+   */
+  pricing: z
+    .array(
+      z.object({
+        name: z.string().min(1).max(40),
+        price: z.string().max(40).default(''),
+        note: z.string().max(120).default(''),
+        features: z.array(z.string().max(90)).max(8).default([]),
+      }),
+    )
+    .max(4)
+    .default([]),
+  /**
+   * A "before / after" band — the without-us versus with-us comparison several
+   * of these designs close on. Derived from the site's own positioning.
+   */
+  comparison: z
+    .object({
+      beforeLabel: z.string().max(40).default('Without us'),
+      afterLabel: z.string().max(40).default('With us'),
+      before: z.array(z.string().max(120)).max(5).default([]),
+      after: z.array(z.string().max(120)).max(5).default([]),
+    })
+    .default({ beforeLabel: 'Without us', afterLabel: 'With us', before: [], after: [] }),
   proof: z
     .object({
       stats: z
@@ -521,7 +618,7 @@ export type SiteContent = z.infer<typeof SiteContent>;
  * demo tenant should look finished, and anything more specific than this would
  * be a claim nobody checked.
  */
-type LandingCopy = Omit<SiteContent, 'sections' | 'contact' | 'footerNote'> & {
+type LandingCopy = Omit<SiteContent, 'sections' | 'contact' | 'footerNote' | 'steps' | 'gallery' | 'testimonials' | 'pricing' | 'comparison'> & {
   template: SiteTemplate;
   /** Only the two fields a template can supply without inventing an address. */
   contact: Pick<SiteContent['contact'], 'hours' | 'formNote'>;
@@ -529,7 +626,7 @@ type LandingCopy = Omit<SiteContent, 'sections' | 'contact' | 'footerNote'> & {
 
 const LANDING_COPY: Record<Industry, LandingCopy> = {
   EDUCATION: {
-    template: 'classic',
+    template: 'solaris',
     hero: {
       eyebrow: 'Admissions open',
       headline: 'Learn something that changes what you can do',
@@ -572,7 +669,7 @@ const LANDING_COPY: Record<Industry, LandingCopy> = {
   },
 
   CLINIC: {
-    template: 'directory',
+    template: 'solaris',
     hero: {
       eyebrow: 'Appointments available this week',
       headline: 'Care that starts with someone answering the phone',
@@ -611,7 +708,7 @@ const LANDING_COPY: Record<Industry, LandingCopy> = {
   },
 
   RESTAURANT: {
-    template: 'directory',
+    template: 'solaris',
     hero: {
       eyebrow: 'Now taking bookings',
       headline: 'A table, a delivery, or a room for thirty',
@@ -650,7 +747,7 @@ const LANDING_COPY: Record<Industry, LandingCopy> = {
   },
 
   PROFESSIONAL: {
-    template: 'classic',
+    template: 'solaris',
     hero: {
       eyebrow: 'Consultations by appointment',
       headline: 'Advice you can act on, from someone who read the file',
@@ -693,7 +790,7 @@ const LANDING_COPY: Record<Industry, LandingCopy> = {
   },
 
   RETAIL: {
-    template: 'bold',
+    template: 'solaris',
     hero: {
       eyebrow: 'In stock now',
       headline: 'Ask a person. Get an answer.',
@@ -732,7 +829,7 @@ const LANDING_COPY: Record<Industry, LandingCopy> = {
   },
 
   FITNESS: {
-    template: 'bold',
+    template: 'solaris',
     hero: {
       eyebrow: 'Trial session available',
       headline: 'Turn up once. We will handle the rest.',
@@ -775,7 +872,7 @@ const LANDING_COPY: Record<Industry, LandingCopy> = {
   },
 
   GENERIC: {
-    template: 'split',
+    template: 'solaris',
     hero: {
       eyebrow: '',
       headline: 'Call us and speak to someone who can help',
@@ -930,6 +1027,11 @@ export const PublicSiteDto = z.object({
   metaDescription: z.string().nullable(),
   /** Whether the page will accept a callback request. */
   acceptsLeads: z.boolean(),
+  /**
+   * The centre's Dograh voice agent, if one is connected. Carries the public
+   * embed token and never the API key — see DograhWidgetDto.
+   */
+  dograh: DograhWidgetDto,
 });
 export type PublicSiteDto = z.infer<typeof PublicSiteDto>;
 
