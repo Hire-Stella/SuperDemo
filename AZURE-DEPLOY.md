@@ -178,9 +178,19 @@ az postgres flexible-server create \
 export DATABASE_URL="postgresql://superdemo:${PG_PASSWORD}@${PG}.postgres.database.azure.com:5432/superdemo?sslmode=require"
 ```
 
-`--public-access "$MY_IP"` is what lets step 7 run `db push` from your laptop.
-Container Apps reaches the server through the *Allow Azure services* rule, which
-that command adds alongside your IP.
+`--public-access "$MY_IP"` is what lets step 7 run `db push` from your laptop,
+and it is only half of what you need. It does **not** add an *Allow Azure
+services* rule, so add one explicitly:
+
+```bash
+az postgres flexible-server firewall-rule create -g $RG -s $PG \
+  -n AllowAzureServices --start-ip-address 0.0.0.0 --end-ip-address 0.0.0.0
+```
+
+`0.0.0.0-0.0.0.0` is Azure's special case for "any Azure service", not "the
+whole internet". Without it the container starts, maps every route, and then
+dies on its first query with `P1001 Can't reach database server` — which reads
+like the database is down rather than like a firewall, and costs you a while.
 
 No extensions needed. The `KnowledgeChunk.embedding` column is `Float[]`, not
 pgvector — deliberately, so the vendored local Postgres needs no extension build

@@ -110,6 +110,7 @@ properties:
               port: 8080
             initialDelaySeconds: 20
             periodSeconds: 30
+            timeoutSeconds: 3
             failureThreshold: 3
           # Readiness gates traffic on Postgres and Redis actually answering.
           - type: Readiness
@@ -118,6 +119,13 @@ properties:
               port: 8080
             initialDelaySeconds: 10
             periodSeconds: 15
+            # Azure defaults timeoutSeconds to 1 when it is omitted, and /ready
+            # round-trips both Postgres and Redis. Omitting it measured latency
+            # instead of health: a cold pool or a Redis blip blew the 1s budget,
+            # failed three times, and pulled the only replica out of rotation —
+            # ingress then accepted TLS and answered nothing, which is what took
+            # the Vercel frontend down to a permanent "Loading…".
+            timeoutSeconds: 5
             failureThreshold: 3
           # Startup gets a longer leash: Prisma's first connection and three
           # Redis connections open before the listener binds.
@@ -127,6 +135,7 @@ properties:
               port: 8080
             initialDelaySeconds: 5
             periodSeconds: 5
+            timeoutSeconds: 3
             failureThreshold: 24
         volumeMounts:
           - volumeName: recordings
