@@ -73,7 +73,7 @@ export default function SuperadminPage() {
   /* Identity and landing page. Both null-means-derive, like themePreset. */
   const [logoUrl, setLogoUrl] = useState('');
   const [tagline, setTagline] = useState('');
-  const [siteTemplate, setSiteTemplate] = useState<SiteTemplate | null>(null);
+  const [websiteUrl, setWebsiteUrl] = useState('');
   const [admin, setAdmin] = useState(BLANK_ADMIN);
   const [addingAdminTo, setAddingAdminTo] = useState<string | null>(null);
   const [newAdmin, setNewAdmin] = useState(BLANK_ADMIN);
@@ -203,7 +203,7 @@ export default function SuperadminPage() {
                 ...(themePreset ? { themePreset } : {}),
                 ...(logoUrl.trim() ? { logoUrl: logoUrl.trim() } : {}),
                 ...(tagline.trim() ? { tagline: tagline.trim() } : {}),
-                ...(siteTemplate ? { siteTemplate } : {}),
+                ...(websiteUrl.trim() ? { websiteUrl: websiteUrl.trim() } : {}),
                 timezone,
                 admin: { ...admin, email: admin.email.trim().toLowerCase() },
               });
@@ -307,24 +307,35 @@ export default function SuperadminPage() {
             </label>
 
             <label className="space-y-1 text-sm md:col-span-2">
-              <span className="text-muted-foreground">Landing page layout</span>
-              <Select
-                value={siteTemplate ?? ''}
-                onChange={(e) => setSiteTemplate((e.target.value || null) as SiteTemplate | null)}
-              >
-                <option value="">
-                  Suits the vertical ({SITE_TEMPLATES[defaultTemplateForIndustry(industry)].label})
-                </option>
-                {SiteTemplateEnum.options.map((t) => (
-                  <option key={t} value={t}>
-                    {SITE_TEMPLATES[t].label} — {SITE_TEMPLATES[t].bestFor}
-                  </option>
-                ))}
-              </Select>
-              <span className="block text-[11px] text-muted-foreground">
-                {SITE_TEMPLATES[siteTemplate ?? defaultTemplateForIndustry(industry)].note}
+              <span className="text-muted-foreground">Their website — optional</span>
+              <Input
+                type="url"
+                value={websiteUrl}
+                onChange={(e) => setWebsiteUrl(e.target.value)}
+                placeholder="https://theirbusiness.com"
+              />
+              <span className="block text-[11px] leading-relaxed text-muted-foreground">
+                {websiteUrl.trim() ? (
+                  <>
+                    The centre is created immediately from the {INDUSTRY_LABELS[industry].toLowerCase()}{' '}
+                    template, then this site is read in the background to rewrite the landing page in
+                    their own words and build a voice agent briefed on what they actually do. Progress
+                    shows on their Website page.
+                  </>
+                ) : (
+                  <>
+                    Leave empty and the centre is built from the vertical template — real copy, but
+                    generic. Give a URL and the page and the voice agent are generated from it.
+                  </>
+                )}
               </span>
             </label>
+
+{/*
+              No layout picker: there is one template, and it is the finished
+              one. A centre's page differs by its own copy and its own theme,
+              not by which of four in-house layouts somebody chose.
+            */}
 
             {/* Says what the button will actually do, so the operator is not
                 guessing what a "clinic" gets. */}

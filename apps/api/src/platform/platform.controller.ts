@@ -29,6 +29,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthService } from '../auth/auth.service';
 import { TenantContext } from '../tenancy/tenant-context.service';
 import { KnowledgeService } from '../knowledge/knowledge.service';
+import { EnrichmentService } from '../integrations/enrichment/enrichment.service';
+import { ScraperService } from '../integrations/enrichment/scraper.service';
+import { OutboxService } from '../outbox/outbox.service';
 import { CurrentUser, Platform, Roles } from '../auth/guards';
 import { ZodBody } from '../shared/zod.pipe';
 import type { Industry, SessionUser, ThemePreset } from '@superdemo/contracts';
@@ -51,6 +54,9 @@ export class PlatformController {
     private readonly auth: AuthService,
     private readonly tenants: TenantContext,
     private readonly knowledge: KnowledgeService,
+    private readonly enrichment: EnrichmentService,
+    private readonly scraper: ScraperService,
+    private readonly outbox: OutboxService,
   ) {}
 
   /* ============================ organisations ============================= */
@@ -139,6 +145,10 @@ export class PlatformController {
       );
     }
 
+    // Before anything is written: a URL that cannot be read should fail the form
+    // the operator is looking at, not a status field on a centre that now exists.
+    if (body.websiteUrl) await this.scraper.assertReadable(body.websiteUrl);
+
     return this.tenants.runAs(null, actor.id, async () => {
       const [slugTaken, emailTaken] = await Promise.all([
         this.prisma.organization.findUnique({ where: { slug }, select: { id: true } }),
@@ -170,6 +180,7 @@ export class PlatformController {
             // truly needs — see packages/contracts/src/brand.ts.
             logoUrl: body.logoUrl ?? null,
             tagline: body.tagline ?? null,
+            websiteUrl: body.websiteUrl ?? null,
           },
         });
 
@@ -302,6 +313,30 @@ export class PlatformController {
           },
         });
 
+        /*
+         * Enrichment is queued, not run.
+         *
+         * Reading the client's website, writing copy with an LLM and building a
+         * workflow on their Dograh is tens of seconds of somebody else's
+         * infrastructure. Doing it here would make creating a centre slow and
+         * make it fail when any of those three is having a bad day — and the
+         * centre above is already complete and usable without it. The outbox
+         * commits the job with the tenant, so it cannot be lost between the two
+         * writes, and retries it if Dograh or Anthropic is briefly down.
+         */
+        if (body.websiteUrl) {
+          /*
+           * Overwrite, because there is nothing yet to protect.
+           *
+           * enqueue defaults to leaving existing copy alone, which is right for
+           * a re-run months later and wrong here: the only copy this centre has
+           * is the vertical template written milliseconds ago. Defaulting to
+           * false meant a brand-new tenant kept "Call us and speak to someone
+           * who can help" while the generated page it asked for was discarded.
+           */
+          await this.enrichment.enqueue(tx, created.id, body.websiteUrl, true);
+        }
+
         await tx.auditLog.create({
           data: {
             actorId: actor.id,
@@ -317,6 +352,7 @@ export class PlatformController {
                 aiAgent: aiAgent.name,
                 knowledgeDocs: template.knowledge.length,
                 siteTemplate,
+                websiteUrl: body.websiteUrl ?? null,
               },
             },
           },
@@ -338,6 +374,11 @@ export class PlatformController {
       // The knowledge index is in memory and per-centre, so the new corpus has
       // to be admitted to it before the AI can retrieve anything.
       await this.tenants.runAs(org.org.id, actor.id, () => this.knowledge.rebuild());
+
+      // Nudge the drainer so a website-backed centre starts enriching now
+      // rather than on the next five-second poll. Awaited only far enough to
+      // schedule it — notify() defers the work off the request.
+      if (body.websiteUrl) await this.outbox.notify();
 
       return {
         id: org.org.id,
