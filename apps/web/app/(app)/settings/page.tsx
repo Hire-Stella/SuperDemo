@@ -291,7 +291,7 @@ export default function SettingsPage() {
       <Card
         className="mb-4"
         title="Demo calls"
-        subtitle="Three agents you can ring from one page — inbound, outbound and info"
+        subtitle="Set up here; ring them — or talk in the browser — from Demo calls"
         contentClassName="p-4"
       >
         {demoCalls.isLoading ? (
@@ -323,6 +323,17 @@ export default function SettingsPage() {
                 </label>
                 <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
                   {DEMO_DIALER_LABELS[dialer.kind].note}
+                </p>
+                {/*
+                  State, because this is now the only place these are set up: a
+                  slot that is on but has no agent looks identical to a working
+                  one otherwise, and the person who finds out is whoever presses
+                  the button on Demo calls.
+                */}
+                <p className="mt-1 text-[11px]">
+                  <Badge dot={dialer.ready ? 'bg-live' : 'bg-muted-foreground'}>
+                    {dialer.ready ? 'Ready' : dialer.enabled ? 'Not set up' : 'Off'}
+                  </Badge>
                 </p>
                 <Select
                   aria-label={`Agent for the ${DEMO_DIALER_LABELS[dialer.kind].label} dialer`}

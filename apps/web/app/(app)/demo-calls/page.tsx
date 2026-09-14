@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Mic, PhoneOutgoing, X } from 'lucide-react';
 import {
@@ -28,7 +28,6 @@ import { Badge, Button, Card, Input, Select, Spinner } from '@/components/compos
  * same controls for whoever is setting a centre up rather than testing it.
  */
 export default function DemoCallsPage() {
-  const queryClient = useQueryClient();
 
   const view = useQuery({
     queryKey: ['demo-calls'],
@@ -44,15 +43,6 @@ export default function DemoCallsPage() {
    * page owns which slot is talking and there is only ever one script tag.
    */
   const [webCall, setWebCall] = useState<{ kind: DemoDialerKind; src: string } | null>(null);
-
-  const save = useMutation({
-    mutationFn: (body: { kind: DemoDialerKind; enabled?: boolean; workflowId?: number | null }) =>
-      api.put<DemoCallsView>('/demo-calls', body),
-    onSuccess: (r) => {
-      queryClient.setQueryData(['demo-calls'], r);
-    },
-    onError: (e) => toast.error((e as Error).message),
-  });
 
   if (view.isLoading) return <Spinner label="Loading dialers…" />;
   if (view.isError) {
@@ -70,8 +60,12 @@ export default function DemoCallsPage() {
           <PhoneOutgoing className="size-5 text-primary" aria-hidden /> Demo calls
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Three agents, three buttons. Point each slot at one of this centre&rsquo;s Dograh
-          workflows and hear it answer.
+          Ring one of this centre&rsquo;s agents, or talk to it in the browser. Which agent
+          answers each slot is set in{' '}
+          <Link href="/settings" className="underline underline-offset-2">
+            Settings
+          </Link>
+          .
         </p>
       </header>
 
@@ -92,7 +86,8 @@ export default function DemoCallsPage() {
         <Card className="mb-4" title="Could not list agents" contentClassName="p-4">
           <p className="max-w-prose text-sm text-muted-foreground">
             Dograh answered, but not with a workflow list — {d.workflowsError}. Slots already
-            configured still dial; you just cannot change which agent they use until this clears.
+            configured still dial and still talk; you just cannot change which agent they use in
+            Settings until this clears.
           </p>
         </Card>
       )}
@@ -102,12 +97,8 @@ export default function DemoCallsPage() {
           <DialerCard
             key={dialer.kind}
             dialer={dialer}
-            workflows={d.workflows}
-            connected={d.dograhConnected}
-            saving={save.isPending}
             talking={webCall?.kind === dialer.kind}
             anyTalking={Boolean(webCall)}
-            onSave={(body) => save.mutate({ kind: dialer.kind, ...body })}
             onWebCall={(src) => setWebCall({ kind: dialer.kind, src })}
           />
         ))}
@@ -193,21 +184,13 @@ function WebCallHost({
 
 function DialerCard({
   dialer,
-  workflows,
-  connected,
-  saving,
   talking,
   anyTalking,
-  onSave,
   onWebCall,
 }: {
   dialer: DemoDialerView;
-  workflows: DemoCallsView['workflows'];
-  connected: boolean;
-  saving: boolean;
   talking: boolean;
   anyTalking: boolean;
-  onSave: (body: { enabled?: boolean; workflowId?: number | null }) => void;
   onWebCall: (src: string) => void;
 }) {
   const meta = DEMO_DIALER_LABELS[dialer.kind];
@@ -255,43 +238,20 @@ function DialerCard({
       <div className="grid gap-3">
         <p className="text-[11px] leading-relaxed text-muted-foreground">{meta.hint}</p>
 
-        {/* ------------------------------ setup ------------------------------ */}
-        <label className="flex cursor-pointer items-center gap-2.5 text-sm">
-          <input
-            type="checkbox"
-            className="size-4 shrink-0 accent-[var(--primary)]"
-            checked={dialer.enabled}
-            disabled={!connected || saving}
-            onChange={(e) => onSave({ enabled: e.target.checked })}
-          />
-          <span>Use this dialer</span>
-        </label>
-
-        <label className="block text-sm">
-          <span className="text-muted-foreground">Agent</span>
-          <Select
-            className="mt-1.5"
-            value={dialer.workflowId ?? ''}
-            disabled={!connected || saving || workflows.length === 0}
-            onChange={(e) =>
-              onSave({ workflowId: e.target.value ? Number(e.target.value) : null })
-            }
-          >
-            <option value="">
-              {workflows.length === 0 ? 'No agents available' : 'Choose an agent…'}
-            </option>
-            {workflows.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.name} · {w.status}
-              </option>
-            ))}
-          </Select>
-          {dialer.workflowName && !workflows.some((w) => w.id === dialer.workflowId) && (
-            <span className="mt-1 block text-[11px] text-muted-foreground">
-              Currently {dialer.workflowName}, which is not in the list Dograh returned.
-            </span>
+        {/*
+          Which agent answers, read-only.
+          Configuration lives in Settings: these cards sit in front of a client
+          while somebody presses the call button, and a dropdown one misclick
+          away from it is the wrong place to keep the wiring.
+        */}
+        <p className="text-sm">
+          <span className="text-muted-foreground">Agent: </span>
+          {dialer.workflowName ? (
+            <span className="font-medium">{dialer.workflowName}</span>
+          ) : (
+            <span className="text-muted-foreground">none chosen</span>
           )}
-        </label>
+        </p>
 
         {/* ------------------------------ dial ------------------------------- */}
         <div className="grid grid-cols-[7rem_1fr] gap-2">
@@ -350,8 +310,11 @@ function DialerCard({
 
         {!dialer.ready && (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            {dialer.blockedReason ??
-              'Switch this dialer on and choose an agent before it can place a call.'}
+            {dialer.blockedReason ?? 'This dialer is switched off.'}{' '}
+            <Link href="/settings" className="underline underline-offset-2">
+              Set it up in Settings
+            </Link>
+            .
           </p>
         )}
 
