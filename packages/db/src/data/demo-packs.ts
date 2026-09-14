@@ -467,8 +467,237 @@ export const FIT_PACK: DemoPack = {
   callerNames: { first: FIT_FIRST, last: FIT_LAST },
 };
 
+/* ----------------------------- car rental --------------------------------- */
+/**
+ * A Dubai car rental desk.
+ *
+ * The five routing slots carry different work here than in either other pack,
+ * and that is the point of writing it out rather than reaching for "generic
+ * retail": a rental company's phone is mostly bookings and rates, but its
+ * *difficult* calls are fines, deposits and damage — and those are the ones
+ * that reach a person. The escalation mix reflects that, because the handoff
+ * chart is meant to tell an operator what to fix.
+ *
+ * Caller names are the FIT lists: a rental desk off Sheikh Zayed Road takes
+ * calls from the same Gulf, South Asian and European mix, and inventing a
+ * fourth phone book to say so would be noise.
+ */
+export const LEGEND_RENTAL_PACK: DemoPack = {
+  interests: [
+    'Economy hatchback — daily',
+    'Mid-size sedan — weekly',
+    'SUV (7-seater) — weekend',
+    'Luxury / sports hire',
+    'Monthly lease',
+    'Corporate fleet account',
+    'Airport pickup & drop',
+    'Chauffeur service',
+    'Long-term lease (12 months)',
+    'Baby seat / additional driver',
+  ],
+
+  staff: [
+    { name: 'Faisal Al Rashid',  email: 'faisal@legendrental.example',  role: 'ADMIN',      location: 'DUBAI', skills: ['GENERAL', 'MANAGEMENT', 'EDUCATION'], ext: '101', colour: '#1d4ed8' },
+    { name: 'Rania Khoury',      email: 'rania@legendrental.example',   role: 'SUPERVISOR', location: 'DUBAI', skills: ['FINANCE', 'MANAGEMENT', 'GENERAL'],   ext: '102', colour: '#7c3aed' },
+    { name: 'Imran Sheikh',      email: 'imran@legendrental.example',   role: 'AGENT',      location: 'DUBAI', skills: ['EDUCATION', 'GENERAL'],               ext: '103', colour: '#0891b2' },
+    { name: 'Joanna Fernandes',  email: 'joanna@legendrental.example',  role: 'AGENT',      location: 'DUBAI', skills: ['EDUCATION', 'LANGUAGE'],              ext: '104', colour: '#db2777' },
+    { name: 'Mahmoud Saleh',     email: 'mahmoud@legendrental.example', role: 'AGENT',      location: 'DUBAI', skills: ['FINANCE', 'GENERAL'],                 ext: '105', colour: '#ea580c' },
+    { name: 'Tanya Petrova',     email: 'tanya@legendrental.example',   role: 'AGENT',      location: 'DUBAI', skills: ['EDUCATION', 'MANAGEMENT'],            ext: '106', colour: '#16a34a' },
+    { name: 'Bilal Chaudhry',    email: 'bilal@legendrental.example',   role: 'AGENT',      location: 'DUBAI', skills: ['LANGUAGE', 'GENERAL'],                ext: '107', colour: '#ca8a04' },
+    { name: 'Grace Mutua',       email: 'grace@legendrental.example',   role: 'AGENT',      location: 'DUBAI', skills: ['FINANCE', 'MANAGEMENT'],              ext: '108', colour: '#4f46e5' },
+    { name: 'Sandeep Rao',       email: 'sandeep@legendrental.example', role: 'AGENT',      location: 'INDIA', skills: ['EDUCATION', 'FINANCE'],               ext: '201', colour: '#0d9488' },
+    { name: 'Neha Kulkarni',     email: 'neha@legendrental.example',    role: 'AGENT',      location: 'INDIA', skills: ['GENERAL', 'LANGUAGE'],                ext: '202', colour: '#be123c' },
+    { name: 'Ahmed Nabil',       email: 'ahmed.n@legendrental.example', role: 'AGENT',      location: 'EGYPT', skills: ['MANAGEMENT', 'GENERAL'],              ext: '301', colour: '#9333ea' },
+    { name: 'Dina Shawky',       email: 'dina@legendrental.example',    role: 'AGENT',      location: 'EGYPT', skills: ['LANGUAGE', 'EDUCATION'],              ext: '302', colour: '#059669' },
+  ],
+
+  knowledge: [
+    {
+      title: 'Branches, opening hours and airport desks',
+      category: 'GENERAL',
+      content: [
+        'SAMPLE CONTENT — replace with your real details.',
+        '',
+        'Head office on Sheikh Zayed Road: open daily 8am to 9pm.',
+        'Deira branch: open daily 9am to 8pm.',
+        'DXB Terminal 3 desk: staffed 24 hours.',
+        'Free delivery of the vehicle to any Dubai address on rentals of three days or more.',
+        'Collection from your address is free on monthly rentals, AED 75 otherwise.',
+      ].join('\n'),
+    },
+    {
+      title: 'What you need to rent — licence and documents',
+      category: 'EDUCATION',
+      content: [
+        'SAMPLE CONTENT — replace with your real policy.',
+        '',
+        'UAE residents: Emirates ID and a valid UAE driving licence.',
+        'Visitors: passport, visit visa page, home licence and an International Driving Permit.',
+        'Licences from the GCC, UK, EU, US, Canada, Australia, Japan and South Africa are accepted directly.',
+        'Minimum age is 22 for standard vehicles and 25 for luxury and sports models.',
+        'The licence must have been held for at least one year.',
+        'The card used for the deposit must belong to the driver named on the contract.',
+      ].join('\n'),
+    },
+    {
+      title: 'Rates, deposits and what is included',
+      category: 'FINANCE',
+      content: [
+        'SAMPLE CONTENT — replace with your real pricing.',
+        '',
+        'Daily, weekly and monthly rates are quoted inclusive of comprehensive insurance and registration.',
+        'A refundable security deposit is held on the card: AED 1,000 for economy and mid-size,',
+        'AED 3,000 for SUVs, and AED 5,000 upwards for luxury models.',
+        'The deposit is released 21 days after the vehicle is returned, once Salik and any fines have cleared.',
+        'Mileage is capped at 250km a day, 1,750km a week and 4,500km a month. Excess is AED 0.50 per km.',
+        'Salik tolls are charged at cost and added to the final invoice.',
+        'Insurance excess is AED 1,200 on standard vehicles unless the damage waiver is taken.',
+      ].join('\n'),
+    },
+    {
+      title: 'Fines, Salik and traffic offences',
+      category: 'FINANCE',
+      content: [
+        'SAMPLE CONTENT — replace with your real policy.',
+        '',
+        'Traffic fines reach us from the RTA up to 30 days after the offence date.',
+        'Fines are charged to the card on file at cost plus an AED 50 administration fee per fine.',
+        'A photograph of the fine notice is emailed to the driver before the card is charged.',
+        'Salik crossings are AED 4 each and are billed at cost with no markup.',
+        'Disputed fines can be contested through us, but the charge stands until the RTA reverses it.',
+      ].join('\n'),
+    },
+    {
+      title: 'Accidents, breakdowns and roadside assistance',
+      category: 'LANGUAGE',
+      content: [
+        'SAMPLE CONTENT — replace with your real procedure.',
+        '',
+        'In any accident, however minor, call the police on 999 first and obtain a police report.',
+        'Insurance will not cover damage without a police report — this is the single most common',
+        'reason a claim is refused.',
+        'Roadside assistance runs 24 hours: punctures, battery, lockouts and recovery.',
+        'A replacement vehicle is provided within four hours anywhere in Dubai if the car is undriveable',
+        'and the driver is not at fault.',
+      ].join('\n'),
+    },
+    {
+      title: 'Corporate accounts and long-term leasing',
+      category: 'MANAGEMENT',
+      content: [
+        'SAMPLE CONTENT — replace with your real terms.',
+        '',
+        'Corporate accounts need a trade licence, VAT certificate and a signed leasing agreement.',
+        'Leases run 12, 24 or 36 months and include registration, servicing, tyres and replacement vehicles.',
+        'Fleets of five vehicles or more get a dedicated account manager and consolidated monthly invoicing.',
+        'Drivers can be added or swapped on a corporate contract without re-signing.',
+        'Early termination is charged at two months of the contracted rate.',
+      ].join('\n'),
+    },
+  ],
+
+  exchanges: [
+    { caller: 'How much is a Nissan Sunny for three days?', ai: 'Our economy sedans start around AED 90 a day, and three days falls in the short-hire band. Rates include insurance and registration. Shall I check availability for your dates?', skill: 'EDUCATION', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'Do you have a 7-seater available this weekend?', ai: 'We keep several 7-seat SUVs. Weekends go quickly, so let me take your dates and hold one.', skill: 'EDUCATION', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'I am a tourist — can I drive on my UK licence?', ai: 'Yes. A UK licence is accepted directly alongside your passport and visit visa page. An International Driving Permit is recommended but not required for UK holders.', skill: 'EDUCATION', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'What deposit do you take on an SUV?', ai: 'AED 3,000, held on the card and released 21 days after return once Salik and any fines have cleared.', skill: 'FINANCE', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'Can you deliver the car to my hotel in Marina?', ai: 'Yes — delivery anywhere in Dubai is free on rentals of three days or more. What time suits you?', skill: 'EDUCATION', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'Is there a mileage limit?', ai: '250km a day, 1,750km a week, 4,500km a month. Beyond that it is AED 0.50 per kilometre.', skill: 'EDUCATION', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'I have been charged AED 700 for a fine I never got.', ai: 'I am sorry — fines reach us up to 30 days later and we email the notice before charging. Let me put you through to someone who can pull the RTA record.', skill: 'FINANCE', escalates: true, disposition: 'EXISTING_STUDENT_SUPPORT', reason: 'NEGATIVE_SENTIMENT' },
+    { caller: 'My deposit still has not come back after a month.', ai: 'That is past our 21-day window and needs looking at properly. Transferring you to accounts now.', skill: 'FINANCE', escalates: true, disposition: 'EXISTING_STUDENT_SUPPORT', reason: 'NEGATIVE_SENTIMENT' },
+    { caller: 'I have had a small accident in Al Quoz, what do I do?', ai: 'Call 999 for a police report first — insurance will not cover it without one. Staying on the line, I am connecting you to our team right now.', skill: 'LANGUAGE', escalates: true, disposition: 'EXISTING_STUDENT_SUPPORT', reason: 'HUMAN_ONLY_INTENT' },
+    { caller: 'The car has a flat tyre on Emirates Road.', ai: 'Roadside assistance runs 24 hours and I am escalating this now so they can reach you.', skill: 'LANGUAGE', escalates: true, disposition: 'EXISTING_STUDENT_SUPPORT', reason: 'HUMAN_ONLY_INTENT' },
+    { caller: 'Can I extend my rental by another week?', ai: 'Usually yes, subject to the car not being reserved after you. Let me check the booking with a colleague.', skill: 'EDUCATION', escalates: true, disposition: 'EXISTING_STUDENT_SUPPORT', reason: 'OUT_OF_SCOPE' },
+    { caller: 'What is your best monthly price on a Pajero?', ai: 'Monthly rates on the larger SUVs are negotiated rather than listed. Putting you through to someone who can quote it.', skill: 'FINANCE', escalates: true, disposition: 'FEE_ENQUIRY', reason: 'LOW_CONFIDENCE' },
+    { caller: 'Do you do chauffeur-driven hire?', ai: 'We do, hourly or daily, with an English or Arabic speaking driver. Let me get the chauffeur desk to price your trip.', skill: 'MANAGEMENT', escalates: true, disposition: 'ENROLMENT_INTEREST', reason: 'HUMAN_ONLY_INTENT' },
+    /*
+     * Not every corporate or roadside call needs a person, and a pack where they
+     * all do reports 0% containment on those two queues — which reads as the
+     * assistant being broken rather than as the work being genuinely human.
+     */
+    { caller: 'What is included in a long-term lease?', ai: 'Registration, servicing, tyres and a replacement vehicle if yours goes off-road, across 12, 24 or 36 months. Insurance is in the monthly rate too.', skill: 'MANAGEMENT', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'How many cars before we get an account manager?', ai: 'Five or more puts you on a dedicated account manager with consolidated monthly invoicing.', skill: 'MANAGEMENT', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'Can we swap which driver uses a leased car?', ai: 'Yes — drivers can be added or changed on a corporate contract without re-signing anything.', skill: 'MANAGEMENT', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'What documents do we need to open a corporate account?', ai: 'A trade licence, VAT certificate and the signed leasing agreement. Send them over and the account is usually open within a day.', skill: 'MANAGEMENT', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'Is roadside assistance included or extra?', ai: 'Included, 24 hours: punctures, batteries, lockouts and recovery, at no extra charge.', skill: 'LANGUAGE', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'The fuel light is on — do I return it full?', ai: 'Yes, same fuel level as collection. There is a refuelling charge plus the fuel cost if it comes back lower.', skill: 'LANGUAGE', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'How long for a replacement if the car breaks down?', ai: 'Within four hours anywhere in Dubai, provided the car is undriveable and you are not at fault.', skill: 'LANGUAGE', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'Where do I return the car at the airport?', ai: 'The Terminal 3 desk, staffed 24 hours. Park in the rental return bay and someone will meet you.', skill: 'LANGUAGE', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'Can I add my wife as a second driver?', ai: 'Yes — she needs to be present with her licence and Emirates ID at collection. There is a small additional-driver fee.', skill: 'GENERAL', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'Do you provide a baby seat?', ai: 'Baby and booster seats are available on request at AED 25 a day. Shall I add one to the booking?', skill: 'GENERAL', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'Is the airport desk open at 3am?', ai: 'Yes, our Terminal 3 desk is staffed 24 hours.', skill: 'GENERAL', escalates: false, disposition: 'INFO_PROVIDED' },
+    { caller: 'Someone who speaks Arabic, please.', ai: 'Of course — connecting you to an Arabic-speaking colleague now.', skill: 'LANGUAGE', escalates: true, disposition: 'INFO_PROVIDED', reason: 'CALLER_REQUESTED' },
+    { caller: 'I want to talk to a person, not a machine.', ai: 'No problem at all — putting you through to the desk now.', skill: 'GENERAL', escalates: true, disposition: 'INFO_PROVIDED', reason: 'CALLER_REQUESTED' },
+    { caller: 'Your website quoted AED 1,400 a month but the desk said 1,900.', ai: 'That gap needs a person to look at the quote and the booking together — transferring you now.', skill: 'FINANCE', escalates: true, disposition: 'NOT_INTERESTED', reason: 'MAX_TURNS' },
+    // Qualified: vehicle count, term and start date are all on the table, so the
+    // fleet desk has something to quote rather than a conversation to restart.
+    { caller: 'We are opening a Dubai office and need eight mid-size sedans on a 24-month lease from March.', ai: 'That is a corporate lease and eight vehicles puts you in the dedicated account-manager band, with servicing and replacements included. I have the count, term and start month — the fleet team will build a quote and call you today.', skill: 'MANAGEMENT', escalates: true, disposition: 'LEAD_QUALIFIED', reason: 'HUMAN_ONLY_INTENT' },
+    { caller: 'Our hotel needs two 7-seaters on permanent standby for guest transfers, starting next month.', ai: 'Standing hospitality contracts run as a long-term lease with a named account manager and consolidated invoicing. I have the vehicles and the start — passing you to the fleet desk to price it.', skill: 'MANAGEMENT', escalates: true, disposition: 'LEAD_QUALIFIED', reason: 'HUMAN_ONLY_INTENT' },
+    { caller: 'I need a car for six months for my staff, what does that cost?', ai: 'Six months sits in our long-term band and is quoted per vehicle and grade. Let me get the leasing team to work it out with you.', skill: 'MANAGEMENT', escalates: true, disposition: 'CALLBACK_REQUESTED', reason: 'HUMAN_ONLY_INTENT' },
+    // The junk any published number gets, so the inbox outcome filter has rows
+    // behind every option.
+    { caller: 'Is this the Toyota service centre on Sheikh Zayed Road?', ai: 'No, this is Legend Rent A Car — the service centre has its own line. Sorry about that.', skill: 'GENERAL', escalates: false, disposition: 'WRONG_NUMBER' },
+    { caller: 'I am calling about selling my car.', ai: 'We rent and lease rather than buy from the public, so we are not the right people for that.', skill: 'GENERAL', escalates: false, disposition: 'WRONG_NUMBER' },
+    { caller: 'Your vehicle warranty is about to expire — press one to renew.', ai: 'This is a business line and we have no warranty with you. Ending the call.', skill: 'GENERAL', escalates: false, disposition: 'SPAM' },
+    { caller: 'We can put your company at the top of Google for a small fee —', ai: 'Thank you, but we are not interested in cold sales calls. Ending the call now.', skill: 'GENERAL', escalates: false, disposition: 'SPAM' },
+  ],
+
+  whatsapp: [
+    { caller: 'Hi, is the Corolla available from Thursday?', ai: 'Let me check Thursday for you — how many days would you need it?' },
+    { caller: 'What deposit for an economy car?', ai: 'AED 1,000, refundable 21 days after return once Salik and fines clear.' },
+    { caller: 'Can you drop the car at DXB Terminal 1?', ai: 'Yes, airport delivery is free on three days or more. What time is your flight in?' },
+    { caller: 'Do I need an International Driving Permit?', ai: 'Not if your licence is from the UK, EU, US, GCC, Canada, Australia, Japan or South Africa.' },
+    { caller: 'How much are Salik charges?', ai: 'AED 4 per crossing, billed at cost with no markup on the final invoice.' },
+    { caller: 'Can I pay monthly by bank transfer?', ai: 'Yes, on monthly and corporate contracts. I can send the account details across.' },
+  ],
+
+  outbound: [
+    {
+      name: 'Booking confirmation callback',
+      opener: 'Hello, this is Legend Rent A Car confirming your booking for tomorrow. Shall I run through the collection details?',
+      replies: ['Yes please.', 'Can you deliver instead?', 'I need to change the date.'],
+      followUp: 'Noted. Bring your licence and Emirates ID, and the deposit goes on the card at collection.',
+    },
+    {
+      name: 'Rental ending — extend or return',
+      opener: 'Hello, Legend Rent A Car here. Your rental ends on Friday — would you like to extend or arrange collection?',
+      replies: ['Extend by a week.', 'Collect it from my office.', 'I will drop it at the branch.'],
+      followUp: 'Perfect. I will update the contract and send the revised invoice by email.',
+    },
+    {
+      name: 'Corporate lease follow-up',
+      opener: 'Hello, this is Legend Rent A Car about the fleet quote we sent over. Did you have any questions on the terms?',
+      replies: ['Send it to our finance team.', 'Can you do 36 months?', 'We have gone with someone else.'],
+      followUp: 'Understood. Longer terms bring the monthly rate down, and servicing stays included either way.',
+    },
+    {
+      name: 'Deposit released',
+      opener: 'Hello, Legend Rent A Car calling — your security deposit has been released back to your card today.',
+      replies: ['Thank you.', 'How long until it shows?', 'There was a fine deducted?'],
+      followUp: 'It usually shows within three to five working days depending on your bank.',
+    },
+  ],
+
+  tags: ['tourist', 'corporate', 'long-term', 'airport', 'follow-up'],
+  // A rental desk peaks late morning and again as flights land in the evening.
+  peakHours: [8, 22],
+  // Weekends are the busiest: short leisure hires and airport pickups.
+  volume: { weekday: [16, 30], weekend: [24, 40] },
+  callerNames: { first: FIT_FIRST, last: FIT_LAST },
+};
+
+/**
+ * Packs by key.
+ *
+ * Keyed loosely rather than by `Industry` because the two are not the same
+ * question: a car rental desk and a grocery are both RETAIL-ish to the database
+ * and share none of their questions. `demo-data.ts` defaults to the org's
+ * industry and takes `--pack` to override, so a vertical can hold more than one
+ * story without either of them having to be the "generic" one.
+ */
 export const DEMO_PACKS: Record<string, DemoPack> = {
   RETAIL: TAMIL_MART_PACK,
   EDUCATION: FIT_PACK,
+  CAR_RENTAL: LEGEND_RENTAL_PACK,
 };
 
