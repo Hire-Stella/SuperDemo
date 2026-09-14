@@ -444,9 +444,33 @@ export const DISPOSITION_LABELS_BY_INDUSTRY: Partial<
   },
   GENERIC: {
     ENROLMENT_INTEREST: 'Sales interest',
+    FEE_ENQUIRY: 'Price enquiry',
     EXISTING_STUDENT_SUPPORT: 'Existing customer',
   },
 };
+
+/**
+ * What the "what are people ringing about" breakdown is called.
+ *
+ * The underlying column is `Contact.courseInterest`, named when the only tenant
+ * was a training institute. Renaming it is a migration; renaming what the chart
+ * says is a string, and a car rental desk reading "Most-asked-about courses"
+ * over a list of SUVs is the kind of detail that loses a demo.
+ */
+export const INTEREST_LABELS: Record<Industry, { title: string; empty: string }> = {
+  EDUCATION: { title: 'Most-asked-about courses', empty: 'No course interest recorded in this range.' },
+  CLINIC: { title: 'Most-asked-about treatments', empty: 'No treatment interest recorded in this range.' },
+  RESTAURANT: { title: 'Most-asked-about dishes', empty: 'No menu interest recorded in this range.' },
+  RETAIL: { title: 'Most-asked-about products', empty: 'No product interest recorded in this range.' },
+  FITNESS: { title: 'Most-asked-about classes', empty: 'No class interest recorded in this range.' },
+  PROFESSIONAL: { title: 'Most-asked-about services', empty: 'No service interest recorded in this range.' },
+  GENERIC: { title: 'What people ask about', empty: 'Nothing recorded in this range.' },
+};
+
+/** What the interest breakdown is called inside a given centre. */
+export function interestLabel(industry: Industry | null | undefined): { title: string; empty: string } {
+  return INTEREST_LABELS[industry ?? 'GENERIC'];
+}
 
 /** What an outcome is called inside a given centre. */
 export function dispositionLabel(
