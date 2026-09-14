@@ -935,7 +935,11 @@ async function main() {
         { to: 'ON_CALL', ms: int(5, 25) * 60_000 },
         { to: 'OFFLINE', ms: 0 },
       ];
+      // `prevMs` measures the state being left, not the one being entered —
+      // the readers sum it alongside `from`. The first event of a shift has
+      // none, because how long someone was offline is not knowable here.
       let prev: string | null = 'OFFLINE';
+      let prevMs: number | null = null;
       for (const step of timeline) {
         await prisma.agentStateEvent.create({
           data: {
@@ -943,10 +947,11 @@ async function main() {
             from: prev as Prisma.AgentStateEventCreateInput['from'],
             to: step.to as Prisma.AgentStateEventCreateInput['to'],
             at: cursor,
-            prevMs: step.ms || null,
+            prevMs,
           },
         });
         prev = step.to;
+        prevMs = step.ms;
         cursor = new Date(cursor.getTime() + step.ms);
       }
     }

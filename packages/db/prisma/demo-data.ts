@@ -12,6 +12,8 @@
  * the whole database and resets it.
  *
  *   pnpm demo:seed --slug tamil-mart --days 45
+ *   pnpm demo:seed --slug tamil-mart --days 60 --volume 6 --reset
+ *   pnpm demo:seed --slug legend --pack CAR_RENTAL --days 60 --volume 12
  *   pnpm demo:seed --slug tamil-mart --name "Tamil Mart" --industry RETAIL --create
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
@@ -48,6 +50,18 @@ const SLUG = arg('slug');
 const NAME = arg('name');
 const INDUSTRY = (arg('industry') ?? 'RETAIL') as Prisma.OrganizationCreateInput['industry'];
 const DAYS = Number(arg('days', '45'));
+/**
+ * Multiplier on the pack's daily call volume.
+ *
+ * The packs describe the real centres they are modelled on — FIT takes 14-26
+ * calls on a weekday — and against thirteen staff that reads as an empty room:
+ * occupancy lands under 1% and the boards look broken rather than quiet. A
+ * multiplier keeps the pack honest about its own centre while letting a demo
+ * be sized for the room it is being shown in.
+ */
+const VOLUME = Number(arg('volume', '1'));
+/** Which demo pack to pour in. Defaults to the org's industry. */
+const PACK = arg('pack');
 const CREATE = flag('create');
 /** Clear this centre's generated traffic first, so a re-run replaces rather than doubles. */
 const RESET = flag('reset');
@@ -79,8 +93,19 @@ async function main() {
     throw new Error(`No centre with slug "${SLUG}". Pass --create --name "…" to make one.`);
   }
 
-  const pack: DemoPack | undefined = DEMO_PACKS[org.industry];
-  if (!pack) throw new Error(`No demo pack for industry ${org.industry}`);
+  /*
+   * The pack decides what this centre talks about, and that is not always
+   * settled by its industry: a car rental desk and a grocery are both retail to
+   * the database and share none of their questions. Default to the industry,
+   * override with --pack.
+   */
+  const packKey = PACK ?? org.industry;
+  const pack: DemoPack | undefined = DEMO_PACKS[packKey];
+  if (!pack) {
+    throw new Error(
+      `No demo pack "${packKey}". Available: ${Object.keys(DEMO_PACKS).join(', ')}. Pass --pack to choose one.`,
+    );
+  }
 
   console.log(`▸ ${org.name} (${org.industry}) — ${DAYS} days of demo traffic`);
 
@@ -94,14 +119,23 @@ async function main() {
     const convIds = (
       await prisma.conversation.findMany({ select: { id: true } })
     ).map((c) => c.id);
-    if (convIds.length) {
-      await prisma.transcriptSegment.deleteMany({ where: { call: { conversationId: { in: convIds } } } });
-      await prisma.recording.deleteMany({ where: { call: { conversationId: { in: convIds } } } });
-      await prisma.callParticipant.deleteMany({ where: { call: { conversationId: { in: convIds } } } });
-      await prisma.call.deleteMany({ where: { conversationId: { in: convIds } } });
-      await prisma.message.deleteMany({ where: { conversationId: { in: convIds } } });
-      await prisma.aiSession.deleteMany({ where: { conversationId: { in: convIds } } });
-      await prisma.conversation.deleteMany({ where: { id: { in: convIds } } });
+    /*
+     * Delete in batches. Every id in an `IN (…)` list is a bind variable and
+     * Postgres refuses a statement with more than 32,767 of them, so a centre
+     * with 25k conversations — which is exactly what a high `--volume` run
+     * produces — cannot be reset in one statement. The cap is per statement,
+     * not per transaction, so batching is the whole fix.
+     */
+    const BATCH = 5_000;
+    for (let i = 0; i < convIds.length; i += BATCH) {
+      const ids = convIds.slice(i, i + BATCH);
+      await prisma.transcriptSegment.deleteMany({ where: { call: { conversationId: { in: ids } } } });
+      await prisma.recording.deleteMany({ where: { call: { conversationId: { in: ids } } } });
+      await prisma.callParticipant.deleteMany({ where: { call: { conversationId: { in: ids } } } });
+      await prisma.call.deleteMany({ where: { conversationId: { in: ids } } });
+      await prisma.message.deleteMany({ where: { conversationId: { in: ids } } });
+      await prisma.aiSession.deleteMany({ where: { conversationId: { in: ids } } });
+      await prisma.conversation.deleteMany({ where: { id: { in: ids } } });
     }
     await prisma.callMetricsDaily.deleteMany({});
     await prisma.agentStateEvent.deleteMany({});
@@ -123,25 +157,48 @@ async function main() {
    * team, and every escalated call in a top-up run would be handed to the
    * handful of people whose addresses happen to match the pack.
    */
+  /*
+   * `email` is unique across the platform, so a pack address already taken by
+   * another centre cannot simply be created here. It must not be *adopted*
+   * either: that user belongs to someone else's org, their AgentState carries
+   * someone else's orgId, and handing them this centre's escalated calls writes
+   * one tenant's id into another tenant's rows. Suffix instead, and keep the
+   * pack's name, skills and location.
+   */
   const users = await prisma.user.findMany();
   for (const s of pack.staff) {
     if (users.some((u) => u.email === s.email)) continue;
-    const existing = await rawPrisma.user.findUnique({ where: { email: s.email } });
-    if (existing) {
-      users.push(existing);
-      continue;
+
+    let email = s.email;
+    if (await rawPrisma.user.findUnique({ where: { email } })) {
+      const [local, domain] = s.email.split('@');
+      email = `${local}+${org.slug}@${domain}`;
+      if (await rawPrisma.user.findUnique({ where: { email } })) continue;
     }
+
+    /*
+     * Extensions are unique within an org, and two packs both number their desk
+     * from 101. A centre that has been seeded once already — or re-pointed at a
+     * different pack — therefore collides on the extension rather than on
+     * anything meaningful. An unreachable extension is a far smaller problem
+     * than a seed that will not run, so give up the number, not the person.
+     */
+    const extTaken = await prisma.user.findFirst({
+      where: { orgId: org.id, extension: s.ext },
+      select: { id: true },
+    });
+
     users.push(
       await prisma.user.create({
         data: {
-          email: s.email,
+          email,
           name: s.name,
           passwordHash: password,
           role: s.role as Prisma.UserCreateInput['role'],
           location: s.location as Prisma.UserCreateInput['location'],
           timezone: TIMEZONES[s.location]!,
           skills: s.skills as unknown as Prisma.UserCreateInput['skills'],
-          extension: s.ext,
+          extension: extTaken ? null : s.ext,
           avatarColor: s.colour,
           presence: { create: { orgId: org.id, status: 'OFFLINE', since: new Date() } },
         },
@@ -250,14 +307,32 @@ async function main() {
   console.log(`  knowledge: ${await prisma.knowledgeDoc.count()} docs`);
 
   /* -------------------------------- numbers ------------------------------- */
+  /*
+   * `e164` is unique across the platform, and the RNG is seeded to a constant so
+   * that a demo's numbers do not move between the rehearsal and the meeting.
+   * Both are deliberate, and together they mean the second centre seeded draws
+   * the first centre's numbers and dies on a P2002 — which made the "safe to run
+   * against a database that already has real centres" promise above untrue.
+   *
+   * Keep drawing until the draw is free. Deterministic for the first centre,
+   * and every later one still gets a stable number for a given database.
+   */
+  const freeNumber = async (prefix: number): Promise<string> => {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const e164 = `+9714${int(prefix, prefix + 999_999)}`;
+      if (!(await rawPrisma.phoneNumber.findUnique({ where: { e164 } }))) return e164;
+    }
+    throw new Error('could not find a free number in 50 draws — is the range exhausted?');
+  };
+
   if ((await prisma.phoneNumber.count()) < 2) {
-    for (const [label, e164] of [
-      ['Main line', `+9714${int(2000000, 2999999)}`],
-      ['Orders & delivery', `+9714${int(3000000, 3999999)}`],
+    for (const [label, prefix] of [
+      ['Main line', 2_000_000],
+      ['Second line', 3_000_000],
     ] as const) {
       await prisma.phoneNumber.create({
         data: {
-          e164,
+          e164: await freeNumber(prefix),
           label,
           provider: 'mock',
           status: 'ASSIGNED',
@@ -315,7 +390,9 @@ async function main() {
     // anyone reads off the traffic chart.
     const isWeekend = weekday === 5 || weekday === 6;
     const [volFrom, volTo] = isWeekend ? pack.volume.weekend : pack.volume.weekday;
-    const full = int(volFrom, volTo);
+    // Draw first, then scale, so the multiplier stretches the pack's weekly
+    // shape rather than flattening it into a wider random range.
+    const full = Math.round(int(volFrom, volTo) * VOLUME);
 
     // Today is only partly over, so scale to the hours actually elapsed rather
     // than inventing calls from the future.
@@ -653,6 +730,25 @@ async function main() {
       login.setUTCDate(login.getUTCDate() - d);
       login.setUTCHours(int(4, 6), int(0, 59), 0, 0);
       let cursor = login;
+      /*
+       * `from` is not decoration. Occupancy sums `prevMs` over the events whose
+       * `from` is a signed-in state — an agent is not "logged in" for the
+       * stretch that ended when they arrived — so an event written without it
+       * contributes nothing and every scorecard reads 0% occupancy against
+       * perfectly good talk time. seed.ts has always set it; this did not.
+       */
+      /*
+       * `prevMs` is how long the state being *left* lasted, which is why the
+       * readers pair it with `from`. Writing the duration of the state being
+       * entered lines every figure up against the wrong label: a BREAK event
+       * then carries the length of the shift that followed it, and the Agents
+       * page reports eleven hours of break in a week.
+       *
+       * The first event of a shift has no `prevMs` — nobody knows how long they
+       * were offline — and the readers filter those out.
+       */
+      let prev: string = 'OFFLINE';
+      let prevMs: number | null = null;
       for (const step of [
         { to: 'AVAILABLE', ms: int(40, 90) * 60_000 },
         { to: 'ON_CALL', ms: int(10, 30) * 60_000 },
@@ -665,11 +761,14 @@ async function main() {
         await prisma.agentStateEvent.create({
           data: {
             userId: a.id,
+            from: prev as Prisma.AgentStateEventCreateInput['from'],
             to: step.to as Prisma.AgentStateEventCreateInput['to'],
             at: cursor,
-            prevMs: step.ms || null,
+            prevMs,
           },
         });
+        prev = step.to;
+        prevMs = step.ms;
         cursor = new Date(cursor.getTime() + step.ms);
       }
     }
