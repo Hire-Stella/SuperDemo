@@ -82,6 +82,7 @@ export default function SettingsPage() {
         drivers: Record<string, string>;
         instituteName: string;
         websiteEnabled: boolean;
+        simulatorEnabled: boolean;
         slug: string | null;
       }>('/settings'),
   });
@@ -91,6 +92,20 @@ export default function SettingsPage() {
    * drawn from the session, so without that the toggle appears to do nothing
    * until the next reload — the same reason refreshSession exists for branding.
    */
+  const setSimulatorEnabled = useMutation({
+    mutationFn: (simulatorEnabled: boolean) => api.put('/settings', { simulatorEnabled }),
+    onSuccess: (_r, simulatorEnabled) => {
+      toast.success(
+        simulatorEnabled
+          ? 'Simulator enabled'
+          : 'Simulator disabled — the section and its shortcuts are hidden',
+      );
+      void queryClient.invalidateQueries({ queryKey: ['settings'] });
+      void refreshSession();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   const setWebsiteEnabled = useMutation({
     mutationFn: (websiteEnabled: boolean) => api.put('/settings', { websiteEnabled }),
     onSuccess: (_r, websiteEnabled) => {
@@ -200,6 +215,48 @@ export default function SettingsPage() {
                     <code className="font-mono">/{settings.data?.slug ?? ''}</code> and the Website
                     section is hidden. Turning it back on restores the page exactly as it was —
                     disabling never deleted the content.
+                  </>
+                )}
+              </span>
+            </span>
+          </label>
+        )}
+      </Card>
+
+      <Card
+        className="mb-4"
+        title="Call simulator"
+        subtitle="A scripted caller driven through the real routing — no carrier involved"
+        contentClassName="p-4"
+      >
+        {settings.isLoading ? (
+          <Spinner label="Loading…" />
+        ) : (
+          <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+              checked={settings.data?.simulatorEnabled ?? true}
+              disabled={setSimulatorEnabled.isPending}
+              onChange={(e) => setSimulatorEnabled.mutate(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium">
+                {settings.data?.simulatorEnabled ? 'Simulator is on' : 'Simulator is off'}
+              </span>
+              <span className="mt-0.5 block max-w-prose text-[11px] leading-relaxed text-muted-foreground">
+                {settings.data?.simulatorEnabled ? (
+                  <>
+                    The Simulator section invents a caller and walks a scripted conversation through
+                    your real routing, AI handoff and queueing. Useful while setting a centre up and
+                    for training; turn it off once you are live on real traffic and a button that
+                    invents a call is a distraction.
+                  </>
+                ) : (
+                  <>
+                    The Simulator section is hidden, along with the &ldquo;Simulate a call&rdquo;
+                    shortcuts on Live ops, and the endpoints refuse. Real calls, the softphone and
+                    everything else are untouched.
                   </>
                 )}
               </span>

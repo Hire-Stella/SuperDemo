@@ -103,6 +103,8 @@ export const SessionUser = z.object({
    * so an operator inside a centre can still reach the section to turn it on.
    */
   orgWebsiteEnabled: z.boolean().nullable(),
+  /** Same shape and same reasoning as orgWebsiteEnabled. Null for SUPERADMIN. */
+  orgSimulatorEnabled: z.boolean().nullable(),
   location: Location,
   timezone: z.string(),
   skills: z.array(Skill),
@@ -179,6 +181,14 @@ export const CreateOrgInput = z.object({
    */
   websiteEnabled: z.boolean().default(true),
   /**
+   * Whether this centre keeps the call simulator.
+   *
+   * On by default: it is the fastest way to prove routing works on a centre
+   * thirty seconds old. Off for a client already taking real calls, to whom a
+   * button that invents one is a support ticket waiting to happen.
+   */
+  simulatorEnabled: z.boolean().default(true),
+  /**
    * The client's real website.
    *
    * Optional, and the centre is created identically without it — the vertical
@@ -227,6 +237,7 @@ export const UpdateOrgInput = z.object({
    * served, and comes back as it was if anyone changes their mind.
    */
   websiteEnabled: z.boolean().optional(),
+  simulatorEnabled: z.boolean().optional(),
 });
 export type UpdateOrgInput = z.infer<typeof UpdateOrgInput>;
 
@@ -269,6 +280,7 @@ export const AgentSummary = SessionUser.omit({
   orgLogoUrl: true,
   orgTagline: true,
   orgWebsiteEnabled: true,
+  orgSimulatorEnabled: true,
 }).extend({
   extension: z.string().nullable(),
   status: AgentStatus,

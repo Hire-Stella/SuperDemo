@@ -236,6 +236,15 @@ model Organization {
   /// Defaults true because every centre that exists today has a page and a
   /// migration that silently took them offline would be the wrong surprise.
   websiteEnabled Boolean @default(true)
+  /// Whether this centre keeps the call simulator.
+  ///
+  /// It is a demo and training surface — it invents a caller and walks a
+  /// scripted conversation through the real routing — which is exactly what
+  /// you want when showing the product and clutter once a centre is live on
+  /// real traffic. Unlike the website there is no public surface behind it, so
+  /// off means the section and its two shortcuts disappear and the endpoints
+  /// refuse; nothing stops being reachable from outside.
+  simulatorEnabled Boolean @default(true)
   /// URL-safe handle, unique across the platform. Stable once issued — the
   /// superadmin can rename an org's display name without breaking anything.
   slug      String   @unique

@@ -161,6 +161,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
      * take away the place it gets turned back on.
      */
     if (n.href === '/website' && user.orgWebsiteEnabled === false) return false;
+    if (n.href === '/simulator' && user.orgSimulatorEnabled === false) return false;
     // A centre's pages are only reachable from inside that centre. On the
     // platform page they would render another tenant's data or nothing at all,
     // so the operator gets exactly one item until they pick a centre.

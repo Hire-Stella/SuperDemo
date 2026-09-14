@@ -81,6 +81,13 @@ export default function SuperadminPage() {
    * contact centre.
    */
   const [websiteEnabled, setWebsiteEnabled] = useState(true);
+  /*
+   * Whether this centre keeps the call simulator. On by default — it is the
+   * fastest way to prove routing works on a centre thirty seconds old — and off
+   * for a client already taking real calls, to whom a button that invents one
+   * is a support ticket waiting to happen.
+   */
+  const [simulatorEnabled, setSimulatorEnabled] = useState(true);
   const [admin, setAdmin] = useState(BLANK_ADMIN);
   const [addingAdminTo, setAddingAdminTo] = useState<string | null>(null);
   const [newAdmin, setNewAdmin] = useState(BLANK_ADMIN);
@@ -100,6 +107,7 @@ export default function SuperadminPage() {
     setTagline('');
     setWebsiteUrl('');
     setWebsiteEnabled(true);
+    setSimulatorEnabled(true);
     setAdmin(BLANK_ADMIN);
     setCreating(false);
   };
@@ -218,6 +226,7 @@ export default function SuperadminPage() {
                   ? { websiteUrl: websiteUrl.trim() }
                   : {}),
                 websiteEnabled,
+                simulatorEnabled,
                 timezone,
                 admin: { ...admin, email: admin.email.trim().toLowerCase() },
               });
@@ -380,6 +389,34 @@ export default function SuperadminPage() {
                 </label>
               )}
             </div>
+
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border p-3 text-sm md:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+                checked={simulatorEnabled}
+                onChange={(e) => setSimulatorEnabled(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium">Give this centre the call simulator</span>
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                  {simulatorEnabled ? (
+                    <>
+                      A scripted caller driven through the real routing, AI handoff and queueing —
+                      no carrier involved. The fastest way to prove a centre works on its first day.
+                      Turn off for a client already taking real calls, where a button that invents
+                      one is a support ticket waiting to happen.
+                    </>
+                  ) : (
+                    <>
+                      No Simulator section and no &ldquo;Simulate a call&rdquo; shortcuts on Live
+                      ops. Real calls, the softphone and every other surface are untouched, and this
+                      can be switched back on at any time.
+                    </>
+                  )}
+                </span>
+              </span>
+            </label>
 
 {/*
               No layout picker: there is one template, and it is the finished
