@@ -186,7 +186,13 @@ export class SitesService {
     const org = await this.prisma.organization.findUnique({
       where: { slug: slug.toLowerCase() },
     });
-    if (!org || !org.isActive) return null;
+    /*
+     * `websiteEnabled` is checked here and not only in the UI, because the
+     * handle is a public URL. A centre that declined a landing page must not
+     * have one reachable by anyone who guesses the slug — hiding the nav item
+     * would leave the page served and merely unlinked.
+     */
+    if (!org || !org.isActive || !org.websiteEnabled) return null;
 
     return this.tenants.runAs(org.id, null, async () => {
       const site = await this.ensureSite(org);
@@ -242,7 +248,7 @@ export class SitesService {
     const org = await this.prisma.organization.findUnique({
       where: { slug: slug.toLowerCase() },
     });
-    if (!org || !org.isActive) throw new NotFoundException('No page here');
+    if (!org || !org.isActive || !org.websiteEnabled) throw new NotFoundException('No page here');
 
     const country = countryByCode(input.country);
     const phoneE164 = composeE164(country, input.phone);

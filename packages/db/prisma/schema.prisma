@@ -225,6 +225,17 @@ model Organization {
   /// Kept after enrichment so the page and agent can be regenerated when their
   /// site changes — the alternative is asking for the URL a second time.
   websiteUrl String?
+  /// Whether this centre uses the landing-page feature at all.
+  ///
+  /// Not the same question as `Site.isPublished`, which is "is the page live
+  /// right now" — a draft the operator is still writing. This is "does this
+  /// client want a page from us", and plenty do not: they already have a
+  /// website and bought a contact centre. For those, the Website section is
+  /// noise in the sidebar and the public URL should not resolve at all.
+  ///
+  /// Defaults true because every centre that exists today has a page and a
+  /// migration that silently took them offline would be the wrong surprise.
+  websiteEnabled Boolean @default(true)
   /// URL-safe handle, unique across the platform. Stable once issued — the
   /// superadmin can rename an org's display name without breaking anything.
   slug      String   @unique

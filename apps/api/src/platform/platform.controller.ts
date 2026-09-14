@@ -181,6 +181,7 @@ export class PlatformController {
             logoUrl: body.logoUrl ?? null,
             tagline: body.tagline ?? null,
             websiteUrl: body.websiteUrl ?? null,
+            websiteEnabled: body.websiteEnabled,
           },
         });
 
@@ -302,16 +303,22 @@ export class PlatformController {
         // callback form writes into this centre's contacts, so a tenant that is
         // thirty seconds old already demonstrates the whole loop — which is the
         // only reason to ship a landing page from a contact-centre platform.
+        //
+        // Unless the operator said this client does not want one. Then no row
+        // is written at all: an empty Site would still serve a page at the
+        // centre's handle, which is the thing being declined.
         const siteTemplate = body.siteTemplate ?? defaultTemplateForIndustry(body.industry);
-        await tx.site.create({
-          data: {
-            orgId: created.id,
-            template: siteTemplate,
-            style: defaultStyleForIndustry(body.industry),
-            content: siteContentForIndustry(body.industry, body.name),
-            metaTitle: `${body.name}${body.tagline ? ` · ${body.tagline}` : ''}`,
-          },
-        });
+        if (body.websiteEnabled) {
+          await tx.site.create({
+            data: {
+              orgId: created.id,
+              template: siteTemplate,
+              style: defaultStyleForIndustry(body.industry),
+              content: siteContentForIndustry(body.industry, body.name),
+              metaTitle: `${body.name}${body.tagline ? ` · ${body.tagline}` : ''}`,
+            },
+          });
+        }
 
         /*
          * Enrichment is queued, not run.
@@ -324,7 +331,7 @@ export class PlatformController {
          * commits the job with the tenant, so it cannot be lost between the two
          * writes, and retries it if Dograh or Anthropic is briefly down.
          */
-        if (body.websiteUrl) {
+        if (body.websiteUrl && body.websiteEnabled) {
           /*
            * Overwrite, because there is nothing yet to protect.
            *
@@ -351,7 +358,8 @@ export class PlatformController {
                 queues: queues.length,
                 aiAgent: aiAgent.name,
                 knowledgeDocs: template.knowledge.length,
-                siteTemplate,
+                siteTemplate: body.websiteEnabled ? siteTemplate : null,
+                websiteEnabled: body.websiteEnabled,
                 websiteUrl: body.websiteUrl ?? null,
               },
             },
@@ -429,6 +437,7 @@ export class PlatformController {
           themePreset: body.themePreset,
           logoUrl: body.logoUrl,
           tagline: body.tagline,
+          websiteEnabled: body.websiteEnabled,
           // undefined leaves it alone; null clears a pasted export so the
           // preset takes over again.
           themeTokens:
@@ -437,6 +446,33 @@ export class PlatformController {
               : (body.themeTokens ?? Prisma.DbNull),
         },
       });
+
+      /*
+       * Switching the website on for a centre created without one has to build
+       * the page, or the section appears in their sidebar with nothing behind
+       * it and the first thing they see is an empty state they cannot fix.
+       *
+       * Only when there is no Site at all. A centre that had one, turned it off
+       * and turned it back on keeps every word it had written — the flag never
+       * deletes content, it only stops it being served.
+       */
+      if (body.websiteEnabled === true) {
+        const site = await this.prisma.site.findUnique({
+          where: { orgId: id },
+          select: { id: true },
+        });
+        if (!site) {
+          await this.prisma.site.create({
+            data: {
+              orgId: id,
+              template: defaultTemplateForIndustry(existing.industry),
+              style: defaultStyleForIndustry(existing.industry),
+              content: siteContentForIndustry(existing.industry, org.name),
+              metaTitle: `${org.name}${org.tagline ? ` · ${org.tagline}` : ''}`,
+            },
+          });
+        }
+      }
 
       // Deactivating is the destructive-looking action, so record what changed
       // rather than just that something did.

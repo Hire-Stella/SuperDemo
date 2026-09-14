@@ -97,6 +97,12 @@ export const SessionUser = z.object({
    */
   orgLogoUrl: z.string().nullable(),
   orgTagline: z.string().nullable(),
+  /**
+   * Whether this centre uses the landing page. Null for SUPERADMIN, who has no
+   * org of their own — the shell treats only an explicit `false` as "hide it",
+   * so an operator inside a centre can still reach the section to turn it on.
+   */
+  orgWebsiteEnabled: z.boolean().nullable(),
   location: Location,
   timezone: z.string(),
   skills: z.array(Skill),
@@ -164,6 +170,15 @@ export const CreateOrgInput = z.object({
   /** Landing-page layout. Omitted follows the vertical — see sites.ts. */
   siteTemplate: SiteTemplate.optional(),
   /**
+   * Whether to build this centre a landing page at all.
+   *
+   * Plenty of clients already have a website and are buying a contact centre,
+   * and for them the page is a section of the product they will never open.
+   * Off skips the page, skips enrichment, and hides the Website section — the
+   * queues, agent, knowledge and number are created exactly the same.
+   */
+  websiteEnabled: z.boolean().default(true),
+  /**
    * The client's real website.
    *
    * Optional, and the centre is created identically without it — the vertical
@@ -205,6 +220,13 @@ export const UpdateOrgInput = z.object({
   /** Null clears the logo, which restores the monogram rather than blanking it. */
   logoUrl: LogoUrl.optional(),
   tagline: z.string().trim().max(120).nullable().optional(),
+  /**
+   * Turning this on for a centre that never had a page creates one from the
+   * vertical template, so the section is never enabled and empty. Turning it
+   * off leaves the page's content in the database untouched — it stops being
+   * served, and comes back as it was if anyone changes their mind.
+   */
+  websiteEnabled: z.boolean().optional(),
 });
 export type UpdateOrgInput = z.infer<typeof UpdateOrgInput>;
 
@@ -246,6 +268,7 @@ export const AgentSummary = SessionUser.omit({
   orgThemeTokens: true,
   orgLogoUrl: true,
   orgTagline: true,
+  orgWebsiteEnabled: true,
 }).extend({
   extension: z.string().nullable(),
   status: AgentStatus,

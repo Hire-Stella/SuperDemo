@@ -74,6 +74,13 @@ export default function SuperadminPage() {
   const [logoUrl, setLogoUrl] = useState('');
   const [tagline, setTagline] = useState('');
   const [websiteUrl, setWebsiteUrl] = useState('');
+  /*
+   * Whether this centre gets a landing page at all. On by default because the
+   * page is the fastest way to show the whole loop working, and off is a real
+   * answer: plenty of clients already have a website and are buying the
+   * contact centre.
+   */
+  const [websiteEnabled, setWebsiteEnabled] = useState(true);
   const [admin, setAdmin] = useState(BLANK_ADMIN);
   const [addingAdminTo, setAddingAdminTo] = useState<string | null>(null);
   const [newAdmin, setNewAdmin] = useState(BLANK_ADMIN);
@@ -89,6 +96,10 @@ export default function SuperadminPage() {
     setTimezone('Asia/Dubai');
     setIndustry('GENERIC');
     setThemePreset(null);
+    setLogoUrl('');
+    setTagline('');
+    setWebsiteUrl('');
+    setWebsiteEnabled(true);
     setAdmin(BLANK_ADMIN);
     setCreating(false);
   };
@@ -203,7 +214,10 @@ export default function SuperadminPage() {
                 ...(themePreset ? { themePreset } : {}),
                 ...(logoUrl.trim() ? { logoUrl: logoUrl.trim() } : {}),
                 ...(tagline.trim() ? { tagline: tagline.trim() } : {}),
-                ...(websiteUrl.trim() ? { websiteUrl: websiteUrl.trim() } : {}),
+                ...(websiteEnabled && websiteUrl.trim()
+                  ? { websiteUrl: websiteUrl.trim() }
+                  : {}),
+                websiteEnabled,
                 timezone,
                 admin: { ...admin, email: admin.email.trim().toLowerCase() },
               });
@@ -306,30 +320,66 @@ export default function SuperadminPage() {
               />
             </label>
 
-            <label className="space-y-1 text-sm md:col-span-2">
-              <span className="text-muted-foreground">Their website — optional</span>
-              <Input
-                type="url"
-                value={websiteUrl}
-                onChange={(e) => setWebsiteUrl(e.target.value)}
-                placeholder="https://theirbusiness.com"
-              />
-              <span className="block text-[11px] leading-relaxed text-muted-foreground">
-                {websiteUrl.trim() ? (
-                  <>
-                    The centre is created immediately from the {INDUSTRY_LABELS[industry].toLowerCase()}{' '}
-                    template, then this site is read in the background to rewrite the landing page in
-                    their own words and build a voice agent briefed on what they actually do. Progress
-                    shows on their Website page.
-                  </>
-                ) : (
-                  <>
-                    Leave empty and the centre is built from the vertical template — real copy, but
-                    generic. Give a URL and the page and the voice agent are generated from it.
-                  </>
-                )}
-              </span>
-            </label>
+            <div className="space-y-2 rounded-md border border-border p-3 md:col-span-2">
+              <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+                  checked={websiteEnabled}
+                  onChange={(e) => setWebsiteEnabled(e.target.checked)}
+                />
+                <span>
+                  <span className="font-medium">Give this centre a landing page</span>
+                  <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                    {websiteEnabled ? (
+                      <>
+                        A published page at <code className="font-mono">/{slug || slugify(name) || 'handle'}</code>{' '}
+                        whose call button dials this centre&apos;s number and whose callback form writes
+                        into its contacts. Turn off for a client who already has a website — the
+                        queues, assistant, knowledge and number are created either way, and the
+                        Website section is hidden from their sidebar.
+                      </>
+                    ) : (
+                      <>
+                        No page, and nothing served at{' '}
+                        <code className="font-mono">/{slug || slugify(name) || 'handle'}</code>. The
+                        Website section stays hidden until someone turns this back on, in their
+                        Settings or here. Everything else about the centre is unchanged.
+                      </>
+                    )}
+                  </span>
+                </span>
+              </label>
+
+              {websiteEnabled && (
+                <label className="block space-y-1 text-sm">
+                  <span className="text-muted-foreground">Their website — optional</span>
+                  <Input
+                    type="url"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    placeholder="https://theirbusiness.com"
+                  />
+                  <span className="block text-[11px] leading-relaxed text-muted-foreground">
+                    {websiteUrl.trim() ? (
+                      <>
+                        The centre is created immediately from the{' '}
+                        {INDUSTRY_LABELS[industry].toLowerCase()} template, then this site is read in
+                        the background to rewrite the landing page in their own words and build a
+                        voice agent briefed on what they actually do. Progress shows on their Website
+                        page.
+                      </>
+                    ) : (
+                      <>
+                        Leave empty and the centre is built from the vertical template — real copy,
+                        but generic. Give a URL and the page and the voice agent are generated from
+                        it.
+                      </>
+                    )}
+                  </span>
+                </label>
+              )}
+            </div>
 
 {/*
               No layout picker: there is one template, and it is the finished
@@ -352,12 +402,25 @@ export default function SuperadminPage() {
                 one phone number. The admin is enrolled in every queue so calls route on day one.
               </p>
               <p className="mt-1.5 text-muted-foreground">
-                Also a published landing page at{' '}
-                <strong className="font-medium text-foreground">
-                  /{slug || slugify(name) || 'handle'}
-                </strong>
-                , whose call button dials that number and whose callback form creates a contact in
-                this centre.
+                {websiteEnabled ? (
+                  <>
+                    Also a published landing page at{' '}
+                    <strong className="font-medium text-foreground">
+                      /{slug || slugify(name) || 'handle'}
+                    </strong>
+                    , whose call button dials that number and whose callback form creates a contact
+                    in this centre.
+                  </>
+                ) : (
+                  <>
+                    No landing page:{' '}
+                    <strong className="font-medium text-foreground">
+                      /{slug || slugify(name) || 'handle'}
+                    </strong>{' '}
+                    will not resolve, and the Website section is hidden for this centre until
+                    somebody turns it on.
+                  </>
+                )}
               </p>
             </div>
 

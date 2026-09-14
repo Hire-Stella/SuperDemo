@@ -25,6 +25,7 @@ import type {
   TestCrmConnectionOutput,
 } from '@superdemo/contracts';
 import { api, qs } from '@/lib/api';
+import { useSession } from '@/components/providers';
 import { dateTime, money, phone } from '@/lib/format';
 import { CrmConfigPanel } from '@/components/crm-config';
 import {
@@ -44,6 +45,7 @@ import {
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
+  const { refreshSession } = useSession();
 
   const numbers = useQuery({
     queryKey: ['numbers'],
@@ -76,7 +78,31 @@ export default function SettingsPage() {
   const settings = useQuery({
     queryKey: ['settings'],
     queryFn: () =>
-      api.get<{ drivers: Record<string, string>; instituteName: string }>('/settings'),
+      api.get<{
+        drivers: Record<string, string>;
+        instituteName: string;
+        websiteEnabled: boolean;
+        slug: string | null;
+      }>('/settings'),
+  });
+
+  /*
+   * Refreshes the session as well as the settings row. The Website nav item is
+   * drawn from the session, so without that the toggle appears to do nothing
+   * until the next reload — the same reason refreshSession exists for branding.
+   */
+  const setWebsiteEnabled = useMutation({
+    mutationFn: (websiteEnabled: boolean) => api.put('/settings', { websiteEnabled }),
+    onSuccess: (_r, websiteEnabled) => {
+      toast.success(
+        websiteEnabled
+          ? 'Website enabled — the page is live and the section is back in the sidebar'
+          : 'Website disabled — the public page now returns 404. Nothing was deleted.',
+      );
+      void queryClient.invalidateQueries({ queryKey: ['settings'] });
+      void refreshSession();
+    },
+    onError: (e) => toast.error((e as Error).message),
   });
 
   /* ------------------------------ numbers -------------------------------- */
@@ -126,8 +152,61 @@ export default function SettingsPage() {
         <h1 className="flex items-center gap-2 text-xl font-semibold">
           <SettingsIcon className="size-5 text-primary" aria-hidden /> Settings
         </h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">Numbers, CRM connection, and active drivers.</p>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Website, numbers, CRM connection, and active drivers.
+        </p>
       </header>
+
+      {/*
+        Website on/off.
+        First card because it is the one setting that changes what the rest of
+        the product looks like — it adds or removes a whole section — and
+        because a client who does not want a public page should not have to
+        scroll past numbers and CRM to say so.
+      */}
+      <Card
+        className="mb-4"
+        title="Website"
+        subtitle="A public landing page for this centre, at its own handle"
+        contentClassName="p-4"
+      >
+        {settings.isLoading ? (
+          <Spinner label="Loading…" />
+        ) : (
+          <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+              checked={settings.data?.websiteEnabled ?? true}
+              disabled={setWebsiteEnabled.isPending}
+              onChange={(e) => setWebsiteEnabled.mutate(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium">
+                {settings.data?.websiteEnabled ? 'Website is on' : 'Website is off'}
+              </span>
+              <span className="mt-0.5 block max-w-prose text-[11px] leading-relaxed text-muted-foreground">
+                {settings.data?.websiteEnabled ? (
+                  <>
+                    Your page is served at{' '}
+                    <code className="font-mono">/{settings.data?.slug ?? ''}</code>, and the Website
+                    section in the sidebar is where you edit it. Turn this off if you already have a
+                    website — the public page stops resolving and the section disappears, but nothing
+                    you have written is deleted.
+                  </>
+                ) : (
+                  <>
+                    Nothing is served at{' '}
+                    <code className="font-mono">/{settings.data?.slug ?? ''}</code> and the Website
+                    section is hidden. Turning it back on restores the page exactly as it was —
+                    disabling never deleted the content.
+                  </>
+                )}
+              </span>
+            </span>
+          </label>
+        )}
+      </Card>
 
       {/* Active drivers — the honesty panel */}
       <Card

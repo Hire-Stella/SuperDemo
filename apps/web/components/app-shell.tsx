@@ -154,6 +154,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const nav = NAV.filter((n) => {
     if (!(n.roles as readonly string[]).includes(user.role)) return false;
+    /*
+     * A centre that declined a landing page should not carry the section
+     * around. Only an explicit `false` hides it: the flag is null for an
+     * operator, who has no org of their own, and hiding it from them would
+     * take away the place it gets turned back on.
+     */
+    if (n.href === '/website' && user.orgWebsiteEnabled === false) return false;
     // A centre's pages are only reachable from inside that centre. On the
     // platform page they would render another tenant's data or nothing at all,
     // so the operator gets exactly one item until they pick a centre.

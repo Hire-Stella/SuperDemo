@@ -19,6 +19,9 @@ import {
   UpdateUserInput,
   UpsertAiAgentInput,
   UpsertQueueInput,
+  defaultStyleForIndustry,
+  defaultTemplateForIndustry,
+  siteContentForIndustry,
   type Skill,
 } from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
@@ -334,8 +337,17 @@ export class AdminController {
   @Get('settings')
   async settings() {
     const s = await this.prisma.setting.findFirst();
+    // Lives on Organization rather than Setting because the session carries it
+    // — the shell needs it to decide whether to draw the Website nav item, and
+    // a second round trip on every page load to answer that would be silly.
+    const org = await this.prisma.organization.findUnique({
+      where: { id: this.tenants.requireOrgId() },
+      select: { websiteEnabled: true, slug: true },
+    });
     return {
       ...s,
+      websiteEnabled: org?.websiteEnabled ?? true,
+      slug: org?.slug ?? null,
       agentHourlyCostUsd: s ? Number(s.agentHourlyCostUsd) : 12,
       // Surfacing the active drivers is how the demo stays honest: anyone
       // looking at settings can see which parts are mocked.
@@ -364,13 +376,50 @@ export class AdminController {
         agentRingTimeoutSec: z.coerce.number().int().min(5).max(120).optional(),
         agentHourlyCostUsd: z.coerce.number().min(0).max(1000).optional(),
         bitrixPortalUrl: z.string().url().nullable().optional(),
+        /**
+         * Whether this centre uses the landing page.
+         *
+         * An admin's own switch rather than a superadmin-only one: deciding a
+         * client does not want a public page is the client's call, and routing
+         * it through the operator makes a one-click choice a support request.
+         */
+        websiteEnabled: z.boolean().optional(),
       }),
     )
     body: Record<string, unknown>,
   ) {
-    const data: Record<string, unknown> = { ...body };
+    const { websiteEnabled, ...settingFields } = body;
+    const data: Record<string, unknown> = { ...settingFields };
     if (typeof body.agentHourlyCostUsd === 'number') {
       data.agentHourlyCostUsd = String(body.agentHourlyCostUsd);
+    }
+
+    if (typeof websiteEnabled === 'boolean') {
+      const orgId = this.tenants.requireOrgId();
+      const org = await this.prisma.organization.update({
+        where: { id: orgId },
+        data: { websiteEnabled },
+        select: { industry: true, name: true, tagline: true },
+      });
+      // Same reason as the platform route: enabling must leave a page behind
+      // it, or the section opens onto nothing. Disabling never deletes content.
+      if (websiteEnabled) {
+        const site = await this.prisma.site.findUnique({
+          where: { orgId },
+          select: { id: true },
+        });
+        if (!site) {
+          await this.prisma.site.create({
+            data: {
+              orgId,
+              template: defaultTemplateForIndustry(org.industry),
+              style: defaultStyleForIndustry(org.industry),
+              content: siteContentForIndustry(org.industry, org.name),
+              metaTitle: `${org.name}${org.tagline ? ` · ${org.tagline}` : ''}`,
+            },
+          });
+        }
+      }
     }
     // orgId is unique, so it is a valid identifier here — and naming it keeps
     // this a single-row update rather than an updateMany the extension filters.
