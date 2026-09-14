@@ -1,0 +1,121 @@
+/*
+ * sanvera, scoped to its own root.
+ *
+ * Nine templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+
+.sanvera-root {
+  --cream: #fdecd4;
+  --cream-soft: #fff3e2;
+  --maroon-deepest: #2c0906;
+  --maroon-deep: #3a0c0a;
+  --maroon: #4a1210;
+  --maroon-card: #4f1210;
+  --maroon-footer: #591a12;
+  --ink: #4a1210;
+  --orange: #dd6b3a;
+  --orange-dark: #c8582c;
+}
+
+@theme inline {
+  --color-cream: var(--cream);
+  --color-maroon: var(--maroon);
+  --color-orange: var(--orange);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+}
+.sanvera-root *, .sanvera-root {
+  box-sizing: border-box;
+}
+.sanvera-root {
+  overflow-x: hidden;
+}
+.sanvera-root {
+  font-family: var(--font-body), Arial, Helvetica, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-display), "Passion One", sans-serif;
+}
+
+.eyebrow-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid rgba(74, 18, 16, 0.35);
+  border-radius: 999px;
+  padding: 0.4rem 1rem;
+  font-size: 0.8rem;
+  color: var(--maroon);
+}
+
+.eyebrow-pill--light {
+  border-color: rgba(253, 236, 212, 0.4);
+  color: var(--cream);
+}
+
+.eyebrow-pill::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.btn-orange {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--orange);
+  color: var(--cream);
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 0.9rem 1.1rem 0.9rem 1.4rem;
+  border-radius: 999px;
+  transition: transform 0.25s ease, background 0.25s ease;
+}
+
+.btn-orange:hover {
+  background: var(--orange-dark);
+  transform: translateY(-2px);
+}
+
+.btn-orange .icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 999px;
+  background: rgba(253, 236, 212, 0.18);
+}
+
+/* Faint recurring line-art texture used behind the cream sections, matching
+   the source site's subtle background pattern. */
+.bg-pattern {
+  position: relative;
+}
+
+.bg-pattern::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("/t/sanvera/images/bg-pattern.png");
+  background-repeat: repeat;
+  background-size: 480px auto;
+  opacity: 0.5;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bg-pattern > * {
+  position: relative;
+  z-index: 1;
+}

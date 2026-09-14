@@ -1,0 +1,41 @@
+{
+  "name": "@stella/template-runtime",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/index.tsx",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.tsx"
+    },
+    "./theme.css": "./src/theme.css"
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.build.json --noEmit",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "@stella/template-schema": "workspace:*",
+    "@stella/template-sanvera": "workspace:*",
+    "@stella/template-momentum": "workspace:*",
+    "@stella/template-reodental": "workspace:*",
+    "@stella/template-tripvanta": "workspace:*",
+    "@stella/template-elianvalen": "workspace:*",
+    "@stella/template-rescale": "workspace:*",
+    "@stella/template-stackgrid": "workspace:*",
+    "@stella/template-utomic": "workspace:*",
+    "@stella/template-zova": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": ">=19",
+    "react-dom": ">=19"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  }
+}

@@ -1,5 +1,7 @@
 import type { SiteTemplate } from '@superdemo/contracts';
+import { TEMPLATES as LIBRARY } from '@stella/template-runtime';
 import type { Site } from '@/components/site/parts';
+import { toTemplateContent } from '@/components/site/library-adapter';
 import type { SiteTemplateModule } from './types';
 import { solarisTemplate } from './solaris';
 import { sentiraTemplate } from './sentira';
@@ -7,13 +9,14 @@ import { knotchTemplate } from './knotch';
 import { nudgeTemplate } from './nudge';
 
 /**
- * Every landing template, by id. Currently one.
+ * The in-house templates, by id.
  *
- * `Record<SiteTemplate, …>` is deliberate and load-bearing: adding an id to
- * the contract without adding a module here is a type error, not a silent
- * fallback on a client's live page. See `./types` for the two-step.
+ * No longer `Record<SiteTemplate, …>`: most ids now resolve in the ported
+ * library instead, and requiring an in-house module for each would mean
+ * writing four dead entries per ported design. `SiteRender` checks both and
+ * the contract's enum is still the closed set either way.
  */
-export const SITE_TEMPLATE_MODULES: Record<SiteTemplate, SiteTemplateModule> = {
+export const SITE_TEMPLATE_MODULES: Partial<Record<SiteTemplate, SiteTemplateModule>> = {
   solaris: solarisTemplate,
   sentira: sentiraTemplate,
   knotch: knotchTemplate,
@@ -28,6 +31,17 @@ export const SITE_TEMPLATE_MODULES: Record<SiteTemplate, SiteTemplateModule> = {
  * page instead of a 500 on someone's marketing site.
  */
 export function SiteRender({ site }: { site: Site }) {
+  /*
+   * Ported templates first.
+   *
+   * They own their whole page — their own layout, palette, fonts and section
+   * order — so there is nothing of ours to wrap them in. The content is
+   * converted at the seam rather than inside the library, because the library
+   * also serves ai-employees-v2 and must not learn what a SuperDemo Site is.
+   */
+  const ported = LIBRARY[site.template];
+  if (ported) return <>{ported.render({ content: toTemplateContent(site) })}</>;
+
   const template = SITE_TEMPLATE_MODULES[site.template] ?? solarisTemplate;
   return (
     <>

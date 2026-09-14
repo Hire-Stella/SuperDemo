@@ -1,0 +1,215 @@
+/*
+ * zova, scoped to its own root.
+ *
+ * Nine templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+
+/* ==========================================================================
+   ZOVA — design tokens, measured from the live Framer site
+   (zova-saas.framer.ai). Light theme only: white background, near-black
+   text, a dark charcoal->black gradient on primary CTAs, and a soft blue
+   accent used for the highlighted pricing tier and headline marker highlights.
+   ========================================================================== */
+
+:root {
+  --zv-bg: #ffffff;
+  --zv-ink: #0a0a0a;
+  --zv-muted: #5f6368;
+  --zv-line: rgba(0, 0, 0, 0.1);
+  --zv-card: #fafafa;
+  --zv-card-2: #f4f4f4;
+  --zv-blue-soft: #e8f1fc;
+  --zv-blue-line: #cfe0f5;
+  --zv-highlight: rgba(196, 217, 245, 0.7);
+}
+
+@theme inline {
+  --color-zv-bg: var(--zv-bg);
+  --color-zv-ink: var(--zv-ink);
+  --color-zv-muted: var(--zv-muted);
+  --color-zv-line: var(--zv-line);
+  --color-zv-card: var(--zv-card);
+  --color-zv-card-2: var(--zv-card-2);
+  --color-zv-blue-soft: var(--zv-blue-soft);
+  --color-zv-blue-line: var(--zv-blue-line);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-geist), var(--font-inter), ui-sans-serif, sans-serif;
+  --font-accent: var(--font-manrope), var(--font-inter), ui-sans-serif, sans-serif;
+}
+
+html {
+  /* Instant (not CSS-smooth) anchor scrolling — matches the live site's own
+     behavior and avoids relying on a scroll-behavior animation that some
+     environments (and Next.js's own router-driven scroll) can interrupt. */
+  -webkit-text-size-adjust: 100%;
+}
+.zova-root {
+  background: var(--zv-bg);
+  color: var(--zv-ink);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+::selection {
+  background: var(--zv-ink);
+  color: #fff;
+}
+
+/* --------------------------------------------------------------------------
+   Buttons — measured gradient + pill shape
+   -------------------------------------------------------------------------- */
+
+.zv-btn-primary {
+  background-image: linear-gradient(111deg, #545454 0%, #000000 100%);
+  color: #ffffff;
+  border-radius: 9999px;
+}
+
+.zv-btn-outline {
+  background-color: #ffffff;
+  color: var(--zv-ink);
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  border-radius: 9999px;
+}
+
+/* --------------------------------------------------------------------------
+   Headline marker-highlight — soft blue/lavender bar sitting behind the
+   lower portion of certain words, like a highlighter pen.
+   -------------------------------------------------------------------------- */
+
+.zv-highlight {
+  position: relative;
+  white-space: nowrap;
+  z-index: 0;
+}
+
+.zv-highlight::after {
+  content: "";
+  position: absolute;
+  left: -0.06em;
+  right: -0.06em;
+  bottom: 0.06em;
+  height: 0.34em;
+  background: var(--zv-highlight);
+  z-index: -1;
+  border-radius: 3px;
+}
+
+/* --------------------------------------------------------------------------
+   Small type helpers
+   -------------------------------------------------------------------------- */
+
+.zv-eyebrow {
+  font-family: var(--font-manrope), var(--font-inter), sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--zv-muted);
+}
+
+.zv-heading {
+  font-family: var(--font-geist), var(--font-inter), sans-serif;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+/* --------------------------------------------------------------------------
+   Motion — plain CSS, reduced-motion safe
+   -------------------------------------------------------------------------- */
+
+@keyframes zv-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.zv-fade-up {
+  animation: zv-fade-up 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes zv-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.zv-fade {
+  animation: zv-fade 0.4s ease both;
+}
+
+@keyframes zv-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.zv-caret {
+  animation: zv-blink 0.9s step-end infinite;
+}
+
+@keyframes zv-progress {
+  from {
+    width: 8%;
+  }
+  to {
+    width: 86%;
+  }
+}
+
+.zv-progress-bar {
+  animation: zv-progress 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes zv-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.zv-marquee-track {
+  animation: zv-marquee 28s linear infinite;
+}
+
+.zv-marquee-track:hover {
+  animation-play-state: paused;
+}
+
+/* --------------------------------------------------------------------------
+   Hero/Features wash — soft white-to-blue gradient behind the hero and the
+   dashboard mockup section, measured from the live site.
+   -------------------------------------------------------------------------- */
+
+.zv-hero-wash {
+  background: linear-gradient(180deg, #ffffff 55%, rgba(207, 226, 252, 0.85) 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zv-fade-up,
+  .zv-fade,
+  .zv-caret,
+  .zv-progress-bar,
+  .zv-marquee-track {
+    animation: none;
+  }
+}

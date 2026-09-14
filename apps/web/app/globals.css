@@ -1,6 +1,38 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
+/*
+ * The ported landing templates.
+ *
+ * `@source` tells Tailwind to scan those packages for class names. Without it
+ * Tailwind only scans this app and every ported template renders as unstyled
+ * text — confusing to diagnose, because the handful of classes the dashboard
+ * happens to share do work.
+ *
+ * Their stylesheets are each scoped to a `.<id>-root` class that only exists
+ * inside the template, so nine palettes coexist and none of them reaches the
+ * dashboard around them.
+ */
+@source "../../../packages/templates/sanvera/src";
+@source "../../../packages/templates/momentum/src";
+@source "../../../packages/templates/reodental/src";
+@source "../../../packages/templates/tripvanta/src";
+@source "../../../packages/templates/elianvalen/src";
+@source "../../../packages/templates/rescale/src";
+@source "../../../packages/templates/stackgrid/src";
+@source "../../../packages/templates/utomic/src";
+@source "../../../packages/templates/zova/src";
+@import '@stella/template-sanvera/theme.css';
+@import '@stella/template-momentum/theme.css';
+@import '@stella/template-reodental/theme.css';
+@import '@stella/template-tripvanta/theme.css';
+@import '@stella/template-elianvalen/theme.css';
+@import '@stella/template-rescale/theme.css';
+@import '@stella/template-stackgrid/theme.css';
+@import '@stella/template-utomic/theme.css';
+@import '@stella/template-zova/theme.css';
+
+
 @custom-variant dark (&:is(.dark *));
 
 /*

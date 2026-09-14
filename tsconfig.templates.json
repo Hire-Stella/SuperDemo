@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "declaration": true,
+    "forceConsistentCasingInFileNames": true,
+    /*
+     * Off for ported template code, as upstream. These components came from
+     * standalone clones that did not use the flag, and satisfying it means
+     * editing bodies the port exists to leave untouched.
+     */
+    "noUncheckedIndexedAccess": false
+  }
+}

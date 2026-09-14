@@ -84,6 +84,16 @@ export default function SuperadminPage() {
    */
   const [websiteEnabled, setWebsiteEnabled] = useState(true);
   /*
+   * Which landing design the centre starts on.
+   *
+   * Null means "whatever suits the vertical" — the API picks, so an operator
+   * who does not care still gets something coherent. The picker came back when
+   * the ported library arrived: choosing between four in-house layouts that
+   * all looked in-house was a decision with no good answer, and choosing
+   * between nine finished designs is a real one.
+   */
+  const [siteTemplate, setSiteTemplate] = useState<SiteTemplate | null>(null);
+  /*
    * Whether this centre keeps the call simulator. On by default — it is the
    * fastest way to prove routing works on a centre thirty seconds old — and off
    * for a client already taking real calls, to whom a button that invents one
@@ -118,6 +128,7 @@ export default function SuperadminPage() {
     setTagline('');
     setWebsiteUrl('');
     setWebsiteEnabled(true);
+    setSiteTemplate(null);
     setSimulatorEnabled(true);
     setAdmin(BLANK_ADMIN);
     setCreating(false);
@@ -237,6 +248,7 @@ export default function SuperadminPage() {
                   ? { websiteUrl: websiteUrl.trim() }
                   : {}),
                 websiteEnabled,
+                ...(websiteEnabled && siteTemplate ? { siteTemplate } : {}),
                 simulatorEnabled,
                 timezone,
                 admin: { ...admin, email: admin.email.trim().toLowerCase() },
@@ -399,6 +411,33 @@ export default function SuperadminPage() {
                   </span>
                 </label>
               )}
+
+              {websiteEnabled && (
+                <label className="space-y-1 text-sm md:col-span-2">
+                  <span className="text-muted-foreground">Landing design</span>
+                  <Select
+                    className="mt-1.5"
+                    value={siteTemplate ?? ''}
+                    onChange={(e) =>
+                      setSiteTemplate((e.target.value || null) as SiteTemplate | null)
+                    }
+                  >
+                    <option value="">
+                      Suits the vertical ({SITE_TEMPLATES[defaultTemplateForIndustry(industry)].label})
+                    </option>
+                    {SiteTemplateEnum.options.map((t) => (
+                      <option key={t} value={t}>
+                        {SITE_TEMPLATES[t].label} — {SITE_TEMPLATES[t].bestFor}
+                      </option>
+                    ))}
+                  </Select>
+                  <span className="block text-[11px] leading-relaxed text-muted-foreground">
+                    {siteTemplate
+                      ? SITE_TEMPLATES[siteTemplate].note
+                      : 'Each design is a finished page that fills itself from this centre\u2019s own copy. The choice is reversible \u2014 switching later keeps every word, because content is stored separately from layout.'}
+                  </span>
+                </label>
+              )}
             </div>
 
             <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border p-3 text-sm md:col-span-2">
@@ -429,11 +468,7 @@ export default function SuperadminPage() {
               </span>
             </label>
 
-{/*
-              No layout picker: there is one template, and it is the finished
-              one. A centre's page differs by its own copy and its own theme,
-              not by which of four in-house layouts somebody chose.
-            */}
+
 
             {/* Says what the button will actually do, so the operator is not
                 guessing what a "clinic" gets. */}

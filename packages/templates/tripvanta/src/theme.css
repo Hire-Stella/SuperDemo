@@ -1,0 +1,43 @@
+/*
+ * tripvanta, scoped to its own root.
+ *
+ * Nine templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+
+.tripvanta-root {
+  --bg: #fbfcfd;
+  --fg: #291c05;
+  --muted: #7a756c;
+  --white: #ffffff;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+.tripvanta-root {
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.font-display {
+  font-family: var(--font-display), "Arial Narrow", sans-serif;
+  letter-spacing: 0.01em;
+}
+
+::selection {
+  background: var(--fg);
+  color: var(--bg);
+}

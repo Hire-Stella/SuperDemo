@@ -1,0 +1,20 @@
+{
+  "extends": "../../../tsconfig.templates.json",
+  "compilerOptions": {
+    /*
+     * Declarations only.
+     *
+     * The host app transpiles `src` directly, which is what keeps a template
+     * edit hot-reloading. But `tsc` in the host would then compile ported
+     * component bodies under the host's own strictness — and SuperDemo runs
+     * `noUncheckedIndexedAccess`, which these clones were never written for.
+     * Pointing `types` at an emitted .d.ts gives the compiler a checked
+     * surface without dragging the source in behind it.
+     */
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "noEmit": false,
+    "outDir": "dist"
+  },
+  "include": ["src"]
+}

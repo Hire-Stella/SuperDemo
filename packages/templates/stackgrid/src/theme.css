@@ -1,0 +1,233 @@
+/*
+ * stackgrid, scoped to its own root.
+ *
+ * Nine templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+
+/* ------------------------------------------------------------------
+   Stackgrid design tokens — every value measured off the live site
+   (getComputedStyle), not eyeballed. Light theme only: the original
+   has no dark mode, so we deliberately do not add one.
+   ------------------------------------------------------------------ */
+:root {
+  /* Surfaces */
+  --sg-bg: rgb(253, 253, 253);
+  --sg-surface: rgb(247, 247, 247);
+  --sg-black: rgb(0, 0, 0);
+  --sg-white: rgb(255, 255, 255);
+
+  /* Text */
+  --sg-text: rgb(0, 0, 0);
+  --sg-text-muted: rgb(84, 84, 84);
+  --sg-text-subtle: rgb(99, 99, 99);
+  --sg-text-label: rgb(51, 51, 51);
+  --sg-icon: rgb(120, 120, 120);
+
+  /* Lines */
+  --sg-border: rgb(222, 222, 222);
+  --sg-border-strong: rgb(189, 189, 189);
+  --sg-line: rgb(51, 51, 51);
+  --sg-marker: rgb(128, 128, 128);
+
+  /* ASCII */
+  --sg-ascii-grey: rgb(176, 176, 176);
+  --sg-ascii-blue: rgb(91, 156, 252);
+  --sg-ascii-team: rgb(128, 128, 128);
+  --sg-feature-blue: rgb(0, 162, 255);
+  --sg-feature-magenta: rgb(255, 79, 252);
+  --sg-feature-teal: rgb(71, 230, 195);
+  --sg-feature-amber: rgb(255, 189, 46);
+
+  /* Layout */
+  --sg-max: 1180px;
+  --sg-gutter: 28px;
+
+  /* Motion */
+  --sg-ease: cubic-bezier(0.44, 0, 0.56, 1);
+}
+
+@theme inline {
+  --color-bg: var(--sg-bg);
+  --color-surface: var(--sg-surface);
+  --color-ink: var(--sg-text);
+  --color-muted: var(--sg-text-muted);
+  --color-subtle: var(--sg-text-subtle);
+  --color-label: var(--sg-text-label);
+  --color-line: var(--sg-border);
+  --color-line-strong: var(--sg-border-strong);
+  --font-sans: var(--font-google-sans-flex), var(--font-inter), sans-serif;
+  --font-serif: var(--font-instrument-serif), serif;
+  --font-mono: var(--font-fragment-mono), monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+  /* the sticky 70px header must not cover anchor targets */
+  scroll-padding-top: 70px;
+}
+.stackgrid-root {
+  background: var(--sg-bg);
+  color: var(--sg-text);
+  font-family: var(--font-google-sans-flex), var(--font-inter), sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* ---------------- typography primitives ---------------- */
+
+.sg-display {
+  font-family: var(--font-instrument-serif), serif;
+  font-weight: 400;
+  font-size: 54px;
+  line-height: 1.2;
+  color: var(--sg-text);
+}
+
+.sg-h2 {
+  font-size: 44px;
+  line-height: 1.2;
+  font-weight: 400;
+  color: var(--sg-text);
+}
+
+.sg-h3 {
+  font-size: 20px;
+  line-height: 1.6;
+  font-weight: 400;
+  color: var(--sg-text);
+}
+
+.sg-body {
+  font-size: 14px;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  color: var(--sg-text-muted);
+}
+
+.sg-small {
+  font-size: 13px;
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+  color: var(--sg-text-subtle);
+}
+
+@media (max-width: 900px) {
+  .sg-display {
+    font-size: 34px;
+  }
+  .sg-h2 {
+    font-size: 30px;
+  }
+  .sg-h3 {
+    font-size: 18px;
+  }
+}
+
+/* ---------------- the hairline border helper ----------------
+   Framer draws every card edge as a 0.8px inset ::after so the
+   border never affects layout. We do the same. */
+.sg-hair {
+  position: relative;
+}
+.sg-hair::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 0.8px solid var(--sg-border);
+  pointer-events: none;
+}
+.sg-hair-strong::after {
+  border-color: var(--sg-border-strong);
+}
+.sg-hair-black::after {
+  border-color: var(--sg-black);
+}
+.sg-hair-x::after {
+  border-left-width: 0;
+  border-right-width: 0;
+}
+
+/* ---------------- ASCII ---------------- */
+.sg-ascii {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-fragment-mono), monospace;
+  white-space: pre;
+  user-select: none;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: normal;
+  overflow: hidden;
+}
+
+/* the blurred duplicate that gives the live ASCII its soft glow */
+.sg-ascii-glow {
+  position: absolute;
+  inset: 0;
+  filter: blur(11px);
+  pointer-events: none;
+}
+
+/* ---------------- marquee ---------------- */
+.sg-marquee-track {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: sg-marquee var(--sg-marquee-duration, 40s) linear infinite;
+}
+.sg-marquee:hover .sg-marquee-track {
+  animation-play-state: paused;
+}
+@keyframes sg-marquee {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sg-marquee-track {
+    animation: none;
+  }
+}
+
+/* ---------------- reveal (scroll-in) ---------------- */
+.sg-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition:
+    opacity 0.7s var(--sg-ease),
+    transform 0.7s var(--sg-ease);
+  transition-delay: var(--sg-reveal-delay, 0ms);
+}
+.sg-reveal[data-shown="true"] {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sg-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* ---------------- focus ---------------- */
+:where(a, button, input, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--sg-black);
+  outline-offset: 2px;
+}

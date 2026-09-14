@@ -25,7 +25,32 @@ import { ThemePreset, ThemeTokens } from './themes';
  * wrote.
  */
 
-export const SiteTemplate = z.enum(['solaris', 'sentira', 'knotch', 'nudge']);
+/**
+ * Every landing layout a centre can be put on.
+ *
+ * The first four are in-house. The nine after them are ported designs from
+ * Hire-Stella/landing-templates — real finished pages that fill themselves from
+ * this centre's content rather than being assembled from our own parts. They
+ * are listed here rather than read from the library at runtime because the
+ * stored value is a database column: it has to be a closed set the API can
+ * validate, and a template that disappears upstream must fail a save rather
+ * than a page render.
+ */
+export const SiteTemplate = z.enum([
+  'solaris',
+  'sentira',
+  'knotch',
+  'nudge',
+  'sanvera',
+  'momentum',
+  'reodental',
+  'tripvanta',
+  'elianvalen',
+  'rescale',
+  'stackgrid',
+  'utomic',
+  'zova',
+]);
 export type SiteTemplate = z.infer<typeof SiteTemplate>;
 
 /**
@@ -71,6 +96,53 @@ export const SITE_TEMPLATES: Record<SiteTemplate, SiteTemplateDefinition> = {
     label: 'Nudge',
     note: 'White blueprint grid, ultra-heavy left-ranged headline, flat colour chips.',
     bestFor: 'Creative and trades — anyone whose pitch is personality',
+  },
+
+  /* ---- ported from Hire-Stella/landing-templates ---- */
+  sanvera: {
+    label: 'Sanvera',
+    note: 'Warm maroon and cream, oversized wordmark, editorial service list.',
+    bestFor: 'Wellness, clinics, practices',
+  },
+  momentum: {
+    label: 'Momentum',
+    note: 'Bold photographic hero, big stat strip, numbered programme, pricing tiers.',
+    bestFor: 'Fitness, coaching, training',
+  },
+  reodental: {
+    label: 'Reodental',
+    note: 'Clinical and calm — treatment cards, team portraits, trust stats.',
+    bestFor: 'Clinics and healthcare',
+  },
+  tripvanta: {
+    label: 'Tripvanta',
+    note: 'Imagery first, destination cards, itinerary steps, video bands.',
+    bestFor: 'Travel, hospitality, venues',
+  },
+  elianvalen: {
+    label: 'Elian Valen',
+    note: 'Editorial and restrained — large imagery, product-led, quiet type.',
+    bestFor: 'Retail, studios, portfolios',
+  },
+  rescale: {
+    label: 'Rescale',
+    note: 'SaaS marketing — process, integrations, performance stats, journal.',
+    bestFor: 'Software and B2B services',
+  },
+  stackgrid: {
+    label: 'Stackgrid',
+    note: 'Technical and dense — monospace motifs, integration diagram.',
+    bestFor: 'Developer and technical products',
+  },
+  utomic: {
+    label: 'Utomic',
+    note: 'Agency site — gradient hero, case studies, service detail, pricing.',
+    bestFor: 'Agencies and consultancies',
+  },
+  zova: {
+    label: 'Zova',
+    note: 'Full marketing page — video hero, benefits, pricing, blog, contact.',
+    bestFor: 'SaaS and product launches',
   },
 };
 
