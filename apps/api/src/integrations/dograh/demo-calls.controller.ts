@@ -1,10 +1,9 @@
-import { Controller, Get, HttpCode, Post, Put } from '@nestjs/common';
+import { Controller, Get, HttpCode, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   type DemoCallOutput,
   type DemoCallsView,
   PlaceDemoCallInput,
-  SaveDemoDialerInput,
   WebCallInput,
   type WebCallOutput,
   composeE164,
@@ -32,17 +31,20 @@ export class DemoCallsController {
     private readonly tenants: TenantContext,
   ) {}
 
+  /**
+   * The three slots, as this centre's own staff may see them.
+   *
+   * `workflows` is emptied on the way out. It is every workflow on the Dograh
+   * host, and a centre with no key of its own is using the deployment's — so
+   * that list names other clients' agents. The operator picks from it on the
+   * platform page; a centre's admin only needs to know which agent answers
+   * here, which `workflowName` already says.
+   */
   @Roles('ADMIN', 'SUPERVISOR')
   @Get()
-  view(): Promise<DemoCallsView> {
-    return this.dograh.dialersView(this.tenants.requireOrgId());
-  }
-
-  /** Point one slot at a workflow, or switch it on and off. */
-  @Roles('ADMIN', 'SUPERVISOR')
-  @Put()
-  save(@ZodBody(SaveDemoDialerInput) body: SaveDemoDialerInput): Promise<DemoCallsView> {
-    return this.dograh.saveDialer(this.tenants.requireOrgId(), body);
+  async view(): Promise<DemoCallsView> {
+    const v = await this.dograh.dialersView(this.tenants.requireOrgId());
+    return { ...v, workflows: [], workflowsError: null };
   }
 
   /**

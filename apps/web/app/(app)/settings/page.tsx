@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -106,13 +107,6 @@ export default function SettingsPage() {
   const demoCalls = useQuery({
     queryKey: ['demo-calls'],
     queryFn: () => api.get<DemoCallsView>('/demo-calls'),
-  });
-
-  const saveDialer = useMutation({
-    mutationFn: (body: { kind: DemoDialerKind; enabled?: boolean; workflowId?: number | null }) =>
-      api.put<DemoCallsView>('/demo-calls', body),
-    onSuccess: (r) => queryClient.setQueryData(['demo-calls'], r),
-    onError: (e) => toast.error((e as Error).message),
   });
 
   const setSimulatorEnabled = useMutation({
@@ -291,7 +285,7 @@ export default function SettingsPage() {
       <Card
         className="mb-4"
         title="Demo calls"
-        subtitle="Set up here; ring them — or talk in the browser — from Demo calls"
+        subtitle="Which agent answers each slot — set by the platform operator"
         contentClassName="p-4"
       >
         {demoCalls.isLoading ? (
@@ -302,65 +296,45 @@ export default function SettingsPage() {
           </p>
         ) : !demoCalls.data?.dograhConnected ? (
           <p className="max-w-prose text-sm text-muted-foreground">
-            These ring through this centre&rsquo;s own Dograh, and none is connected yet. Set a host
-            and key up on the Website page first.
+            No voice platform is connected for this centre yet. Your platform operator sets this
+            up.
           </p>
         ) : (
-          <div className="grid gap-3 sm:grid-cols-3">
-            {demoCalls.data.dialers.map((dialer) => (
-              <div key={dialer.kind} className="rounded-md border border-border p-3">
-                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
-                  <input
-                    type="checkbox"
-                    className="size-4 shrink-0 accent-[var(--primary)]"
-                    checked={dialer.enabled}
-                    disabled={saveDialer.isPending}
-                    onChange={(e) =>
-                      saveDialer.mutate({ kind: dialer.kind, enabled: e.target.checked })
-                    }
-                  />
-                  {DEMO_DIALER_LABELS[dialer.kind].label}
-                </label>
-                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                  {DEMO_DIALER_LABELS[dialer.kind].note}
-                </p>
-                {/*
-                  State, because this is now the only place these are set up: a
-                  slot that is on but has no agent looks identical to a working
-                  one otherwise, and the person who finds out is whoever presses
-                  the button on Demo calls.
-                */}
-                <p className="mt-1 text-[11px]">
-                  <Badge dot={dialer.ready ? 'bg-live' : 'bg-muted-foreground'}>
-                    {dialer.ready ? 'Ready' : dialer.enabled ? 'Not set up' : 'Off'}
-                  </Badge>
-                </p>
-                <Select
-                  aria-label={`Agent for the ${DEMO_DIALER_LABELS[dialer.kind].label} dialer`}
-                  className="mt-2"
-                  value={dialer.workflowId ?? ''}
-                  disabled={saveDialer.isPending || demoCalls.data!.workflows.length === 0}
-                  onChange={(e) =>
-                    saveDialer.mutate({
-                      kind: dialer.kind,
-                      workflowId: e.target.value ? Number(e.target.value) : null,
-                    })
-                  }
-                >
-                  <option value="">
-                    {demoCalls.data!.workflows.length === 0
-                      ? 'No agents available'
-                      : 'Choose an agent…'}
-                  </option>
-                  {demoCalls.data!.workflows.map((w) => (
-                    <option key={w.id} value={w.id}>
-                      {w.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            ))}
-          </div>
+          <>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {demoCalls.data.dialers.map((dialer) => (
+                <div key={dialer.kind} className="rounded-md border border-border p-3">
+                  <p className="text-sm font-medium">{DEMO_DIALER_LABELS[dialer.kind].label}</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    {DEMO_DIALER_LABELS[dialer.kind].note}
+                  </p>
+                  <p className="mt-2">
+                    <Badge dot={dialer.ready ? 'bg-live' : 'bg-muted-foreground'}>
+                      {dialer.ready ? 'Ready' : dialer.enabled ? 'Not set up' : 'Off'}
+                    </Badge>
+                  </p>
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    {dialer.workflowName || 'No agent chosen'}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {/*
+              Read-only, deliberately.
+              Choosing an agent means listing every workflow on the voice host,
+              and a centre without its own key is on the deployment's — so that
+              list is other clients' agents. Picking from it is the operator's
+              act, not a tenant admin's. See PlatformVoiceController.
+            */}
+            <p className="mt-3 max-w-prose text-[11px] leading-relaxed text-muted-foreground">
+              Ring these, or talk to them in the browser, from{' '}
+              <Link href="/demo-calls" className="underline underline-offset-2">
+                Demo calls
+              </Link>
+              . Changing which agent answers is done by your platform operator — the agent list
+              spans the whole voice host, so it is not shown inside a single centre.
+            </p>
+          </>
         )}
       </Card>
 

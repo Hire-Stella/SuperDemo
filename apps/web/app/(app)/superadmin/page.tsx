@@ -4,7 +4,7 @@ import { Fragment, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ExternalLink, Eye, Plus, ShieldCheck, Trash2, UserPlus } from 'lucide-react';
+import { ExternalLink, Eye, Mic, Plus, ShieldCheck, Trash2, UserPlus } from 'lucide-react';
 import {
   DEFAULT_PRESET_FOR_INDUSTRY,
   INDUSTRY_LABELS,
@@ -26,6 +26,8 @@ import { api } from '@/lib/api';
 import { dateTime } from '@/lib/format';
 import { useSession } from '@/components/providers';
 import { TenantLogo } from '@/components/tenant-logo';
+import { DograhConnection } from '@/components/dograh-connection';
+import { PlatformDialers } from '@/components/platform-dialers';
 import {
   Badge,
   Button,
@@ -90,6 +92,15 @@ export default function SuperadminPage() {
   const [simulatorEnabled, setSimulatorEnabled] = useState(true);
   const [admin, setAdmin] = useState(BLANK_ADMIN);
   const [addingAdminTo, setAddingAdminTo] = useState<string | null>(null);
+  /*
+   * Voice setup, per centre, opened from the row.
+   *
+   * Here rather than in the centre's own Settings because choosing an agent
+   * means listing every workflow on the voice host, and a centre without its
+   * own key is using the deployment's — so that list is other clients' agents.
+   * The operator is the only party entitled to see it.
+   */
+  const [voiceFor, setVoiceFor] = useState<string | null>(null);
   const [newAdmin, setNewAdmin] = useState(BLANK_ADMIN);
 
   const orgs = useQuery({
@@ -677,6 +688,14 @@ export default function SuperadminPage() {
                         <Button
                           variant="ghost"
                           className="h-8 px-2 text-xs"
+                          onClick={() => setVoiceFor(voiceFor === org.id ? null : org.id)}
+                        >
+                          <Mic className="size-3.5" aria-hidden />
+                          Voice
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="h-8 px-2 text-xs"
                           disabled={updateOrg.isPending}
                           onClick={() => {
                             // Suspension locks out every one of their staff at
@@ -793,9 +812,28 @@ export default function SuperadminPage() {
         )}
       </Card>
 
+      {/*
+        Below the table, not inside it.
+        The rows live in a horizontally scrolling table, and a full-width panel
+        in a colSpan cell inherits that scroll — half of it ends up off-screen
+        with no way to reach it.
+      */}
+      {voiceFor && (
+        <Card
+          title={`Voice — ${rows.find((o) => o.id === voiceFor)?.name ?? ''}`}
+          subtitle="The agent list spans the whole voice host, which is why this lives here and not in the centre's own settings"
+          contentClassName="p-4"
+        >
+          <DograhConnection orgId={voiceFor} />
+          <PlatformDialers orgId={voiceFor} />
+        </Card>
+      )}
+
       <p className="text-xs text-muted-foreground">
         A platform operator can read a centre but never write to it — the API refuses any change
-        made while viewing one. To alter a client’s configuration, sign in as one of their admins.
+        made while viewing one, with one deliberate exception: voice setup, which is operator-only
+        because the agent list covers every centre on the host. To alter anything else in a
+        client’s configuration, sign in as one of their admins.
       </p>
     </div>
   );

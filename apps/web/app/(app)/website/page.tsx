@@ -45,7 +45,7 @@ import { api } from '@/lib/api';
 import { dateTime } from '@/lib/format';
 import { useSession } from '@/components/providers';
 import { TenantLogo } from '@/components/tenant-logo';
-import { DograhConnection } from '@/components/dograh-connection';
+import { VoiceSummary } from '@/components/voice-summary';
 import { WebsiteGenerator } from '@/components/website-generator';
 import {
   Badge,
@@ -470,7 +470,7 @@ export default function WebsitePage() {
       <WebsiteGenerator />
 
       {/* ---------------------------- voice agent -------------------------- */}
-      <DograhConnection />
+      <VoiceSummary />
 
       {/* ------------------------------- leads ----------------------------- */}
       <Card

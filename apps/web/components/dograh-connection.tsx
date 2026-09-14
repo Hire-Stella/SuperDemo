@@ -29,11 +29,21 @@ import { Badge, Button, Card, Input, Label, Select, Spinner } from '@/components
  * can never redisplay a credential, and a shoulder-surfer gets nothing from an
  * open editor tab.
  */
-export function DograhConnection() {
+export function DograhConnection({ orgId }: { orgId: string }) {
+  /*
+   * Operator-scoped, not tenant-scoped.
+   *
+   * Picking a workflow means listing every workflow on the voice host, and a
+   * centre without its own key is using the deployment's — so that list is
+   * other clients' agents. These routes therefore live under /platform and
+   * only a SUPERADMIN reaches them. See PlatformVoiceController.
+   */
+  const base = `/platform/orgs/${orgId}/voice`;
   const queryClient = useQueryClient();
   const conn = useQuery({
-    queryKey: ['dograh'],
-    queryFn: () => api.get<DograhConnectionView>('/sites/mine/dograh'),
+    queryKey: ['dograh', orgId],
+    queryFn: async () =>
+      (await api.get<{ connection: DograhConnectionView }>(base)).connection,
   });
 
   const [baseUrl, setBaseUrl] = useState<string | null>(null);
@@ -44,7 +54,7 @@ export function DograhConnection() {
    *  to the client's own host, so it should not run on an empty form. */
   const workflows = useQuery({
     queryKey: ['dograh-workflows'],
-    queryFn: () => api.get<DograhWorkflowRow[]>('/sites/mine/dograh/workflows'),
+    queryFn: () => api.get<DograhWorkflowRow[]>(`${base}/workflows`),
     enabled: Boolean(conn.data?.hasApiKey && conn.data?.baseUrl),
     retry: false,
   });
@@ -56,7 +66,7 @@ export function DograhConnection() {
       workflowId?: number | null;
       callMode?: DograhCallMode;
       chatEnabled?: boolean;
-    }) => api.put<DograhConnectionView>('/sites/mine/dograh', body),
+    }) => api.put<DograhConnectionView>(`${base}/connection`, body),
     onSuccess: async (fresh) => {
       queryClient.setQueryData(['dograh'], fresh);
       setApiKey('');
@@ -67,7 +77,7 @@ export function DograhConnection() {
   });
 
   const runTest = useMutation({
-    mutationFn: () => api.post<TestDograhConnectionOutput>('/sites/mine/dograh/test'),
+    mutationFn: () => api.post<TestDograhConnectionOutput>(`${base}/test`),
     onSuccess: (r) => {
       setTest(r);
       if (r.ok) void queryClient.invalidateQueries({ queryKey: ['dograh-workflows'] });
@@ -76,11 +86,11 @@ export function DograhConnection() {
   });
 
   const connect = useMutation({
-    mutationFn: () => api.post<ConnectDograhSiteOutput>('/sites/mine/dograh/connect'),
+    mutationFn: () => api.post<ConnectDograhSiteOutput>(`${base}/connect`),
     onSuccess: async (r) => {
       if (r.ok) {
         toast.success(r.detail);
-        await queryClient.invalidateQueries({ queryKey: ['dograh'] });
+        await queryClient.invalidateQueries({ queryKey: ['dograh', orgId] });
       } else {
         toast.error(r.detail);
       }

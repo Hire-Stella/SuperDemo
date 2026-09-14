@@ -35,40 +35,19 @@ export class DograhController {
     private readonly tenants: TenantContext,
   ) {}
 
+  /**
+   * What this centre's admin may see of its own voice setup.
+   *
+   * Read-only. Storing the key, picking the workflow, minting the page's embed
+   * token and testing the host all moved to PlatformVoiceController — the
+   * workflow list those need is every workflow on the host, which on a shared
+   * key means other clients'. See that file for the whole argument.
+   */
   @Roles('ADMIN')
   @Get()
   view(): Promise<DograhConnectionView> {
     return this.dograh.view(this.tenants.requireOrgId());
   }
-
-  @Roles('ADMIN')
-  @Put()
-  save(@ZodBody(SaveDograhConnectionInput) body: SaveDograhConnectionInput): Promise<DograhConnectionView> {
-    return this.dograh.save(this.tenants.requireOrgId(), body);
-  }
-
-  /** Does the stored credential work? Answers rather than throws, so the editor
-   *  can render the reason next to the field that caused it. */
-  @Roles('ADMIN')
-  @Post('test')
-  test(): Promise<TestDograhConnectionOutput> {
-    return this.dograh.test(this.tenants.requireOrgId());
-  }
-
-  @Roles('ADMIN')
-  @Get('workflows')
-  workflows(): Promise<DograhWorkflowRow[]> {
-    return this.dograh.workflows(this.tenants.requireOrgId());
-  }
-
-  /** Mint the public embed token, domain-locked to where the page is served. */
-  @Roles('ADMIN')
-  @Post('connect')
-  connect(): Promise<ConnectDograhSiteOutput> {
-    return this.dograh.connectSite(this.tenants.requireOrgId());
-  }
-
-  /* --------------------- website-generated page and agent -------------------- */
 
   @Roles('ADMIN', 'SUPERVISOR')
   @Get('enrichment')
