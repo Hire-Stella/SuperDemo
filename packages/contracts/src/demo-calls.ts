@@ -59,6 +59,18 @@ export const DemoDialerConfig = z.object({
   workflowId: z.number().int().positive().nullable().default(null),
   workflowUuid: z.string().default(''),
   workflowName: z.string().default(''),
+  /**
+   * The embed token that lets this slot's agent be talked to in the browser.
+   *
+   * Minted on first use rather than when the slot is configured: most slots are
+   * dialled, not spoken to in a tab, and a token per slot per configure would
+   * be three round trips to Dograh for something usually unused.
+   *
+   * Not a secret — it is what the browser sends to Dograh's public embed
+   * endpoints, exactly as on the landing page — and what keeps it from being
+   * useful elsewhere is the domain list Dograh enforces against it.
+   */
+  embedToken: z.string().default(''),
 });
 export type DemoDialerConfig = z.infer<typeof DemoDialerConfig>;
 
@@ -67,6 +79,7 @@ const BLANK: DemoDialerConfig = {
   workflowId: null,
   workflowUuid: '',
   workflowName: '',
+  embedToken: '',
 };
 
 /** All three slots, as stored in `Setting.dograhDialers`. */
@@ -96,6 +109,15 @@ export const DemoDialerView = DemoDialerConfig.extend({
   ready: z.boolean(),
   /** Why it cannot dial, when it cannot. Null when it can. */
   blockedReason: z.string().nullable(),
+  /**
+   * Whether this slot can also be talked to in the browser.
+   *
+   * Same condition as `ready` today — a configured workflow is all either
+   * needs — but kept separate because the two can diverge: Dograh can refuse to
+   * mint an embed token for a workflow it will happily ring a phone with, and
+   * the card should be able to offer the button that works.
+   */
+  canWebCall: z.boolean(),
 });
 export type DemoDialerView = z.infer<typeof DemoDialerView>;
 
@@ -138,3 +160,19 @@ export const PlaceDemoCallInput = z.object({
   note: z.string().max(300).optional(),
 });
 export type PlaceDemoCallInput = z.infer<typeof PlaceDemoCallInput>;
+
+/** Ask for the browser-call script for one slot, minting a token if needed. */
+export const WebCallInput = z.object({ kind: DemoDialerKind });
+export type WebCallInput = z.infer<typeof WebCallInput>;
+
+export const WebCallOutput = z.object({
+  ok: z.boolean(),
+  detail: z.string(),
+  /**
+   * The widget script to load, built from the configured host so it is
+   * same-origin by construction — see dograhWidgetSrc for why it is not lifted
+   * out of Dograh's own embed snippet. Null when there is nothing to load.
+   */
+  scriptSrc: z.string().nullable(),
+});
+export type WebCallOutput = z.infer<typeof WebCallOutput>;

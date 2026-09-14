@@ -5,6 +5,8 @@ import {
   type DemoCallsView,
   PlaceDemoCallInput,
   SaveDemoDialerInput,
+  WebCallInput,
+  type WebCallOutput,
   composeE164,
   countryByCode,
   isPlausibleNumber,
@@ -41,6 +43,21 @@ export class DemoCallsController {
   @Put()
   save(@ZodBody(SaveDemoDialerInput) body: SaveDemoDialerInput): Promise<DemoCallsView> {
     return this.dograh.saveDialer(this.tenants.requireOrgId(), body);
+  }
+
+  /**
+   * The browser-call script for one slot.
+   *
+   * Not throttled like the phone dialer: this costs nothing to place, rings
+   * nobody's handset, and the expensive half — minting a token — happens at
+   * most once per workflow because the service reuses any token that already
+   * exists for it.
+   */
+  @Roles('ADMIN', 'SUPERVISOR')
+  @Post('web-call')
+  @HttpCode(200)
+  webCall(@ZodBody(WebCallInput) body: WebCallInput): Promise<WebCallOutput> {
+    return this.dograh.webCallScript(this.tenants.requireOrgId(), body.kind);
   }
 
   /**

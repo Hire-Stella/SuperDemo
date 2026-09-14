@@ -688,6 +688,7 @@ export class DograhService {
           kind,
           ...c,
           ready: connected && Boolean(c.workflowUuid) && c.enabled,
+          canWebCall: connected && Boolean(c.workflowId) && c.enabled,
           blockedReason,
         };
       }),
@@ -740,6 +741,109 @@ export class DograhService {
     });
 
     return this.dialersView(orgId);
+  }
+
+  /**
+   * The browser-call script for one slot, minting an embed token if needed.
+   *
+   * ## Why this never re-mints the landing page's token
+   *
+   * `POST /workflow/{id}/embed-token` is create-or-*update*: one token per
+   * workflow. Minting again for a workflow that already has one overwrites its
+   * settings, which is how chat once silently turned the voice widget into a
+   * chat widget. A demo slot very often points at the same workflow the landing
+   * page uses, so this reuses an existing token wherever one exists — the
+   * landing page's first, then another slot's — and only mints when the
+   * workflow genuinely has none of ours.
+   *
+   * When it does mint, it mints with exactly the settings `mintPair` uses for
+   * voice. Identical settings make a re-mint a no-op in effect rather than a
+   * change nobody asked for.
+   */
+  async webCallScript(
+    orgId: string,
+    kind: DemoDialerKind,
+  ): Promise<{ ok: boolean; detail: string; scriptSrc: string | null }> {
+    const row = await this.row(orgId);
+    const baseUrl = this.resolveBaseUrl(row?.dograhBaseUrl);
+    const dialers = this.parseDialers(row?.dograhDialers ?? null);
+    const slot = dialers[kind];
+    const label = DEMO_DIALER_LABELS[kind].label.toLowerCase();
+
+    if (!slot.enabled) {
+      return { ok: false, detail: `The ${label} dialer is switched off.`, scriptSrc: null };
+    }
+    if (!slot.workflowId) {
+      return { ok: false, detail: `No agent is set for the ${label} dialer yet.`, scriptSrc: null };
+    }
+    if (!baseUrl) {
+      return { ok: false, detail: 'No Dograh host is configured for this centre.', scriptSrc: null };
+    }
+
+    const build = (token: string) => {
+      const src = dograhWidgetSrc(baseUrl, token);
+      return src
+        ? { ok: true, detail: 'Ready to talk.', scriptSrc: src }
+        : {
+            ok: false,
+            detail: 'Could not build a widget URL from this centre’s Dograh host.',
+            scriptSrc: null,
+          };
+    };
+
+    if (slot.embedToken) return build(slot.embedToken);
+
+    // The landing page's token, when this slot points at the same agent.
+    const pub = this.parsePublic(row?.dograhPublic ?? null);
+    let token =
+      pub.workflowId === slot.workflowId && pub.embedToken ? pub.embedToken : '';
+
+    // Another slot's, when two slots share an agent.
+    if (!token) {
+      token =
+        DEMO_DIALER_KINDS.map((k) => dialers[k])
+          .find((d) => d.workflowId === slot.workflowId && d.embedToken)?.embedToken ?? '';
+    }
+
+    if (!token) {
+      let client: DograhClient;
+      try {
+        ({ client } = await this.clientFor(orgId));
+      } catch (e) {
+        return {
+          ok: false,
+          detail: e instanceof Error ? e.message : 'no Dograh configured',
+          scriptSrc: null,
+        };
+      }
+      try {
+        const minted = await client.createEmbedToken(slot.workflowId, this.allowedDomains(), {
+          widgetType: 'voice',
+          buttonText: DOGRAH_WIDGET_BUTTON_TEXT,
+          callToActionText: 'Click to speak to us now',
+        });
+        if (!minted.token) throw new Error('Dograh returned no token');
+        token = minted.token;
+      } catch (e) {
+        return {
+          ok: false,
+          detail: e instanceof Error ? e.message : 'Dograh refused to mint an embed token',
+          scriptSrc: null,
+        };
+      }
+    }
+
+    await this.prisma.setting.update({
+      where: { orgId },
+      data: {
+        dograhDialers: {
+          ...dialers,
+          [kind]: { ...slot, embedToken: token },
+        } as Prisma.InputJsonValue,
+      },
+    });
+
+    return build(token);
   }
 
   /** Ring a number with one slot's agent. */

@@ -1,10 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { PhoneOutgoing } from 'lucide-react';
+import { Mic, PhoneOutgoing, X } from 'lucide-react';
 import {
   DEFAULT_DIALLING_COUNTRY,
   DEMO_DIALER_LABELS,
@@ -13,6 +13,7 @@ import {
   type DemoCallsView,
   type DemoDialerKind,
   type DemoDialerView,
+  type WebCallOutput,
 } from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { Badge, Button, Card, Input, Select, Spinner } from '@/components/composites';
@@ -33,6 +34,16 @@ export default function DemoCallsPage() {
     queryKey: ['demo-calls'],
     queryFn: () => api.get<DemoCallsView>('/demo-calls'),
   });
+
+  /*
+   * One web call at a time, held here rather than in a card.
+   *
+   * Dograh's widget bundle gives every floating instance the same element ids —
+   * `dograh-widget-root` and `dograh-widget-cta` — and knows exactly one
+   * position. Two mounted at once do not overlap, they fight over an id. So the
+   * page owns which slot is talking and there is only ever one script tag.
+   */
+  const [webCall, setWebCall] = useState<{ kind: DemoDialerKind; src: string } | null>(null);
 
   const save = useMutation({
     mutationFn: (body: { kind: DemoDialerKind; enabled?: boolean; workflowId?: number | null }) =>
@@ -94,9 +105,87 @@ export default function DemoCallsPage() {
             workflows={d.workflows}
             connected={d.dograhConnected}
             saving={save.isPending}
+            talking={webCall?.kind === dialer.kind}
+            anyTalking={Boolean(webCall)}
             onSave={(body) => save.mutate({ kind: dialer.kind, ...body })}
+            onWebCall={(src) => setWebCall({ kind: dialer.kind, src })}
           />
         ))}
+      </div>
+
+      {webCall && (
+        <WebCallHost
+          kind={webCall.kind}
+          src={webCall.src}
+          onClose={() => setWebCall(null)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Mounts Dograh's widget for one slot, and takes it away again.
+ *
+ * The bundle renders a floating button into elements it creates itself and
+ * offers no teardown, so closing removes those elements by hand. What it cannot
+ * undo is the script having run: switching to a second agent in the same page
+ * load may keep talking to the first, which is why the other cards say so
+ * rather than pretending otherwise.
+ */
+function WebCallHost({
+  kind,
+  src,
+  onClose,
+}: {
+  kind: DemoDialerKind;
+  src: string;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const tag = document.createElement('script');
+    tag.src = src;
+    tag.async = true;
+    tag.dataset.dograhContext = JSON.stringify({
+      surface: 'dashboard-demo-calls',
+      dialer: kind,
+      today: new Date().toISOString().slice(0, 10),
+    });
+    document.body.appendChild(tag);
+
+    return () => {
+      tag.remove();
+      /*
+       * `querySelectorAll`, not `getElementById`: the bundle ends up with more
+       * than one element carrying `dograh-widget-root`, so removing "the" one
+       * by id left a stray behind that the next mount then fought with. Matching
+       * the id prefix also catches whatever else it names that way.
+       */
+      document
+        .querySelectorAll('[id^="dograh-widget"]')
+        .forEach((el) => el.remove());
+    };
+  }, [src, kind]);
+
+  return (
+    // Bottom centre, not bottom left: the sidebar's presence and theme controls
+    // live in that corner, and a notice sitting on top of them trades one
+    // problem for a worse one.
+    <div className="fixed bottom-4 left-1/2 z-50 max-w-sm -translate-x-1/2 rounded-lg border border-border bg-popover p-3 text-xs shadow-lg">
+      <div className="flex items-start justify-between gap-3">
+        <p className="leading-relaxed text-muted-foreground">
+          The <strong className="text-foreground">{DEMO_DIALER_LABELS[kind].label}</strong> agent is
+          loaded. Its call button is in the bottom-right corner — press it and allow the
+          microphone.
+        </p>
+        <button
+          type="button"
+          aria-label="End the browser call"
+          className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+          onClick={onClose}
+        >
+          <X className="size-4" aria-hidden />
+        </button>
       </div>
     </div>
   );
@@ -107,13 +196,19 @@ function DialerCard({
   workflows,
   connected,
   saving,
+  talking,
+  anyTalking,
   onSave,
+  onWebCall,
 }: {
   dialer: DemoDialerView;
   workflows: DemoCallsView['workflows'];
   connected: boolean;
   saving: boolean;
+  talking: boolean;
+  anyTalking: boolean;
   onSave: (body: { enabled?: boolean; workflowId?: number | null }) => void;
+  onWebCall: (src: string) => void;
 }) {
   const meta = DEMO_DIALER_LABELS[dialer.kind];
   const [phone, setPhone] = useState('');
@@ -128,6 +223,18 @@ function DialerCard({
       setLast(r);
       if (r.ok) toast.success(r.detail);
       else toast.error(r.detail);
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const webCall = useMutation({
+    mutationFn: () => api.post<WebCallOutput>('/demo-calls/web-call', { kind: dialer.kind }),
+    onSuccess: (r) => {
+      if (!r.ok || !r.scriptSrc) {
+        toast.error(r.detail);
+        return;
+      }
+      onWebCall(r.scriptSrc);
     },
     onError: (e) => toast.error((e as Error).message),
   });
@@ -221,6 +328,24 @@ function DialerCard({
           onClick={() => call.mutate({ phone, country, note: note || undefined })}
         >
           {call.isPending ? 'Dialling…' : `Call me — ${meta.label.toLowerCase()}`}
+        </Button>
+
+        {/*
+          Talk in the browser: no number, no carrier, no cost. Offered second
+          because the phone path is the one that proves the whole loop, but it
+          is the faster of the two to try.
+        */}
+        <Button
+          disabled={!dialer.canWebCall || webCall.isPending || (anyTalking && !talking)}
+          title={
+            anyTalking && !talking
+              ? 'Close the other browser call first — the widget only supports one at a time'
+              : undefined
+          }
+          onClick={() => webCall.mutate()}
+        >
+          <Mic className="size-4" aria-hidden />
+          {talking ? 'Loaded — button is bottom-right' : webCall.isPending ? 'Connecting…' : 'Talk in browser'}
         </Button>
 
         {!dialer.ready && (
