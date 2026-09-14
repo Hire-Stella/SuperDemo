@@ -74,6 +74,20 @@ const list = <T,>(v: T[] | undefined, fallback: T[]) => (v && v.length > 0 ? v :
  * over produces duplicate keys. This keeps the template's width and padding and
  * counts properly.
  */
+/**
+ * A stat's number and its decoration, apart.
+ *
+ * The schema keeps "600+" as one string because "24/7" is a perfectly good
+ * stat that is not a number. Templates that animate their stats need the two
+ * separately — and taking the label without the value is what showed the
+ * template's "1200+" above the tenant's "Vehicles in the fleet".
+ */
+const statValue = (v: string) => {
+  const n = Number.parseFloat(v);
+  return Number.isFinite(n) ? n : v;
+};
+const statSuffix = (v: string) => v.replace(/^[\d.,]+/, '');
+
 const numbered = (i: number, like: unknown) =>
   String(i + 1).padStart(String(like ?? '').length || 2, '0');
 
@@ -104,7 +118,8 @@ export function adapt(content: TemplateContent): TemplateProps {
       }) as unknown as typeof d.NAV_LINKS,
       d.NAV_LINKS,
     ),
-    HERO: { ...d.HERO, subhead: (text(hero.subhead, (d.HERO as never as Record<string,string>)["subhead"]) as never) },
+    HERO: { ...d.HERO, eyebrow: (text(hero.eyebrow, (d.HERO as never as Record<string,string>)["eyebrow"]) as never), titleLines: (hero.headline.length ? hero.headline : (d.HERO as never as Record<string,string[]>)["titleLines"]) as never, subhead: (text(hero.subhead, (d.HERO as never as Record<string,string>)["subhead"]) as never) },
+    TREATMENT_CHIPS: list(content.services.map((s) => s.name) as typeof d.TREATMENT_CHIPS, d.TREATMENT_CHIPS),
     SERVICES: list(
       content.services.map((s, i) => {
         const b = d.SERVICES[i % d.SERVICES.length] as unknown as Record<string, never>;
@@ -115,7 +130,7 @@ export function adapt(content: TemplateContent): TemplateProps {
     STATS: list(
       content.stats.map((s, i) => {
         const b = d.STATS[i % d.STATS.length] as unknown as Record<string, never>;
-        return { ...b, label: s.label || b.label };
+        return { ...b, value: statValue(s.value) || b.value, suffix: statSuffix(s.value) || b.suffix, label: s.label || b.label };
       }) as unknown as typeof d.STATS,
       d.STATS,
     ),
@@ -147,5 +162,7 @@ export function adapt(content: TemplateContent): TemplateProps {
       }) as unknown as typeof d.FAQS,
       d.FAQS,
     ),
+    FOOTER_SERVICES: list(content.services.map((s) => s.name) as typeof d.FOOTER_SERVICES, d.FOOTER_SERVICES),
+    BOOKING_SERVICE_OPTIONS: list(content.services.map((s) => s.name) as typeof d.BOOKING_SERVICE_OPTIONS, d.BOOKING_SERVICE_OPTIONS),
   };
 }

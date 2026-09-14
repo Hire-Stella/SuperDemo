@@ -37,28 +37,38 @@ const nextConfig = {
   },
 
   /*
-   * The rewrite alone is not enough for `next/image`.
+   * Which hosts `next/image` may fetch from.
    *
-   * The optimizer fetches the rewritten URL itself, and refuses any host that
-   * is not allow-listed — so every template photograph came back 400 while the
-   * page around it rendered fine. Derived from the same variable so the two
-   * cannot drift apart.
+   * Two different needs, and missing either one 500s a public page.
+   *
+   * A tenant's own imagery comes from whatever domain their site used — that
+   * is the whole point of scraping it — so there is no list to enumerate.
+   * `https://**` is the honest policy for a page whose images are, by design,
+   * somebody else's. The in-house templates never hit this because they use
+   * plain `<img>`; the ported ones use `next/image`, which is why it surfaced
+   * only after they landed.
+   *
+   * The asset base is separate and may be plain http in development, so it is
+   * derived from the same variable as the rewrite rather than restated.
    */
-  images: (() => {
-    const base = process.env.TEMPLATE_ASSET_BASE;
-    if (!base) return {};
-    const u = new URL(base);
-    return {
-      remotePatterns: [
-        {
-          protocol: u.protocol.replace(':', ''),
-          hostname: u.hostname,
-          ...(u.port ? { port: u.port } : {}),
-          pathname: '/t/**',
-        },
-      ],
-    };
-  })(),
+  images: {
+    remotePatterns: [
+      { protocol: 'https', hostname: '**' },
+      ...(() => {
+        const base = process.env.TEMPLATE_ASSET_BASE;
+        if (!base) return [];
+        const u = new URL(base);
+        return [
+          {
+            protocol: u.protocol.replace(':', ''),
+            hostname: u.hostname,
+            ...(u.port ? { port: u.port } : {}),
+            pathname: '/t/**',
+          },
+        ];
+      })(),
+    ],
+  },
   // The dev indicator defaults to bottom-left, directly on top of the sidebar's
   // presence selector. Dev-only, but it hides a control agents use constantly.
   devIndicators: { position: 'bottom-right' },

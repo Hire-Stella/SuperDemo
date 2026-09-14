@@ -58,6 +58,20 @@ const list = <T,>(v: T[] | undefined, fallback: T[]) => (v && v.length > 0 ? v :
  * over produces duplicate keys. This keeps the template's width and padding and
  * counts properly.
  */
+/**
+ * A stat's number and its decoration, apart.
+ *
+ * The schema keeps "600+" as one string because "24/7" is a perfectly good
+ * stat that is not a number. Templates that animate their stats need the two
+ * separately — and taking the label without the value is what showed the
+ * template's "1200+" above the tenant's "Vehicles in the fleet".
+ */
+const statValue = (v: string) => {
+  const n = Number.parseFloat(v);
+  return Number.isFinite(n) ? n : v;
+};
+const statSuffix = (v: string) => v.replace(/^[\d.,]+/, '');
+
 const numbered = (i: number, like: unknown) =>
   String(i + 1).padStart(String(like ?? '').length || 2, '0');
 
@@ -117,7 +131,7 @@ export function adapt(content: TemplateContent): TemplateProps {
     companyStats: list(
       content.stats.map((s, i) => {
         const b = d.companyStats[i % d.companyStats.length] as unknown as Record<string, never>;
-        return { ...b, label: s.label || b.label };
+        return { ...b, value: s.value || b.value, label: s.label || b.label };
       }) as unknown as typeof d.companyStats,
       d.companyStats,
     ),
