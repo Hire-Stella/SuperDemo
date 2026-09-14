@@ -16,7 +16,15 @@ import {
   dograhSnippetHostMismatch,
   dograhWidgetSrc,
   dograhOffersWidget,
+  BLANK_DIALERS,
+  DEMO_DIALER_KINDS,
+  DEMO_DIALER_LABELS,
+  DograhDialers,
   type ApiEnv,
+  type DemoCallsView,
+  type DemoDialerConfig,
+  type DemoDialerKind,
+  type SaveDemoDialerInput,
   type ConnectDograhSiteOutput,
   type DograhConnectionView,
   type DograhWidgetDto,
@@ -81,6 +89,7 @@ export class DograhService {
         dograhBaseUrl: true,
         dograhPublic: true,
         dograhSecretsEnc: true,
+        dograhDialers: true,
         dograhUpdatedAt: true,
       },
     });
@@ -608,6 +617,188 @@ export class DograhService {
    * that bypasses the dialler entirely — no campaign, no pacing, no opt-out
    * list — which is why it is ADMIN-only and rate-limited at the controller.
    */
+  /* =========================== demo call dialers =========================== */
+
+  private parseDialers(raw: Prisma.JsonValue | null): DograhDialers {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return { ...BLANK_DIALERS };
+    const parsed = DograhDialers.safeParse(raw);
+    if (!parsed.success) {
+      // Same reasoning as parsePublic: an unreadable config must not 500 the
+      // one page where it can be fixed.
+      this.log.warn('Setting.dograhDialers did not parse; treating as unconfigured');
+      return { ...BLANK_DIALERS };
+    }
+    return parsed.data;
+  }
+
+  /**
+   * The three slots, plus whatever is needed to configure them.
+   *
+   * The workflow list is fetched here rather than by a second request from the
+   * page, so a Dograh that is down produces one card saying so instead of three
+   * empty pickers and a separate silent failure. It is also why a listing
+   * failure is a field rather than a thrown error: the stored config is still
+   * worth rendering when Dograh is unreachable.
+   */
+  async dialersView(orgId: string): Promise<DemoCallsView> {
+    const row = await this.row(orgId);
+    const baseUrl = this.resolveBaseUrl(row?.dograhBaseUrl);
+    const dialers = this.parseDialers(row?.dograhDialers ?? null);
+
+    let key: { key: string; inherited: boolean } | null = null;
+    try {
+      key = this.resolveKey(row?.dograhSecretsEnc);
+    } catch {
+      key = null;
+    }
+    const connected = Boolean(baseUrl && key);
+
+    let workflows: DemoCallsView['workflows'] = [];
+    let workflowsError: string | null = null;
+    if (connected) {
+      try {
+        workflows = (await new DograhClient(baseUrl!, key!.key).listWorkflows()).map((w) => ({
+          id: w.id,
+          name: w.name,
+          status: w.status,
+        }));
+      } catch (e) {
+        workflowsError = e instanceof Error ? e.message : 'Dograh did not return a workflow list';
+      }
+    }
+
+    return {
+      dograhConnected: connected,
+      baseUrl,
+      workflows,
+      workflowsError,
+      updatedAt: row?.dograhUpdatedAt ?? null,
+      dialers: DEMO_DIALER_KINDS.map((kind) => {
+        const c = dialers[kind];
+        const blockedReason = !connected
+          ? 'This centre has no Dograh host or key yet. Connect one on the Website page.'
+          : !c.workflowId
+            ? 'No agent chosen for this slot.'
+            : !c.workflowUuid
+              ? 'Dograh did not return a uuid for that agent — choose it again.'
+              : !c.enabled
+                ? null
+                : null;
+        return {
+          kind,
+          ...c,
+          ready: connected && Boolean(c.workflowUuid) && c.enabled,
+          blockedReason,
+        };
+      }),
+    };
+  }
+
+  /**
+   * Point one slot at a workflow, or switch it on and off.
+   *
+   * The uuid is resolved at save time, not at dial time. Dograh only returns it
+   * from `/workflow/fetch`, so looking it up per call would add a round trip to
+   * every demo — and, worse, would fail at the moment someone is standing in
+   * front of a client rather than at the moment they were configuring it.
+   */
+  async saveDialer(orgId: string, input: SaveDemoDialerInput): Promise<DemoCallsView> {
+    const row = await this.row(orgId);
+    const dialers = this.parseDialers(row?.dograhDialers ?? null);
+    const current = dialers[input.kind];
+
+    let next: DemoDialerConfig = { ...current };
+
+    if (input.workflowId !== undefined) {
+      if (input.workflowId === null) {
+        next = { ...next, workflowId: null, workflowUuid: '', workflowName: '' };
+      } else if (input.workflowId !== current.workflowId) {
+        const { client } = await this.clientFor(orgId);
+        const [uuid, list] = await Promise.all([
+          client.workflowUuid(input.workflowId).catch(() => ''),
+          client.listWorkflows().catch(() => [] as Awaited<ReturnType<DograhClient['listWorkflows']>>),
+        ]);
+        if (!uuid) {
+          throw new BadGatewayException(
+            `Dograh has no uuid for workflow ${input.workflowId}, so it cannot be dialled. Pick another.`,
+          );
+        }
+        next = {
+          ...next,
+          workflowId: input.workflowId,
+          workflowUuid: uuid,
+          workflowName: list.find((w) => w.id === input.workflowId)?.name ?? '',
+        };
+      }
+    }
+
+    if (input.enabled !== undefined) next.enabled = input.enabled;
+
+    await this.prisma.setting.update({
+      where: { orgId },
+      data: { dograhDialers: { ...dialers, [input.kind]: next } as Prisma.InputJsonValue },
+    });
+
+    return this.dialersView(orgId);
+  }
+
+  /** Ring a number with one slot's agent. */
+  async placeDialerCall(
+    orgId: string,
+    kind: DemoDialerKind,
+    phoneE164: string,
+    note?: string,
+  ): Promise<{ ok: boolean; detail: string; workflowRunId: number | null }> {
+    const row = await this.row(orgId);
+    const slot = this.parseDialers(row?.dograhDialers ?? null)[kind];
+
+    if (!slot.enabled) {
+      return {
+        ok: false,
+        detail: `The ${DEMO_DIALER_LABELS[kind].label.toLowerCase()} dialer is switched off for this centre.`,
+        workflowRunId: null,
+      };
+    }
+    if (!slot.workflowUuid) {
+      return {
+        ok: false,
+        detail: `No agent is set for the ${DEMO_DIALER_LABELS[kind].label.toLowerCase()} dialer yet.`,
+        workflowRunId: null,
+      };
+    }
+
+    let client: DograhClient;
+    try {
+      ({ client } = await this.clientFor(orgId));
+    } catch (e) {
+      return {
+        ok: false,
+        detail: e instanceof Error ? e.message : 'no Dograh configured',
+        workflowRunId: null,
+      };
+    }
+
+    try {
+      const run = await client.demoCall(
+        slot.workflowUuid,
+        phoneE164,
+        note ? { note } : undefined,
+      );
+      this.log.log(`dograh: ${kind} demo call ${run.workflow_run_name} org=${orgId} -> ${phoneE164}`);
+      return {
+        ok: true,
+        detail: `Calling ${phoneE164} now — ${slot.workflowName || 'the agent'} speaks as soon as it is picked up.`,
+        workflowRunId: run.workflow_run_id ?? null,
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        detail: e instanceof Error ? e.message : 'Dograh refused the call',
+        workflowRunId: null,
+      };
+    }
+  }
+
   async demoCall(
     orgId: string,
     phoneE164: string,

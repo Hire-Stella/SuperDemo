@@ -1046,6 +1046,12 @@ model Setting {
   /// CRM_DRIVER.
   dograhSecretsEnc      String?
   dograhUpdatedAt       DateTime?
+  /// DograhDialers: the three demo-call slots — inbound, outbound, info — each
+  /// naming a workflow on this centre's Dograh. Separate from `dograhPublic`
+  /// because that object is the *landing page's* one agent, rendered into
+  /// public HTML; these are internal testing targets and never leave the
+  /// dashboard. Null means none configured, which is the normal state.
+  dograhDialers         Json?
 
   /// Website-to-centre enrichment: scrape the client's site, then generate the
   /// landing-page copy and the Dograh agent brief from what it says.

@@ -16,6 +16,7 @@ import {
   Inbox,
   LogOut,
   PhoneCall,
+  PhoneForwarded,
   PhoneOutgoing,
   Settings,
   Sparkles,
@@ -51,6 +52,9 @@ const NAV = [
   // Agents get this one: a telecaller is an agent, and manual dialling is the
   // only outbound action that is theirs rather than an admin's.
   { href: '/telecaller', label: 'Manual dial', icon: PhoneCall, roles: ['ADMIN', 'SUPERVISOR', 'AGENT'] },
+  // Three Dograh agents on one page. Not an agent's concern — it rings real
+  // handsets on the client's carrier account, which is a supervisor's call.
+  { href: '/demo-calls', label: 'Demo calls', icon: PhoneForwarded, roles: ['ADMIN', 'SUPERVISOR'] },
   { href: '/simulator', label: 'Simulator', icon: FlaskConical, roles: ['ADMIN', 'SUPERVISOR'] },
   // The centre's public landing page. Not an agent's concern, and not a
   // read-only surface either — it is configuration, so an operator is excluded

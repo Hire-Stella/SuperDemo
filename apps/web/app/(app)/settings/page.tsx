@@ -14,7 +14,10 @@ import {
 } from 'lucide-react';
 import {
   CRM_DRIVER_LABELS,
+  DEMO_DIALER_LABELS,
   type CrmDriver,
+  type DemoCallsView,
+  type DemoDialerKind,
 } from '@superdemo/contracts';
 import type {
   AvailableNumberDto,
@@ -92,6 +95,26 @@ export default function SettingsPage() {
    * drawn from the session, so without that the toggle appears to do nothing
    * until the next reload — the same reason refreshSession exists for branding.
    */
+  /*
+   * The three demo dialers, mirrored from the Demo calls page.
+   *
+   * Same endpoint and same controls, because the two audiences arrive at
+   * different moments: somebody setting a centre up works through Settings top
+   * to bottom, and somebody about to show it opens Demo calls and expects to
+   * fix a slot where they found it.
+   */
+  const demoCalls = useQuery({
+    queryKey: ['demo-calls'],
+    queryFn: () => api.get<DemoCallsView>('/demo-calls'),
+  });
+
+  const saveDialer = useMutation({
+    mutationFn: (body: { kind: DemoDialerKind; enabled?: boolean; workflowId?: number | null }) =>
+      api.put<DemoCallsView>('/demo-calls', body),
+    onSuccess: (r) => queryClient.setQueryData(['demo-calls'], r),
+    onError: (e) => toast.error((e as Error).message),
+  });
+
   const setSimulatorEnabled = useMutation({
     mutationFn: (simulatorEnabled: boolean) => api.put('/settings', { simulatorEnabled }),
     onSuccess: (_r, simulatorEnabled) => {
@@ -262,6 +285,71 @@ export default function SettingsPage() {
               </span>
             </span>
           </label>
+        )}
+      </Card>
+
+      <Card
+        className="mb-4"
+        title="Demo calls"
+        subtitle="Three agents you can ring from one page — inbound, outbound and info"
+        contentClassName="p-4"
+      >
+        {demoCalls.isLoading ? (
+          <Spinner label="Loading…" />
+        ) : demoCalls.isError ? (
+          <p className="text-sm text-muted-foreground">
+            Could not read the dialers — {(demoCalls.error as Error).message}
+          </p>
+        ) : !demoCalls.data?.dograhConnected ? (
+          <p className="max-w-prose text-sm text-muted-foreground">
+            These ring through this centre&rsquo;s own Dograh, and none is connected yet. Set a host
+            and key up on the Website page first.
+          </p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-3">
+            {demoCalls.data.dialers.map((dialer) => (
+              <div key={dialer.kind} className="rounded-md border border-border p-3">
+                <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    className="size-4 shrink-0 accent-[var(--primary)]"
+                    checked={dialer.enabled}
+                    disabled={saveDialer.isPending}
+                    onChange={(e) =>
+                      saveDialer.mutate({ kind: dialer.kind, enabled: e.target.checked })
+                    }
+                  />
+                  {DEMO_DIALER_LABELS[dialer.kind].label}
+                </label>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                  {DEMO_DIALER_LABELS[dialer.kind].note}
+                </p>
+                <Select
+                  aria-label={`Agent for the ${DEMO_DIALER_LABELS[dialer.kind].label} dialer`}
+                  className="mt-2"
+                  value={dialer.workflowId ?? ''}
+                  disabled={saveDialer.isPending || demoCalls.data!.workflows.length === 0}
+                  onChange={(e) =>
+                    saveDialer.mutate({
+                      kind: dialer.kind,
+                      workflowId: e.target.value ? Number(e.target.value) : null,
+                    })
+                  }
+                >
+                  <option value="">
+                    {demoCalls.data!.workflows.length === 0
+                      ? 'No agents available'
+                      : 'Choose an agent…'}
+                  </option>
+                  {demoCalls.data!.workflows.map((w) => (
+                    <option key={w.id} value={w.id}>
+                      {w.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ))}
+          </div>
         )}
       </Card>
 
