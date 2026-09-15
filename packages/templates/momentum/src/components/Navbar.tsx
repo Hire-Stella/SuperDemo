@@ -16,10 +16,19 @@ export default function Navbar() {
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-        className="mx-auto flex max-w-5xl items-center justify-between rounded-3xl border border-white/10 bg-ink/80 px-5 py-3 text-cream shadow-lg shadow-black/25 backdrop-blur-xl">
+        className="mx-auto flex max-w-5xl items-center justify-between gap-3 rounded-3xl border border-white/10 bg-ink/80 px-5 py-3 text-cream shadow-lg shadow-black/25 backdrop-blur-xl">
         <Link
           href="#hero-section"
-          className="font-display text-xl font-semibold tracking-wide"
+          /*
+           * min-w-0 + truncate, because the name is the tenant's.
+           *
+           * The clone was built for "Forgewell" and a flex child will not
+           * shrink below its content by default — so a real centre called
+           * "Legend Rent A Car" pushed the bar to 466px on a 390px screen and
+           * took the menu button off the edge with it. Any template whose
+           * wordmark is text rather than a logo has this waiting in it.
+           */
+          className="min-w-0 truncate font-display text-xl font-semibold tracking-wide"
         >
           {SITE_NAME}
         </Link>
