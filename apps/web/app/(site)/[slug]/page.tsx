@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import {
+  DOGRAH_WIDGET_DISABLED,
   type PublicSiteDto,
   SiteCorners,
   SiteDensity,
@@ -34,6 +35,16 @@ import { DograhWidget } from '@/components/site/dograh-widget';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3101';
 
+/**
+ * What the API actually sends, which is not always what this page was built
+ * against. Web and API deploy independently — the container app trailed the
+ * web app by eleven days once — so a field added on both sides still arrives
+ * missing for as long as the older image is serving. Marking `dograh`
+ * optional makes the compiler insist on the fallback instead of trusting a
+ * cast, which is what put a stack trace in front of a client's visitors.
+ */
+type OnTheWire = Omit<PublicSiteDto, 'dograh'> & { dograh?: PublicSiteDto['dograh'] };
+
 async function fetchSite(slug: string): Promise<PublicSiteDto | null> {
   try {
     const res = await fetch(`${API}/api/public/sites/${encodeURIComponent(slug)}`, {
@@ -43,7 +54,10 @@ async function fetchSite(slug: string): Promise<PublicSiteDto | null> {
       cache: 'no-store',
     });
     if (!res.ok) return null;
-    return (await res.json()) as PublicSiteDto;
+    const wire = (await res.json()) as OnTheWire;
+    // No agent connected is the honest reading of a missing field, and it is
+    // the state every centre starts in anyway.
+    return { ...wire, dograh: wire.dograh ?? DOGRAH_WIDGET_DISABLED };
   } catch {
     // The API being down must not render a stack trace at a client's visitors.
     return null;
