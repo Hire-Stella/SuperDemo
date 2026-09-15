@@ -183,6 +183,7 @@ export class PlatformController {
             websiteUrl: body.websiteUrl ?? null,
             websiteEnabled: body.websiteEnabled,
             simulatorEnabled: body.simulatorEnabled,
+            demoCallsEnabled: body.demoCallsEnabled,
           },
         });
 
@@ -441,6 +442,7 @@ export class PlatformController {
           tagline: body.tagline,
           websiteEnabled: body.websiteEnabled,
           simulatorEnabled: body.simulatorEnabled,
+          demoCallsEnabled: body.demoCallsEnabled,
           // undefined leaves it alone; null clears a pasted export so the
           // preset takes over again.
           themeTokens:

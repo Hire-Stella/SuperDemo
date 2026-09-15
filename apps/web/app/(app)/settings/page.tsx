@@ -87,6 +87,7 @@ export default function SettingsPage() {
         instituteName: string;
         websiteEnabled: boolean;
         simulatorEnabled: boolean;
+        demoCallsEnabled: boolean;
         slug: string | null;
       }>('/settings'),
   });
@@ -107,6 +108,26 @@ export default function SettingsPage() {
   const demoCalls = useQuery({
     queryKey: ['demo-calls'],
     queryFn: () => api.get<DemoCallsView>('/demo-calls'),
+    // The API now refuses this route once demoCallsEnabled is off, and firing
+    // a request doomed to 404 on every load of this page would just print a
+    // console error nobody asked for — undefined here means "not loaded yet",
+    // not "off", so the very first paint still fetches as before.
+    enabled: settings.data?.demoCallsEnabled !== false,
+  });
+
+  const setDemoCallsEnabled = useMutation({
+    mutationFn: (demoCallsEnabled: boolean) => api.put('/settings', { demoCallsEnabled }),
+    onSuccess: (_r, demoCallsEnabled) => {
+      toast.success(
+        demoCallsEnabled
+          ? 'Demo calls enabled'
+          : 'Demo calls disabled — the section is hidden and its endpoints refuse',
+      );
+      void queryClient.invalidateQueries({ queryKey: ['settings'] });
+      if (demoCallsEnabled) void queryClient.invalidateQueries({ queryKey: ['demo-calls'] });
+      void refreshSession();
+    },
+    onError: (e) => toast.error((e as Error).message),
   });
 
   const setSimulatorEnabled = useMutation({
@@ -285,57 +306,91 @@ export default function SettingsPage() {
       <Card
         className="mb-4"
         title="Demo calls"
-        subtitle="Which agent answers each slot — set by the platform operator"
+        subtitle="Three Dograh-backed dialer slots — which agent answers each is set by the platform operator"
         contentClassName="p-4"
       >
-        {demoCalls.isLoading ? (
+        {settings.isLoading ? (
           <Spinner label="Loading…" />
-        ) : demoCalls.isError ? (
-          <p className="text-sm text-muted-foreground">
-            Could not read the dialers — {(demoCalls.error as Error).message}
-          </p>
-        ) : !demoCalls.data?.dograhConnected ? (
-          <p className="max-w-prose text-sm text-muted-foreground">
-            No voice platform is connected for this centre yet. Your platform operator sets this
-            up.
-          </p>
         ) : (
-          <>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {demoCalls.data.dialers.map((dialer) => (
-                <div key={dialer.kind} className="rounded-md border border-border p-3">
-                  <p className="text-sm font-medium">{DEMO_DIALER_LABELS[dialer.kind].label}</p>
-                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-                    {DEMO_DIALER_LABELS[dialer.kind].note}
-                  </p>
-                  <p className="mt-2">
-                    <Badge dot={dialer.ready ? 'bg-live' : 'bg-muted-foreground'}>
-                      {dialer.ready ? 'Ready' : dialer.enabled ? 'Not set up' : 'Off'}
-                    </Badge>
-                  </p>
-                  <p className="mt-1.5 text-[11px] text-muted-foreground">
-                    {dialer.workflowName || 'No agent chosen'}
-                  </p>
-                </div>
-              ))}
-            </div>
-            {/*
-              Read-only, deliberately.
-              Choosing an agent means listing every workflow on the voice host,
-              and a centre without its own key is on the deployment's — so that
-              list is other clients' agents. Picking from it is the operator's
-              act, not a tenant admin's. See PlatformVoiceController.
-            */}
-            <p className="mt-3 max-w-prose text-[11px] leading-relaxed text-muted-foreground">
-              Ring these, or talk to them in the browser, from{' '}
-              <Link href="/demo-calls" className="underline underline-offset-2">
-                Demo calls
-              </Link>
-              . Changing which agent answers is done by your platform operator — the agent list
-              spans the whole voice host, so it is not shown inside a single centre.
-            </p>
-          </>
+          <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+              checked={settings.data?.demoCallsEnabled ?? true}
+              disabled={setDemoCallsEnabled.isPending}
+              onChange={(e) => setDemoCallsEnabled.mutate(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium">
+                {settings.data?.demoCallsEnabled ? 'Demo calls is on' : 'Demo calls is off'}
+              </span>
+              <span className="mt-0.5 block max-w-prose text-[11px] leading-relaxed text-muted-foreground">
+                {settings.data?.demoCallsEnabled ? (
+                  <>
+                    Inbound, outbound and info slots, ready to ring or talk to in the browser from{' '}
+                    <Link href="/demo-calls" className="underline underline-offset-2">
+                      Demo calls
+                    </Link>
+                    .
+                  </>
+                ) : (
+                  <>
+                    The Demo calls section is hidden and its endpoints refuse. Turning this back
+                    on does not clear any agent already wired to a slot.
+                  </>
+                )}
+              </span>
+            </span>
+          </label>
         )}
+
+        {settings.data?.demoCallsEnabled &&
+          (demoCalls.isLoading ? (
+            <div className="mt-3">
+              <Spinner label="Loading…" />
+            </div>
+          ) : demoCalls.isError ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Could not read the dialers — {(demoCalls.error as Error).message}
+            </p>
+          ) : !demoCalls.data?.dograhConnected ? (
+            <p className="mt-3 max-w-prose text-sm text-muted-foreground">
+              No voice platform is connected for this centre yet. Your platform operator sets this
+              up.
+            </p>
+          ) : (
+            <>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                {demoCalls.data.dialers.map((dialer) => (
+                  <div key={dialer.kind} className="rounded-md border border-border p-3">
+                    <p className="text-sm font-medium">{DEMO_DIALER_LABELS[dialer.kind].label}</p>
+                    <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                      {DEMO_DIALER_LABELS[dialer.kind].note}
+                    </p>
+                    <p className="mt-2">
+                      <Badge dot={dialer.ready ? 'bg-live' : 'bg-muted-foreground'}>
+                        {dialer.ready ? 'Ready' : dialer.enabled ? 'Not set up' : 'Off'}
+                      </Badge>
+                    </p>
+                    <p className="mt-1.5 text-[11px] text-muted-foreground">
+                      {dialer.workflowName || 'No agent chosen'}
+                    </p>
+                  </div>
+                ))}
+              </div>
+              {/*
+                Read-only, deliberately.
+                Choosing an agent means listing every workflow on the voice host,
+                and a centre without its own key is on the deployment's — so that
+                list is other clients' agents. Picking from it is the operator's
+                act, not a tenant admin's. See PlatformVoiceController.
+              */}
+              <p className="mt-3 max-w-prose text-[11px] leading-relaxed text-muted-foreground">
+                Changing which agent answers is done by your platform operator — the agent list
+                spans the whole voice host, so it is not shown inside a single centre.
+              </p>
+            </>
+          ))}
       </Card>
 
       {/* Active drivers — the honesty panel */}

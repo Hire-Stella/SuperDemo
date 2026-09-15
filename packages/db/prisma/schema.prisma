@@ -245,6 +245,17 @@ model Organization {
   /// off means the section and its two shortcuts disappear and the endpoints
   /// refuse; nothing stops being reachable from outside.
   simulatorEnabled Boolean @default(true)
+  /// Whether this centre keeps the Demo calls page — three Dograh-backed
+  /// dialer slots (inbound, outbound, info) an operator wires up and a
+  /// tenant admin can ring or talk to in the browser.
+  ///
+  /// Which workflow answers each slot is chosen later, in the platform
+  /// voice panel — see platform-voice.controller.ts for why that step
+  /// cannot happen before the org exists. This flag only decides whether
+  /// the page and its endpoints exist for this centre at all. Defaults
+  /// true for the same reason as the other two: every centre seeded before
+  /// this flag existed should not go dark on migration.
+  demoCallsEnabled Boolean @default(true)
   /// URL-safe handle, unique across the platform. Stable once issued — the
   /// superadmin can rename an org's display name without breaking anything.
   slug      String   @unique

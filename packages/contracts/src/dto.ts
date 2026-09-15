@@ -105,6 +105,8 @@ export const SessionUser = z.object({
   orgWebsiteEnabled: z.boolean().nullable(),
   /** Same shape and same reasoning as orgWebsiteEnabled. Null for SUPERADMIN. */
   orgSimulatorEnabled: z.boolean().nullable(),
+  /** Same shape and same reasoning as orgWebsiteEnabled. Null for SUPERADMIN. */
+  orgDemoCallsEnabled: z.boolean().nullable(),
   location: Location,
   timezone: z.string(),
   skills: z.array(Skill),
@@ -189,6 +191,14 @@ export const CreateOrgInput = z.object({
    */
   simulatorEnabled: z.boolean().default(true),
   /**
+   * Whether this centre gets the Demo calls page.
+   *
+   * On by default, same as the other two. Which agent answers inbound,
+   * outbound and info is chosen afterward in the voice panel — there is no
+   * org yet for this request to point a workflow at.
+   */
+  demoCallsEnabled: z.boolean().default(true),
+  /**
    * The client's real website.
    *
    * Optional, and the centre is created identically without it — the vertical
@@ -238,6 +248,7 @@ export const UpdateOrgInput = z.object({
    */
   websiteEnabled: z.boolean().optional(),
   simulatorEnabled: z.boolean().optional(),
+  demoCallsEnabled: z.boolean().optional(),
 });
 export type UpdateOrgInput = z.infer<typeof UpdateOrgInput>;
 
@@ -281,6 +292,7 @@ export const AgentSummary = SessionUser.omit({
   orgTagline: true,
   orgWebsiteEnabled: true,
   orgSimulatorEnabled: true,
+  orgDemoCallsEnabled: true,
 }).extend({
   extension: z.string().nullable(),
   status: AgentStatus,

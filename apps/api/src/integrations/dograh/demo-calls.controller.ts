@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, Post } from '@nestjs/common';
+import { Controller, Get, HttpCode, NotFoundException, Post } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import {
   type DemoCallOutput,
@@ -13,6 +13,7 @@ import {
 import { DograhService } from './dograh.service';
 import { Roles } from '../../auth/guards';
 import { ZodBody } from '../../shared/zod.pipe';
+import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContext } from '../../tenancy/tenant-context.service';
 
 /**
@@ -29,7 +30,22 @@ export class DemoCallsController {
   constructor(
     private readonly dograh: DograhService,
     private readonly tenants: TenantContext,
+    private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * The sidebar hides this page when `demoCallsEnabled` is off, but a
+   * bookmarked URL or a stray script does not read the sidebar — the same
+   * reason `sites.service.ts` checks `websiteEnabled` before serving a page
+   * rather than trusting the UI to have hidden the link.
+   */
+  private async assertEnabled(orgId: string): Promise<void> {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { demoCallsEnabled: true },
+    });
+    if (!org?.demoCallsEnabled) throw new NotFoundException('Demo calls is off for this centre');
+  }
 
   /**
    * The three slots, as this centre's own staff may see them.
@@ -43,7 +59,9 @@ export class DemoCallsController {
   @Roles('ADMIN', 'SUPERVISOR')
   @Get()
   async view(): Promise<DemoCallsView> {
-    const v = await this.dograh.dialersView(this.tenants.requireOrgId());
+    const orgId = this.tenants.requireOrgId();
+    await this.assertEnabled(orgId);
+    const v = await this.dograh.dialersView(orgId);
     return { ...v, workflows: [], workflowsError: null };
   }
 
@@ -58,8 +76,10 @@ export class DemoCallsController {
   @Roles('ADMIN', 'SUPERVISOR')
   @Post('web-call')
   @HttpCode(200)
-  webCall(@ZodBody(WebCallInput) body: WebCallInput): Promise<WebCallOutput> {
-    return this.dograh.webCallScript(this.tenants.requireOrgId(), body.kind);
+  async webCall(@ZodBody(WebCallInput) body: WebCallInput): Promise<WebCallOutput> {
+    const orgId = this.tenants.requireOrgId();
+    await this.assertEnabled(orgId);
+    return this.dograh.webCallScript(orgId, body.kind);
   }
 
   /**
@@ -77,6 +97,8 @@ export class DemoCallsController {
   @Post('call')
   @HttpCode(200)
   async call(@ZodBody(PlaceDemoCallInput) body: PlaceDemoCallInput): Promise<DemoCallOutput> {
+    const orgId = this.tenants.requireOrgId();
+    await this.assertEnabled(orgId);
     const country = countryByCode(body.country);
     const phoneE164 = composeE164(country, body.phone);
     if (!isPlausibleNumber(country, phoneE164)) {
@@ -87,12 +109,7 @@ export class DemoCallsController {
         dialled: null,
       };
     }
-    const r = await this.dograh.placeDialerCall(
-      this.tenants.requireOrgId(),
-      body.kind,
-      phoneE164,
-      body.note,
-    );
+    const r = await this.dograh.placeDialerCall(orgId, body.kind, phoneE164, body.note);
     return { ...r, dialled: r.ok ? phoneE164 : null };
   }
 }

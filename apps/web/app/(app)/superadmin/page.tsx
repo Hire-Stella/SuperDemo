@@ -100,6 +100,15 @@ export default function SuperadminPage() {
    * is a support ticket waiting to happen.
    */
   const [simulatorEnabled, setSimulatorEnabled] = useState(true);
+  /*
+   * Whether this centre gets the Demo calls page. On by default, same as the
+   * other two. This only decides whether the page and its endpoints exist —
+   * picking which agent answers inbound, outbound and info happens after
+   * creation, in the voice panel below, because that picker lists every
+   * workflow on the voice host and there is no centre yet for this form to
+   * scope that list to.
+   */
+  const [demoCallsEnabled, setDemoCallsEnabled] = useState(true);
   const [admin, setAdmin] = useState(BLANK_ADMIN);
   const [addingAdminTo, setAddingAdminTo] = useState<string | null>(null);
   /*
@@ -130,15 +139,21 @@ export default function SuperadminPage() {
     setWebsiteEnabled(true);
     setSiteTemplate(null);
     setSimulatorEnabled(true);
+    setDemoCallsEnabled(true);
     setAdmin(BLANK_ADMIN);
     setCreating(false);
   };
 
   const createOrg = useMutation({
-    mutationFn: (body: CreateOrgInput) => api.post('/platform/orgs', body),
-    onSuccess: (_res, body) => {
+    mutationFn: (body: CreateOrgInput) => api.post<{ id: string }>('/platform/orgs', body),
+    onSuccess: (res, body) => {
       toast.success(`${body.name} created — ${body.admin.email} can sign in now`);
       void queryClient.invalidateQueries({ queryKey: ['platform-orgs'] });
+      // Land straight on the voice panel rather than making them find the row
+      // and click into it themselves — this is the picker for inbound,
+      // outbound and info, and "test in browser" only means something once an
+      // agent is actually wired to a slot.
+      if (body.demoCallsEnabled) setVoiceFor(res.id);
       reset();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -250,6 +265,7 @@ export default function SuperadminPage() {
                 websiteEnabled,
                 ...(websiteEnabled && siteTemplate ? { siteTemplate } : {}),
                 simulatorEnabled,
+                demoCallsEnabled,
                 timezone,
                 admin: { ...admin, email: admin.email.trim().toLowerCase() },
               });
@@ -468,7 +484,32 @@ export default function SuperadminPage() {
               </span>
             </label>
 
-
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border p-3 text-sm md:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+                checked={demoCallsEnabled}
+                onChange={(e) => setDemoCallsEnabled(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium">Give this centre demo calls</span>
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                  {demoCallsEnabled ? (
+                    <>
+                      Three dialer slots — inbound, outbound, info — each pointed at a Dograh agent
+                      of your choosing right after this centre is created, then dialable or talkable
+                      in the browser from its own Demo calls page. Turn off for a client with no
+                      Dograh agent to show.
+                    </>
+                  ) : (
+                    <>
+                      No Demo calls section, and its endpoints refuse. Everything else about the
+                      centre is unchanged, and this can be switched back on at any time.
+                    </>
+                  )}
+                </span>
+              </span>
+            </label>
 
             {/* Says what the button will actually do, so the operator is not
                 guessing what a "clinic" gets. */}

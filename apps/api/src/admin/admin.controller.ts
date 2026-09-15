@@ -342,12 +342,13 @@ export class AdminController {
     // a second round trip on every page load to answer that would be silly.
     const org = await this.prisma.organization.findUnique({
       where: { id: this.tenants.requireOrgId() },
-      select: { websiteEnabled: true, simulatorEnabled: true, slug: true },
+      select: { websiteEnabled: true, simulatorEnabled: true, demoCallsEnabled: true, slug: true },
     });
     return {
       ...s,
       websiteEnabled: org?.websiteEnabled ?? true,
       simulatorEnabled: org?.simulatorEnabled ?? true,
+      demoCallsEnabled: org?.demoCallsEnabled ?? true,
       slug: org?.slug ?? null,
       agentHourlyCostUsd: s ? Number(s.agentHourlyCostUsd) : 12,
       // Surfacing the active drivers is how the demo stays honest: anyone
@@ -387,11 +388,13 @@ export class AdminController {
         websiteEnabled: z.boolean().optional(),
         /** Whether this centre keeps the call simulator. Same reasoning. */
         simulatorEnabled: z.boolean().optional(),
+        /** Whether this centre keeps the Demo calls page. Same reasoning. */
+        demoCallsEnabled: z.boolean().optional(),
       }),
     )
     body: Record<string, unknown>,
   ) {
-    const { websiteEnabled, simulatorEnabled, ...settingFields } = body;
+    const { websiteEnabled, simulatorEnabled, demoCallsEnabled, ...settingFields } = body;
     const data: Record<string, unknown> = { ...settingFields };
     if (typeof body.agentHourlyCostUsd === 'number') {
       data.agentHourlyCostUsd = String(body.agentHourlyCostUsd);
@@ -431,6 +434,16 @@ export class AdminController {
       await this.prisma.organization.update({
         where: { id: this.tenants.requireOrgId() },
         data: { simulatorEnabled },
+      });
+    }
+
+    // Same as the simulator: nothing to provision. The dialer slots and their
+    // workflow assignments live untouched either way — this only decides
+    // whether the page and its endpoints are reachable.
+    if (typeof demoCallsEnabled === 'boolean') {
+      await this.prisma.organization.update({
+        where: { id: this.tenants.requireOrgId() },
+        data: { demoCallsEnabled },
       });
     }
     // orgId is unique, so it is a valid identifier here — and naming it keeps
