@@ -108,9 +108,26 @@ vercel link          # from the repo root
 vercel --prod
 ```
 
-`apps/web/vercel.json` builds `@superdemo/contracts` before `next build`. That
-order is not optional: it resolves through `main` to `dist`, so a plain
-`next build` fails on a module that has not been emitted yet.
+`apps/web/vercel.json` builds through turbo rather than calling `next build`,
+and that order is not optional. `@superdemo/contracts` resolves through `main`
+to `dist`, so a plain `next build` fails on a module nothing has emitted yet.
+
+The template packages need the same treatment for a subtler reason. Each
+`packages/templates/*` points `types` at `./dist/index.d.ts`, which gives the
+host a type-checked surface without compiling ported component bodies under
+SuperDemo's `noUncheckedIndexedAccess` — those clones were never written for
+it. `dist/` is gitignored, so on a clean CI checkout the declarations are
+absent, TypeScript falls back to `src`, and the build dies on 44 errors across
+six templates. It passes on a developer machine only because an earlier build
+left `dist/` on disk, which makes this a failure you cannot reproduce locally
+without deleting it first.
+
+`turbo run build --filter=@superdemo/web` walks the dependency graph, so new
+templates are covered automatically and `@superdemo/db` still stays out.
+
+Note that `vercel.json` is schema-validated and rejects unknown top-level keys
+— a `"//"` comment block there fails the deployment before any build starts,
+with an empty log and a 0ms build.
 
 Environment on Vercel:
 
