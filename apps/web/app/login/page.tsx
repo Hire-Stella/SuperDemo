@@ -8,19 +8,11 @@ import { Button, Input, Spinner } from '@/components/composites';
 import { PLATFORM_NAME, PLATFORM_TAGLINE } from '@/lib/platform';
 import { ThemeToggle } from '@/components/theme-toggle';
 
-/** Seeded accounts, so a demo doesn't stall on "what was the password?". */
-const DEMO_ACCOUNTS = [
-  { email: 'super@hirestella.com', role: 'Platform', note: 'creates & manages contact centres' },
-  { email: 'layla@fitiedu.com', role: 'Admin', note: 'settings, numbers, AI config' },
-  { email: 'omar@fitiedu.com', role: 'Supervisor', note: 'live ops, analytics' },
-  { email: 'mariam@fitiedu.com', role: 'Agent', note: 'softphone, receives calls' },
-];
-
 export default function LoginPage() {
   const { login, user, loading } = useSession();
   const router = useRouter();
-  const [email, setEmail] = useState('layla@fitiedu.com');
-  const [password, setPassword] = useState('Password123!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -95,24 +87,6 @@ export default function LoginPage() {
             Sign in <ArrowRight className="size-4" aria-hidden />
           </Button>
         </form>
-
-        <div className="mt-4 rounded-card border border-border bg-muted p-4">
-          <p className="text-xs font-semibold text-muted-foreground">Seeded accounts (password: Password123!)</p>
-          <ul className="mt-2 space-y-1.5">
-            {DEMO_ACCOUNTS.map((a) => (
-              <li key={a.email}>
-                <button
-                  onClick={() => setEmail(a.email)}
-                  className="w-full rounded-lg px-2 py-1.5 text-left transition hover:bg-card"
-                >
-                  <span className="text-xs font-medium">{a.role}</span>
-                  <span className="ml-1.5 text-xs text-muted-foreground">{a.email}</span>
-                  <span className="block text-[11px] text-muted-foreground/70">{a.note}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
       </div>
     </main>
   );
