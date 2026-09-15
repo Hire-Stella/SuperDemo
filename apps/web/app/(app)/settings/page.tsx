@@ -93,6 +93,20 @@ export default function SettingsPage() {
   });
 
   /*
+   * Each flag defaults to on when the row has not loaded yet — and, until now,
+   * also whenever the field was simply absent from the response (an API build
+   * that predates the flag, mid-rollout). Reading the raw field in three
+   * places per toggle meant the checkbox and its own label could disagree on
+   * exactly that undefined case: `x ?? true` checks the box, but `x ? … : …`
+   * treats undefined as falsy and prints "is off" beside a checked box.
+   * Normalising once here is what keeps every reader of the same value seeing
+   * the same answer.
+   */
+  const websiteOn = settings.data?.websiteEnabled ?? true;
+  const simulatorOn = settings.data?.simulatorEnabled ?? true;
+  const demoCallsOn = settings.data?.demoCallsEnabled ?? true;
+
+  /*
    * Refreshes the session as well as the settings row. The Website nav item is
    * drawn from the session, so without that the toggle appears to do nothing
    * until the next reload — the same reason refreshSession exists for branding.
@@ -112,7 +126,7 @@ export default function SettingsPage() {
     // a request doomed to 404 on every load of this page would just print a
     // console error nobody asked for — undefined here means "not loaded yet",
     // not "off", so the very first paint still fetches as before.
-    enabled: settings.data?.demoCallsEnabled !== false,
+    enabled: demoCallsOn,
   });
 
   const setDemoCallsEnabled = useMutation({
@@ -230,16 +244,16 @@ export default function SettingsPage() {
             <input
               type="checkbox"
               className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
-              checked={settings.data?.websiteEnabled ?? true}
+              checked={websiteOn}
               disabled={setWebsiteEnabled.isPending}
               onChange={(e) => setWebsiteEnabled.mutate(e.target.checked)}
             />
             <span>
               <span className="font-medium">
-                {settings.data?.websiteEnabled ? 'Website is on' : 'Website is off'}
+                {websiteOn ? 'Website is on' : 'Website is off'}
               </span>
               <span className="mt-0.5 block max-w-prose text-[11px] leading-relaxed text-muted-foreground">
-                {settings.data?.websiteEnabled ? (
+                {websiteOn ? (
                   <>
                     Your page is served at{' '}
                     <code className="font-mono">/{settings.data?.slug ?? ''}</code>, and the Website
@@ -274,16 +288,16 @@ export default function SettingsPage() {
             <input
               type="checkbox"
               className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
-              checked={settings.data?.simulatorEnabled ?? true}
+              checked={simulatorOn}
               disabled={setSimulatorEnabled.isPending}
               onChange={(e) => setSimulatorEnabled.mutate(e.target.checked)}
             />
             <span>
               <span className="font-medium">
-                {settings.data?.simulatorEnabled ? 'Simulator is on' : 'Simulator is off'}
+                {simulatorOn ? 'Simulator is on' : 'Simulator is off'}
               </span>
               <span className="mt-0.5 block max-w-prose text-[11px] leading-relaxed text-muted-foreground">
-                {settings.data?.simulatorEnabled ? (
+                {simulatorOn ? (
                   <>
                     The Simulator section invents a caller and walks a scripted conversation through
                     your real routing, AI handoff and queueing. Useful while setting a centre up and
@@ -316,16 +330,16 @@ export default function SettingsPage() {
             <input
               type="checkbox"
               className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
-              checked={settings.data?.demoCallsEnabled ?? true}
+              checked={demoCallsOn}
               disabled={setDemoCallsEnabled.isPending}
               onChange={(e) => setDemoCallsEnabled.mutate(e.target.checked)}
             />
             <span>
               <span className="font-medium">
-                {settings.data?.demoCallsEnabled ? 'Demo calls is on' : 'Demo calls is off'}
+                {demoCallsOn ? 'Demo calls is on' : 'Demo calls is off'}
               </span>
               <span className="mt-0.5 block max-w-prose text-[11px] leading-relaxed text-muted-foreground">
-                {settings.data?.demoCallsEnabled ? (
+                {demoCallsOn ? (
                   <>
                     Inbound, outbound and info slots, ready to ring or talk to in the browser from{' '}
                     <Link href="/demo-calls" className="underline underline-offset-2">
@@ -344,7 +358,7 @@ export default function SettingsPage() {
           </label>
         )}
 
-        {settings.data?.demoCallsEnabled &&
+        {demoCallsOn &&
           (demoCalls.isLoading ? (
             <div className="mt-3">
               <Spinner label="Loading…" />
