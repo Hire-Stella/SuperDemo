@@ -24,7 +24,7 @@ import {
   isPlausibleNumber,
   type CallableContact,
   type ConversationDetail,
-  type Disposition,
+  Disposition,
   type ManualCallResult,
   type PhoneNumberDto,
 } from '@superdemo/contracts';
@@ -809,16 +809,13 @@ function formatDuration(ms: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
 }
 
-const DISPOSITION_KEYS = new Set<string>([
-  'ENROLMENT_INTEREST',
-  'INFO_PROVIDED',
-  'CALLBACK_REQUESTED',
-  'FEE_ENQUIRY',
-  'EXISTING_STUDENT_SUPPORT',
-  'NOT_INTERESTED',
-  'WRONG_NUMBER',
-  'SPAM',
-]);
+/*
+ * Derived from the enum, not restated beside it. The hand-kept copy this
+ * replaces had drifted by one value — LEAD_QUALIFIED was missing — and the
+ * miss renders as a raw LEAD_QUALIFIED in the queue, sitting next to
+ * "Information provided" and "Existing customer" in front of a client.
+ */
+const DISPOSITION_KEYS = new Set<string>(Disposition.options);
 
 /** The worklist's lastOutcome is either a disposition or a plain phrase. */
 function isDisposition(value: string): value is Disposition {
