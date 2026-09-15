@@ -1,0 +1,81 @@
+/*
+ * reodental, scoped to its own root.
+ *
+ * Nine templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+
+.reodental-root {
+  --color-ink: #121212;
+  --color-ink-soft: #1c1c1c;
+  --color-cream: #fafaf8;
+  --color-cream-soft: #f8f8f6;
+  --color-cream-deep: #f6f0e6;
+  --color-gold: #b49064;
+  --color-muted: #575756;
+  --color-muted-warm: #625a53;
+  --color-muted-dark: #3a3a3a;
+  --color-border: #f0f0f0;
+  --color-border-strong: #c9c9c9;
+}
+
+@theme inline {
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-cream: var(--color-cream);
+  --color-cream-soft: var(--color-cream-soft);
+  --color-cream-deep: var(--color-cream-deep);
+  --color-gold: var(--color-gold);
+  --color-muted: var(--color-muted);
+  --color-muted-warm: var(--color-muted-warm);
+  --color-muted-dark: var(--color-muted-dark);
+  --color-border: var(--color-border);
+  --color-border-strong: var(--color-border-strong);
+  --font-sans: var(--font-geist-sans);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+.reodental-root {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Seamless infinite marquee track — duplicated content scrolls -50% */
+@keyframes marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.marquee-track {
+  animation: marquee-scroll 28s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * Several of these templates bring cards in from `x: 100`, and a card below
+ * the fold sits at that offset until it scrolls into view — 100px of push on a
+ * 390px screen, which is 76px of sideways scroll on a phone. `clip` rather
+ * than `hidden`: it stops the overflow without making this a scroll container,
+ * so `position: sticky` inside still works.
+ */
+.reodental-root {
+  overflow-x: clip;
+}

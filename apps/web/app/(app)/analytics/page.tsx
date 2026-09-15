@@ -19,6 +19,7 @@ import {
 import { BarChart3, Download, PiggyBank, ShieldCheck } from 'lucide-react';
 import {
   dispositionLabel,
+  interestLabel,
   evalBand,
   type AnalyticsOverview,
   type EvalSummary,
@@ -319,7 +320,8 @@ export default function AnalyticsPage() {
             </tbody>
           </table>
           <p className="mt-2 text-xs text-muted-foreground">
-            Friday and Saturday are the UAE weekend — light traffic there is expected.
+            Friday and Saturday are the UAE weekend. Whether that is your quietest stretch or your
+            busiest depends on the business — an office empties, a rental desk fills up.
           </p>
         </div>
       </Card>
@@ -527,9 +529,9 @@ export default function AnalyticsPage() {
       </div>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        <Card title="Most-asked-about courses" subtitle="Where the demand actually is">
+        <Card title={interestLabel(user.orgIndustry).title} subtitle="Where the demand actually is">
           {d.topCourses.length === 0 ? (
-            <p className="p-4 text-sm text-muted-foreground">No course interest recorded in this range.</p>
+            <p className="p-4 text-sm text-muted-foreground">{interestLabel(user.orgIndustry).empty}</p>
           ) : (
             <ul className="divide-y divide-border">
               {d.topCourses.map((c) => (

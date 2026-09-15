@@ -1,5 +1,9 @@
 # Deploying SuperDemo
 
+Host-agnostic. For Azure specifically — Container Apps, Postgres Flexible
+Server, a recordings share, and real calls through ElevenLabs on a Twilio
+number — follow **[AZURE-DEPLOY.md](AZURE-DEPLOY.md)** instead.
+
 Two halves, and they cannot both go to the same place.
 
 **The web app is a Next.js site and belongs on Vercel.** **The API cannot be
@@ -58,7 +62,7 @@ Environment — the ones without a default will stop it booting:
 ```
 DATABASE_URL=…                 # from step 1
 REDIS_URL=…                    # from step 2
-JWT_SECRET=…                   # openssl rand -base64 48
+JWT_ACCESS_SECRET=…            # openssl rand -base64 48
 JWT_REFRESH_SECRET=…           # a DIFFERENT one
 CRM_SECRET_KEY=…               # openssl rand -base64 32
 PUBLIC_BASE_URL=https://…      # this service's own public URL
@@ -91,17 +95,39 @@ Settings → Build & Deployment → Root Directory. Without it the deploy fails 
 the root directory, and the repo root is a workspace root that has none.
 
 Leave "Include files outside the root directory" ON — the app imports
-`@superdemo/contracts` and `@superdemo/db`, which resolve to their `dist`, so
-those packages have to be present and built.
+`@superdemo/contracts`, which resolves through `main` to its `dist`, so that
+package has to be present and built.
+
+Not `@superdemo/db`. The web app neither imports it nor declares it, and
+building it on Vercel only ran `prisma generate` for a client nothing there
+loads — which is what the "could not find your Prisma schema" warnings in the
+build log were. Dropped from the build command.
 
 ```bash
 vercel link          # from the repo root
 vercel --prod
 ```
 
-`apps/web/vercel.json` builds both workspace packages before `next build`. That
-order is not optional: both resolve through `main` to `dist`, so a plain
-`next build` fails on modules that have not been emitted yet.
+`apps/web/vercel.json` builds through turbo rather than calling `next build`,
+and that order is not optional. `@superdemo/contracts` resolves through `main`
+to `dist`, so a plain `next build` fails on a module nothing has emitted yet.
+
+The template packages need the same treatment for a subtler reason. Each
+`packages/templates/*` points `types` at `./dist/index.d.ts`, which gives the
+host a type-checked surface without compiling ported component bodies under
+SuperDemo's `noUncheckedIndexedAccess` — those clones were never written for
+it. `dist/` is gitignored, so on a clean CI checkout the declarations are
+absent, TypeScript falls back to `src`, and the build dies on 44 errors across
+six templates. It passes on a developer machine only because an earlier build
+left `dist/` on disk, which makes this a failure you cannot reproduce locally
+without deleting it first.
+
+`turbo run build --filter=@superdemo/web` walks the dependency graph, so new
+templates are covered automatically and `@superdemo/db` still stays out.
+
+Note that `vercel.json` is schema-validated and rejects unknown top-level keys
+— a `"//"` comment block there fails the deployment before any build starts,
+with an empty log and a 0ms build.
 
 Environment on Vercel:
 

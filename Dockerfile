@@ -20,7 +20,7 @@ RUN corepack enable
 FROM base AS deps
 WORKDIR /app
 # Manifests only, so a source-only change does not re-resolve the whole tree.
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/contracts/package.json packages/contracts/
@@ -46,7 +46,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 # Production tree only. The dev dependencies are a build concern and have no
 # business being reachable from a running container.
-COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
+COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY apps/api/package.json apps/api/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/db/package.json packages/db/
@@ -56,10 +56,25 @@ COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/packages/contracts/dist ./packages/contracts/dist
 COPY --from=build /app/packages/db/dist ./packages/db/dist
 COPY --from=build /app/packages/db/prisma ./packages/db/prisma
-# The generated Prisma client lives in node_modules and is arch-specific, so it
-# is copied from the build stage rather than regenerated on a different machine.
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
+# Generate the Prisma client here rather than copying it out of the build stage.
+#
+# The COPY this replaces could never have worked, and had clearly never been
+# run: `.npmrc` sets shamefully-hoist=false, so pnpm never places the generated
+# client at the workspace root. It lives beside @prisma/client inside the pnpm
+# store, under a directory name carrying a content hash — and Docker's COPY
+# cannot expand a glob on the destination side, so there is no spelling of that
+# path that works.
+#
+#   Step 33/37 : COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+#   COPY failed: stat app/node_modules/.prisma: file does not exist
+#
+# Regenerating is also the more honest answer to the arch-specific worry that
+# motivated the copy: the engines are platform specific, and this stage is the
+# platform that will run them. The CLI is pinned to the installed client's own
+# version, because a generate from a mismatched CLI is a runtime failure rather
+# than a build one.
+RUN PRISMA_VERSION="$(cd packages/db && node -p "require('@prisma/client/package.json').version")" \
+  && pnpm dlx prisma@"$PRISMA_VERSION" generate --schema=packages/db/prisma/schema.prisma
 
 # Not 3101: hosts inject their own port and expect the app to honour it.
 ENV PORT=8080

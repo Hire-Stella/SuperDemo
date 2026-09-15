@@ -23,6 +23,7 @@ import {
 import { Prisma } from '@superdemo/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenancy/tenant-context.service';
+import { DograhService } from '../integrations/dograh/dograh.service';
 import { ENV } from '../config/config.module';
 
 /**
@@ -48,6 +49,7 @@ export class SitesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenants: TenantContext,
+    private readonly dograh: DograhService,
     @Inject(ENV) private readonly env: ApiEnv,
   ) {}
 
@@ -184,7 +186,13 @@ export class SitesService {
     const org = await this.prisma.organization.findUnique({
       where: { slug: slug.toLowerCase() },
     });
-    if (!org || !org.isActive) return null;
+    /*
+     * `websiteEnabled` is checked here and not only in the UI, because the
+     * handle is a public URL. A centre that declined a landing page must not
+     * have one reachable by anyone who guesses the slug — hiding the nav item
+     * would leave the page served and merely unlinked.
+     */
+    if (!org || !org.isActive || !org.websiteEnabled) return null;
 
     return this.tenants.runAs(org.id, null, async () => {
       const site = await this.ensureSite(org);
@@ -208,6 +216,7 @@ export class SitesService {
         metaTitle: site.metaTitle,
         metaDescription: site.metaDescription,
         acceptsLeads: content.contact.showForm,
+        dograh: await this.dograh.widgetFor(org.id),
       } satisfies PublicSiteDto;
     });
   }
@@ -239,7 +248,7 @@ export class SitesService {
     const org = await this.prisma.organization.findUnique({
       where: { slug: slug.toLowerCase() },
     });
-    if (!org || !org.isActive) throw new NotFoundException('No page here');
+    if (!org || !org.isActive || !org.websiteEnabled) throw new NotFoundException('No page here');
 
     const country = countryByCode(input.country);
     const phoneE164 = composeE164(country, input.phone);
@@ -288,10 +297,25 @@ export class SitesService {
        */
       const suppressed = contact.doNotCall;
 
+      /**
+       * When the page's callback path is Dograh, Dograh does the dialling.
+       *
+       * Both this and a running campaign ring the same number, so doing both
+       * would call a visitor twice seconds apart from two different systems —
+       * worse than either alone. Dograh wins because it is the thing the admin
+       * pointed this page at; the campaign remains the path for pages that have
+       * no Dograh connected.
+       *
+       * An opt-out still suppresses it: ringVisitor is never reached for a
+       * doNotCall contact, so connecting Dograh cannot quietly undo a
+       * suppression the internal dialler respects.
+       */
+      const ringing = suppressed ? false : await this.dograh.ringVisitor(org.id, phoneE164);
+
       let targetId: string | null = null;
       // Queued only when the centre nominated a campaign *and* it is running —
       // see queueToCampaign. Otherwise the lead is captured and a human works it.
-      if (site.leadCampaignId && !suppressed) {
+      if (site.leadCampaignId && !suppressed && !ringing) {
         targetId = await this.queueToCampaign(site.leadCampaignId, contact.id);
       }
 
@@ -312,13 +336,26 @@ export class SitesService {
 
       this.log.log(
         `site lead ${lead.id} for ${org.slug}: ${phoneE164}` +
-          (targetId ? ' → queued to campaign' : suppressed ? ' → held (opted out)' : ' → captured'),
+          (ringing
+            ? ' → Dograh is calling'
+            : targetId
+              ? ' → queued to campaign'
+              : suppressed
+                ? ' → held (opted out)'
+                : ' → captured'),
       );
 
+      const firstName = input.name.split(/\s+/)[0];
+      if (ringing) {
+        return {
+          ok: true,
+          message: `Thank you, ${firstName} — we are calling you now, so please keep your phone to hand.`,
+        };
+      }
       return targetId
         ? {
             ok: true,
-            message: `Thank you, ${input.name.split(/\s+/)[0]} — you are in the queue and we will call you shortly.`,
+            message: `Thank you, ${firstName} — you are in the queue and we will call you shortly.`,
           }
         : accepted;
     });

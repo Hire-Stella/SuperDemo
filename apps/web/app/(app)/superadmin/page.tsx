@@ -4,7 +4,7 @@ import { Fragment, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ExternalLink, Eye, Plus, ShieldCheck, Trash2, UserPlus } from 'lucide-react';
+import { ExternalLink, Eye, Mic, Plus, ShieldCheck, Trash2, UserPlus } from 'lucide-react';
 import {
   DEFAULT_PRESET_FOR_INDUSTRY,
   INDUSTRY_LABELS,
@@ -26,6 +26,8 @@ import { api } from '@/lib/api';
 import { dateTime } from '@/lib/format';
 import { useSession } from '@/components/providers';
 import { TenantLogo } from '@/components/tenant-logo';
+import { DograhConnection } from '@/components/dograh-connection';
+import { PlatformDialers } from '@/components/platform-dialers';
 import {
   Badge,
   Button,
@@ -73,9 +75,42 @@ export default function SuperadminPage() {
   /* Identity and landing page. Both null-means-derive, like themePreset. */
   const [logoUrl, setLogoUrl] = useState('');
   const [tagline, setTagline] = useState('');
+  const [websiteUrl, setWebsiteUrl] = useState('');
+  /*
+   * Whether this centre gets a landing page at all. On by default because the
+   * page is the fastest way to show the whole loop working, and off is a real
+   * answer: plenty of clients already have a website and are buying the
+   * contact centre.
+   */
+  const [websiteEnabled, setWebsiteEnabled] = useState(true);
+  /*
+   * Which landing design the centre starts on.
+   *
+   * Null means "whatever suits the vertical" — the API picks, so an operator
+   * who does not care still gets something coherent. The picker came back when
+   * the ported library arrived: choosing between four in-house layouts that
+   * all looked in-house was a decision with no good answer, and choosing
+   * between nine finished designs is a real one.
+   */
   const [siteTemplate, setSiteTemplate] = useState<SiteTemplate | null>(null);
+  /*
+   * Whether this centre keeps the call simulator. On by default — it is the
+   * fastest way to prove routing works on a centre thirty seconds old — and off
+   * for a client already taking real calls, to whom a button that invents one
+   * is a support ticket waiting to happen.
+   */
+  const [simulatorEnabled, setSimulatorEnabled] = useState(true);
   const [admin, setAdmin] = useState(BLANK_ADMIN);
   const [addingAdminTo, setAddingAdminTo] = useState<string | null>(null);
+  /*
+   * Voice setup, per centre, opened from the row.
+   *
+   * Here rather than in the centre's own Settings because choosing an agent
+   * means listing every workflow on the voice host, and a centre without its
+   * own key is using the deployment's — so that list is other clients' agents.
+   * The operator is the only party entitled to see it.
+   */
+  const [voiceFor, setVoiceFor] = useState<string | null>(null);
   const [newAdmin, setNewAdmin] = useState(BLANK_ADMIN);
 
   const orgs = useQuery({
@@ -89,6 +124,12 @@ export default function SuperadminPage() {
     setTimezone('Asia/Dubai');
     setIndustry('GENERIC');
     setThemePreset(null);
+    setLogoUrl('');
+    setTagline('');
+    setWebsiteUrl('');
+    setWebsiteEnabled(true);
+    setSiteTemplate(null);
+    setSimulatorEnabled(true);
     setAdmin(BLANK_ADMIN);
     setCreating(false);
   };
@@ -203,7 +244,12 @@ export default function SuperadminPage() {
                 ...(themePreset ? { themePreset } : {}),
                 ...(logoUrl.trim() ? { logoUrl: logoUrl.trim() } : {}),
                 ...(tagline.trim() ? { tagline: tagline.trim() } : {}),
-                ...(siteTemplate ? { siteTemplate } : {}),
+                ...(websiteEnabled && websiteUrl.trim()
+                  ? { websiteUrl: websiteUrl.trim() }
+                  : {}),
+                websiteEnabled,
+                ...(websiteEnabled && siteTemplate ? { siteTemplate } : {}),
+                simulatorEnabled,
                 timezone,
                 admin: { ...admin, email: admin.email.trim().toLowerCase() },
               });
@@ -306,25 +352,123 @@ export default function SuperadminPage() {
               />
             </label>
 
-            <label className="space-y-1 text-sm md:col-span-2">
-              <span className="text-muted-foreground">Landing page layout</span>
-              <Select
-                value={siteTemplate ?? ''}
-                onChange={(e) => setSiteTemplate((e.target.value || null) as SiteTemplate | null)}
-              >
-                <option value="">
-                  Suits the vertical ({SITE_TEMPLATES[defaultTemplateForIndustry(industry)].label})
-                </option>
-                {SiteTemplateEnum.options.map((t) => (
-                  <option key={t} value={t}>
-                    {SITE_TEMPLATES[t].label} — {SITE_TEMPLATES[t].bestFor}
-                  </option>
-                ))}
-              </Select>
-              <span className="block text-[11px] text-muted-foreground">
-                {SITE_TEMPLATES[siteTemplate ?? defaultTemplateForIndustry(industry)].note}
+            <div className="space-y-2 rounded-md border border-border p-3 md:col-span-2">
+              <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+                  checked={websiteEnabled}
+                  onChange={(e) => setWebsiteEnabled(e.target.checked)}
+                />
+                <span>
+                  <span className="font-medium">Give this centre a landing page</span>
+                  <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                    {websiteEnabled ? (
+                      <>
+                        A published page at <code className="font-mono">/{slug || slugify(name) || 'handle'}</code>{' '}
+                        whose call button dials this centre&apos;s number and whose callback form writes
+                        into its contacts. Turn off for a client who already has a website — the
+                        queues, assistant, knowledge and number are created either way, and the
+                        Website section is hidden from their sidebar.
+                      </>
+                    ) : (
+                      <>
+                        No page, and nothing served at{' '}
+                        <code className="font-mono">/{slug || slugify(name) || 'handle'}</code>. The
+                        Website section stays hidden until someone turns this back on, in their
+                        Settings or here. Everything else about the centre is unchanged.
+                      </>
+                    )}
+                  </span>
+                </span>
+              </label>
+
+              {websiteEnabled && (
+                <label className="block space-y-1 text-sm">
+                  <span className="text-muted-foreground">Their website — optional</span>
+                  <Input
+                    type="url"
+                    value={websiteUrl}
+                    onChange={(e) => setWebsiteUrl(e.target.value)}
+                    placeholder="https://theirbusiness.com"
+                  />
+                  <span className="block text-[11px] leading-relaxed text-muted-foreground">
+                    {websiteUrl.trim() ? (
+                      <>
+                        The centre is created immediately from the{' '}
+                        {INDUSTRY_LABELS[industry].toLowerCase()} template, then this site is read in
+                        the background to rewrite the landing page in their own words and build a
+                        voice agent briefed on what they actually do. Progress shows on their Website
+                        page.
+                      </>
+                    ) : (
+                      <>
+                        Leave empty and the centre is built from the vertical template — real copy,
+                        but generic. Give a URL and the page and the voice agent are generated from
+                        it.
+                      </>
+                    )}
+                  </span>
+                </label>
+              )}
+
+              {websiteEnabled && (
+                <label className="space-y-1 text-sm md:col-span-2">
+                  <span className="text-muted-foreground">Landing design</span>
+                  <Select
+                    className="mt-1.5"
+                    value={siteTemplate ?? ''}
+                    onChange={(e) =>
+                      setSiteTemplate((e.target.value || null) as SiteTemplate | null)
+                    }
+                  >
+                    <option value="">
+                      Suits the vertical ({SITE_TEMPLATES[defaultTemplateForIndustry(industry)].label})
+                    </option>
+                    {SiteTemplateEnum.options.map((t) => (
+                      <option key={t} value={t}>
+                        {SITE_TEMPLATES[t].label} — {SITE_TEMPLATES[t].bestFor}
+                      </option>
+                    ))}
+                  </Select>
+                  <span className="block text-[11px] leading-relaxed text-muted-foreground">
+                    {siteTemplate
+                      ? SITE_TEMPLATES[siteTemplate].note
+                      : 'Each design is a finished page that fills itself from this centre\u2019s own copy. The choice is reversible \u2014 switching later keeps every word, because content is stored separately from layout.'}
+                  </span>
+                </label>
+              )}
+            </div>
+
+            <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border p-3 text-sm md:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+                checked={simulatorEnabled}
+                onChange={(e) => setSimulatorEnabled(e.target.checked)}
+              />
+              <span>
+                <span className="font-medium">Give this centre the call simulator</span>
+                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
+                  {simulatorEnabled ? (
+                    <>
+                      A scripted caller driven through the real routing, AI handoff and queueing —
+                      no carrier involved. The fastest way to prove a centre works on its first day.
+                      Turn off for a client already taking real calls, where a button that invents
+                      one is a support ticket waiting to happen.
+                    </>
+                  ) : (
+                    <>
+                      No Simulator section and no &ldquo;Simulate a call&rdquo; shortcuts on Live
+                      ops. Real calls, the softphone and every other surface are untouched, and this
+                      can be switched back on at any time.
+                    </>
+                  )}
+                </span>
               </span>
             </label>
+
+
 
             {/* Says what the button will actually do, so the operator is not
                 guessing what a "clinic" gets. */}
@@ -341,12 +485,25 @@ export default function SuperadminPage() {
                 one phone number. The admin is enrolled in every queue so calls route on day one.
               </p>
               <p className="mt-1.5 text-muted-foreground">
-                Also a published landing page at{' '}
-                <strong className="font-medium text-foreground">
-                  /{slug || slugify(name) || 'handle'}
-                </strong>
-                , whose call button dials that number and whose callback form creates a contact in
-                this centre.
+                {websiteEnabled ? (
+                  <>
+                    Also a published landing page at{' '}
+                    <strong className="font-medium text-foreground">
+                      /{slug || slugify(name) || 'handle'}
+                    </strong>
+                    , whose call button dials that number and whose callback form creates a contact
+                    in this centre.
+                  </>
+                ) : (
+                  <>
+                    No landing page:{' '}
+                    <strong className="font-medium text-foreground">
+                      /{slug || slugify(name) || 'handle'}
+                    </strong>{' '}
+                    will not resolve, and the Website section is hidden for this centre until
+                    somebody turns it on.
+                  </>
+                )}
               </p>
             </div>
 
@@ -566,6 +723,14 @@ export default function SuperadminPage() {
                         <Button
                           variant="ghost"
                           className="h-8 px-2 text-xs"
+                          onClick={() => setVoiceFor(voiceFor === org.id ? null : org.id)}
+                        >
+                          <Mic className="size-3.5" aria-hidden />
+                          Voice
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="h-8 px-2 text-xs"
                           disabled={updateOrg.isPending}
                           onClick={() => {
                             // Suspension locks out every one of their staff at
@@ -682,9 +847,28 @@ export default function SuperadminPage() {
         )}
       </Card>
 
+      {/*
+        Below the table, not inside it.
+        The rows live in a horizontally scrolling table, and a full-width panel
+        in a colSpan cell inherits that scroll — half of it ends up off-screen
+        with no way to reach it.
+      */}
+      {voiceFor && (
+        <Card
+          title={`Voice — ${rows.find((o) => o.id === voiceFor)?.name ?? ''}`}
+          subtitle="The agent list spans the whole voice host, which is why this lives here and not in the centre's own settings"
+          contentClassName="p-4"
+        >
+          <DograhConnection orgId={voiceFor} />
+          <PlatformDialers orgId={voiceFor} />
+        </Card>
+      )}
+
       <p className="text-xs text-muted-foreground">
         A platform operator can read a centre but never write to it — the API refuses any change
-        made while viewing one. To alter a client’s configuration, sign in as one of their admins.
+        made while viewing one, with one deliberate exception: voice setup, which is operator-only
+        because the agent list covers every centre on the host. To alter anything else in a
+        client’s configuration, sign in as one of their admins.
       </p>
     </div>
   );

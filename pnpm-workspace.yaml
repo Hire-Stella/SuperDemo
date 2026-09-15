@@ -1,6 +1,7 @@
 packages:
   - "apps/*"
   - "packages/*"
+  - "packages/templates/*"
 
 # These packages ship native binaries or run symlink hydration in postinstall.
 # pnpm blocks build scripts by default; without these, `embedded-postgres`

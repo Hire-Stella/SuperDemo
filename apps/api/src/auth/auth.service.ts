@@ -44,7 +44,7 @@ export class AuthService {
     // unscoped — which it must be: the address is what tells us the org.
     const user = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase() },
-      include: { org: { select: { name: true, industry: true, isActive: true, themePreset: true, themeTokens: true, logoUrl: true, tagline: true } } },
+      include: { org: { select: { name: true, industry: true, isActive: true, themePreset: true, themeTokens: true, logoUrl: true, tagline: true, websiteEnabled: true, simulatorEnabled: true } } },
     });
 
     // Verify against a dummy hash when the user is absent so the response time
@@ -83,6 +83,8 @@ export class AuthService {
       orgThemeTokens: (user.org?.themeTokens as SessionUser['orgThemeTokens']) ?? null,
       orgLogoUrl: user.org?.logoUrl ?? null,
       orgTagline: user.org?.tagline ?? null,
+      orgWebsiteEnabled: user.org?.websiteEnabled ?? null,
+      orgSimulatorEnabled: user.org?.simulatorEnabled ?? null,
       location: user.location,
       timezone: user.timezone,
       skills: user.skills,
@@ -142,7 +144,7 @@ export class AuthService {
   ): Promise<{ user: SessionUser; accessToken: string; refreshToken: string }> {
     const existing = await this.prisma.refreshToken.findUnique({
       where: { tokenHash: hashToken(token) },
-      include: { user: { include: { org: { select: { name: true, industry: true, isActive: true, themePreset: true, themeTokens: true, logoUrl: true, tagline: true } } } } },
+      include: { user: { include: { org: { select: { name: true, industry: true, isActive: true, themePreset: true, themeTokens: true, logoUrl: true, tagline: true, websiteEnabled: true, simulatorEnabled: true } } } } },
     });
 
     if (!existing) throw new UnauthorizedException('Invalid refresh token');
@@ -186,6 +188,8 @@ export class AuthService {
       orgThemeTokens: (existing.user.org?.themeTokens as SessionUser['orgThemeTokens']) ?? null,
       orgLogoUrl: existing.user.org?.logoUrl ?? null,
       orgTagline: existing.user.org?.tagline ?? null,
+      orgWebsiteEnabled: existing.user.org?.websiteEnabled ?? null,
+      orgSimulatorEnabled: existing.user.org?.simulatorEnabled ?? null,
       location: existing.user.location,
       timezone: existing.user.timezone,
       skills: existing.user.skills,

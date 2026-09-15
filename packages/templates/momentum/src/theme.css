@@ -1,0 +1,50 @@
+/*
+ * momentum, scoped to its own root.
+ *
+ * Nine templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+
+@theme inline {
+  --color-ink: #0d0d0d;
+  --color-cream: #f5f5f0;
+  --color-accent: #ff5c1a;
+  --color-lime: #e8ff9c;
+  --color-muted: #4a4a47;
+  --font-display: var(--font-cormorant), serif;
+  --font-body: var(--font-dm-sans), sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+.momentum-root {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  font-family: var(--font-dm-sans), sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-display {
+  font-family: var(--font-cormorant), serif;
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * Several of these templates bring cards in from `x: 100`, and a card below
+ * the fold sits at that offset until it scrolls into view — 100px of push on a
+ * 390px screen, which is 76px of sideways scroll on a phone. `clip` rather
+ * than `hidden`: it stops the overflow without making this a scroll container,
+ * so `position: sticky` inside still works.
+ */
+.momentum-root {
+  overflow-x: clip;
+}

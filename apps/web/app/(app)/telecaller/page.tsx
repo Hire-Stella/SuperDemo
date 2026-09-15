@@ -58,6 +58,9 @@ import { Avatar, Badge, Button, Input, Select, cn } from '@/components/composite
 const QUICK_DISPOSITIONS: Disposition[] = [
   'INFO_PROVIDED',
   'CALLBACK_REQUESTED',
+  // Qualifying is the job on a dialled list, and this is the only place a
+  // telecaller can record it — the quick picks are the whole picker here.
+  'LEAD_QUALIFIED',
   'ENROLMENT_INTEREST',
   'FEE_ENQUIRY',
   'NOT_INTERESTED',

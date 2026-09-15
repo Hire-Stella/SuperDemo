@@ -1,0 +1,220 @@
+/*
+ * elianvalen, scoped to its own root.
+ *
+ * Nine templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+
+/* ==========================================================================
+   LIGNE PURE — design tokens, measured from the brand's live site.
+   Light editorial palette; the only dark surfaces are the footer and the
+   full-bleed campaign bands.
+   ========================================================================== */
+
+:root {
+  --ev-ink: #0e0e0e;
+  --ev-ink-soft: #121212;
+  --ev-muted: #666666;
+  --ev-muted-light: #898a87;
+  --ev-cream: #f4f4f2;
+  --ev-dark: #0e0e0e;
+  --ev-line: rgba(14, 14, 14, 0.12);
+  --ev-line-dark: rgba(255, 255, 255, 0.18);
+}
+
+@theme inline {
+  --color-ink: var(--ev-ink);
+  --color-ink-soft: var(--ev-ink-soft);
+  --color-muted: var(--ev-muted);
+  --color-muted-light: var(--ev-muted-light);
+  --color-cream: var(--ev-cream);
+  --color-ev-dark: var(--ev-dark);
+  --color-line: var(--ev-line);
+  --color-line-dark: var(--ev-line-dark);
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-poppins), var(--font-inter), sans-serif;
+  --font-script: var(--font-inspiration), cursive;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+.elianvalen-root {
+  background: #ffffff;
+  color: var(--ev-ink);
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+::selection {
+  background: var(--ev-ink);
+  color: #fff;
+}
+
+/* --------------------------------------------------------------------------
+   Decorative backgrounds
+   -------------------------------------------------------------------------- */
+
+/* 126x126 repeating diagonal-stripe / chevron field used behind the
+   "Curated fasion products from london" band. */
+.ev-stripes {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='126' height='126'%3E%3Cpath d='M126 0v21.584L21.584 126H0v-17.585L108.415 0H126Zm0 108.414V126h-17.586L126 108.414Zm0-84v39.171L63.585 126H24.414L126 24.414Zm0 42v39.17L105.584 126h-39.17L126 66.414ZM105.586 0 0 105.586V66.415L66.415 0h39.171Zm-42 0L0 63.586V24.415L24.415 0h39.171Zm-42 0L0 21.586V0h21.586Z' fill='rgba(136,136,136,0.2)'/%3E%3C/svg%3E");
+  background-size: 64px 64px;
+  background-repeat: repeat;
+}
+
+/* Top-down scrim used over the hero wordmark and full-bleed campaign imagery */
+.ev-scrim {
+  background-image: linear-gradient(#0e0e0e 0%, rgba(0, 0, 0, 0) 100%);
+}
+
+.ev-scrim-up {
+  background-image: linear-gradient(to top, #0e0e0e 0%, rgba(0, 0, 0, 0) 100%);
+}
+
+/* --------------------------------------------------------------------------
+   Type helpers
+   -------------------------------------------------------------------------- */
+
+/* Small display labels — the one place the theme's Poppins face is used. */
+.ev-eyebrow {
+  font-family: var(--font-poppins), var(--font-inter), sans-serif;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.ev-heading {
+  font-size: clamp(28px, 3.4vw, 40px);
+  line-height: 1.1;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.ev-body {
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--ev-muted);
+}
+
+/* Giant wordmark — Inter SemiBold, very tight tracking, fitted to its box */
+.ev-wordmark {
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+/* The oversized lockups are set to fill their line without wrapping. The
+   divisor is the measured width-to-font-size ratio of "LIGNE P(UR)E" with the
+   Inspiration insert, so the mark always fits the viewport minus gutters. */
+.ev-wordmark-fit {
+  font-size: min(calc((100vw - 72px) / 6.2), var(--ev-wordmark-max, 223px));
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS transitions/keyframes, no motion library
+   -------------------------------------------------------------------------- */
+
+.ev-underline {
+  position: relative;
+}
+
+.ev-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -3px;
+  height: 1px;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ev-underline:hover::after,
+.ev-underline[data-active="true"]::after {
+  transform: scaleX(1);
+}
+
+.ev-zoom img {
+  transition: transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.ev-zoom:hover img {
+  transform: scale(1.035);
+}
+
+@keyframes ev-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ev-rise {
+  animation: ev-rise 0.75s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes ev-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.ev-fade {
+  animation: ev-fade 0.5s ease both;
+}
+
+@keyframes ev-slide-in {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+.ev-slide-in {
+  animation: ev-slide-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ev-rise,
+  .ev-fade,
+  .ev-slide-in {
+    animation: none;
+  }
+  .ev-zoom img,
+  .ev-underline::after {
+    transition: none;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * Several of these templates bring cards in from `x: 100`, and a card below
+ * the fold sits at that offset until it scrolls into view — 100px of push on a
+ * 390px screen, which is 76px of sideways scroll on a phone. `clip` rather
+ * than `hidden`: it stops the overflow without making this a scroll container,
+ * so `position: sticky` inside still works.
+ */
+.elianvalen-root {
+  overflow-x: clip;
+}

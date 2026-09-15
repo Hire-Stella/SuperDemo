@@ -5,10 +5,12 @@ import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowDownLeft, ArrowUpRight, CheckCircle2, Download, Inbox, MessageCircle, Phone, Search, Sparkles } from 'lucide-react';
 import {
+  Disposition,
   dispositionLabel,
   evalBand,
   type Channel,
   type ConversationListItem,
+  type DispositionFilter,
 } from '@superdemo/contracts';
 import { api, qs } from '@/lib/api';
 import { useUser } from '@/components/providers';
@@ -28,6 +30,24 @@ import {
   Th,
 } from '@/components/composites';
 
+/**
+ * One tone per outcome, exhaustive on purpose: adding an outcome to the enum
+ * should make the compiler ask what colour it is rather than quietly render it
+ * grey. Only the outcomes worth spotting from across the room get colour — a
+ * table where every badge is coloured is a table nobody scans.
+ */
+const OUTCOME_TONE: Record<Disposition, string> = {
+  LEAD_QUALIFIED: 'bg-live-soft text-live',
+  ENROLMENT_INTEREST: 'bg-brand-soft text-primary',
+  CALLBACK_REQUESTED: 'bg-amber-500/10 text-amber-600',
+  FEE_ENQUIRY: '',
+  INFO_PROVIDED: '',
+  EXISTING_STUDENT_SUPPORT: '',
+  NOT_INTERESTED: 'text-muted-foreground',
+  WRONG_NUMBER: 'text-muted-foreground',
+  SPAM: 'text-muted-foreground',
+};
+
 export default function ConversationsPage() {
   // Outcome labels read in this centre's own vocabulary.
   const user = useUser();
@@ -39,6 +59,7 @@ export default function ConversationsPage() {
   const [channel, setChannel] = useState<Channel | ''>('');
   const [direction, setDirection] = useState<'' | 'INBOUND' | 'OUTBOUND'>('');
   const [contained, setContained] = useState<'' | 'true' | 'false'>('');
+  const [outcome, setOutcome] = useState<DispositionFilter | ''>('');
 
   // Debounce so typing doesn't fire a query per keystroke.
   useEffect(() => {
@@ -47,7 +68,7 @@ export default function ConversationsPage() {
   }, [search]);
 
   const query = useQuery({
-    queryKey: ['conversations', debounced, channel, direction, contained],
+    queryKey: ['conversations', debounced, channel, direction, contained, outcome],
     queryFn: () =>
       api.get<{ items: ConversationListItem[]; nextCursor: string | null }>(
         `/conversations${qs({
@@ -56,6 +77,7 @@ export default function ConversationsPage() {
           channel: channel || undefined,
           direction: direction || undefined,
           aiContained: contained || undefined,
+          disposition: outcome || undefined,
         })}`,
       ),
   });
@@ -121,22 +143,6 @@ export default function ConversationsPage() {
             <option value="INBOUND">Inbound only</option>
             <option value="OUTBOUND">Outbound only</option>
           </Select>
-          <Button
-            onClick={() =>
-              void api
-                .download(
-                  `/reports/conversations.csv${qs({
-                    search: debounced || undefined,
-                    channel: channel || undefined,
-                    direction: direction || undefined,
-                    aiContained: contained || undefined,
-                  })}`,
-                )
-                .catch(() => undefined)
-            }
-          >
-            <Download className="size-4" aria-hidden /> Export CSV
-          </Button>
           <Select
             className="w-auto"
             value={contained}
@@ -147,6 +153,46 @@ export default function ConversationsPage() {
             <option value="true">AI-contained only</option>
             <option value="false">Reached an agent</option>
           </Select>
+          {/*
+           * Outcome is its own axis, not a third state of the containment
+           * filter above: "AI resolved" and "escalated" say who handled the
+           * call, while the outcome says what came of it. A qualified lead the
+           * assistant closed on its own and one an advisor took over are both
+           * qualified leads, and a supervisor pulling the week's leads wants
+           * them in the same list.
+           */}
+          <Select
+            className="w-auto"
+            value={outcome}
+            onChange={(e) => setOutcome(e.target.value as DispositionFilter | '')}
+            aria-label="Filter by outcome"
+          >
+            <option value="">All outcomes</option>
+            {Disposition.options.map((d) => (
+              <option key={d} value={d}>
+                {dispositionLabel(user.orgIndustry, d)}
+              </option>
+            ))}
+            <option value="NONE">No outcome recorded</option>
+          </Select>
+          <Button
+            className="ml-auto"
+            onClick={() =>
+              void api
+                .download(
+                  `/reports/conversations.csv${qs({
+                    search: debounced || undefined,
+                    channel: channel || undefined,
+                    direction: direction || undefined,
+                    aiContained: contained || undefined,
+                    disposition: outcome || undefined,
+                  })}`,
+                )
+                .catch(() => undefined)
+            }
+          >
+            <Download className="size-4" aria-hidden /> Export CSV
+          </Button>
         </div>
 
         {query.isLoading ? (
@@ -219,17 +265,21 @@ export default function ConversationsPage() {
                     </span>
                   </Td>
                   <Td>
+                    {/* The outcome itself leads: what came of the call is the
+                        column's question. Who handled it sits underneath, in
+                        the same place the eye already goes for the handoff
+                        reason. */}
                     <div className="flex flex-wrap items-center gap-1.5">
-                      {c.aiContained ? (
-                        <Badge className="bg-ai-soft text-ai">
-                          <Sparkles className="size-3" aria-hidden /> AI resolved
+                      {c.disposition ? (
+                        <Badge className={OUTCOME_TONE[c.disposition]}>
+                          {dispositionLabel(user.orgIndustry, c.disposition)}
                         </Badge>
                       ) : (
-                        <Badge className="bg-brand-soft text-primary">Escalated</Badge>
-                      )}
-                      {c.escalationReason && (
-                        <span className="text-[11px] text-muted-foreground">
-                          {ESCALATION_LABEL[c.escalationReason]}
+                        <span
+                          className="text-xs text-muted-foreground/70"
+                          title="Nobody recorded an outcome for this one"
+                        >
+                          No outcome recorded
                         </span>
                       )}
                       {/*
@@ -251,11 +301,22 @@ export default function ConversationsPage() {
                         </span>
                       )}
                     </div>
-                    {c.disposition && (
-                      <span className="mt-0.5 block text-[11px] text-muted-foreground/70">
-                        {dispositionLabel(user.orgIndustry, c.disposition)}
-                      </span>
-                    )}
+                    <span className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground/80">
+                      {c.aiContained ? (
+                        <span className="inline-flex items-center gap-1 text-ai">
+                          <Sparkles className="size-3" aria-hidden /> AI resolved
+                        </span>
+                      ) : (
+                        <span>Escalated</span>
+                      )}
+                      {/* Only meaningful when it actually handed over. An
+                          AI-contained conversation never reached a person, so a
+                          handoff reason left on its session is stale, and
+                          "AI resolved · asked for a human" reads as a bug. */}
+                      {!c.aiContained && c.escalationReason && (
+                        <span>· {ESCALATION_LABEL[c.escalationReason]}</span>
+                      )}
+                    </span>
                   </Td>
                   <Td className="text-xs">
                     {c.handledByName ?? <span className="text-ai">AI assistant</span>}

@@ -124,13 +124,16 @@ export default function LiveOpsPage() {
             {user.name.split(' ')[0]}. Everything happening right now, across all channels.
           </p>
         </div>
-        {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
-          <Link href="/simulator">
-            <Button variant="default">
-              <PhoneCall className="size-4" aria-hidden /> Simulate a call
-            </Button>
-          </Link>
-        )}
+        {/* Both simulator shortcuts follow the centre's own switch: a button
+            that leads to a section this centre has turned off is a dead end. */}
+        {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') &&
+          user.orgSimulatorEnabled !== false && (
+            <Link href="/simulator">
+              <Button variant="default">
+                <PhoneCall className="size-4" aria-hidden /> Simulate a call
+              </Button>
+            </Link>
+          )}
       </header>
 
       {/* live tiles */}
@@ -228,11 +231,12 @@ export default function LiveOpsPage() {
               title="No calls in progress"
               hint="When a call arrives it appears here instantly — AI-handled calls in purple, agent calls in green."
               action={
-                (user.role === 'ADMIN' || user.role === 'SUPERVISOR') && (
+                (user.role === 'ADMIN' || user.role === 'SUPERVISOR') &&
+                user.orgSimulatorEnabled !== false ? (
                   <Link href="/simulator">
                     <Button size="sm">Simulate one</Button>
                   </Link>
-                )
+                ) : undefined
               }
             />
           ) : (

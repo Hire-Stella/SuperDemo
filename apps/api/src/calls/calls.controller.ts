@@ -1,4 +1,4 @@
-import { Controller, Get, HttpCode, Param, Post } from '@nestjs/common';
+import { Controller, ForbiddenException, Get, HttpCode, Param, Post } from '@nestjs/common';
 import { z } from 'zod';
 import {
   ManualCallInput,
@@ -23,6 +23,7 @@ import { ZodBody } from '../shared/zod.pipe';
 import { SimulatedTelephony } from '../integrations/telephony/simulated.telephony';
 import { BrowserTelephony } from '../integrations/telephony/browser.telephony';
 import { PrismaService } from '../prisma/prisma.service';
+import { TenantContext } from '../tenancy/tenant-context.service';
 
 @Controller('calls')
 export class CallsController {
@@ -31,6 +32,7 @@ export class CallsController {
     private readonly simulated: SimulatedTelephony,
     private readonly browser: BrowserTelephony,
     private readonly prisma: PrismaService,
+    private readonly tenants: TenantContext,
   ) {}
 
   /* ---------------------------- agent softphone --------------------------- */
@@ -119,8 +121,31 @@ export class CallsController {
 
   /* ------------------------------- simulator ------------------------------ */
 
+  /**
+   * Refuse when this centre has the simulator switched off.
+   *
+   * Checked on the server and not only by hiding the nav item, for the same
+   * reason the landing page is: an unlinked route is still a route, and a
+   * stale tab or a bookmark would keep inventing calls into a centre whose
+   * admin decided it should not. There is no public surface here — every
+   * caller is an authenticated member of the tenant — so this is about the
+   * switch meaning what it says rather than about access control.
+   */
+  private async assertSimulatorEnabled(): Promise<void> {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: this.tenants.requireOrgId() },
+      select: { simulatorEnabled: true },
+    });
+    if (org && !org.simulatorEnabled) {
+      throw new ForbiddenException(
+        'The call simulator is switched off for this centre. Turn it on in Settings.',
+      );
+    }
+  }
+
   @Get('scenarios')
-  scenarios(): ScenarioDto[] {
+  async scenarios(): Promise<ScenarioDto[]> {
+    await this.assertSimulatorEnabled();
     return this.simulated.listScenarios().map((s) => ({
       id: s.id,
       title: s.title,
@@ -139,6 +164,7 @@ export class CallsController {
   @Post('simulate')
   @HttpCode(202)
   async simulate(@ZodBody(SimulateCallInput) body: SimulateCallInput) {
+    await this.assertSimulatorEnabled();
     const scenarios = this.simulated.listScenarios();
     const scenario = body.scenarioId
       ? this.simulated.getScenario(body.scenarioId)

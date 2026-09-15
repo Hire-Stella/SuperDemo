@@ -155,6 +155,7 @@ export type HangupCause = z.infer<typeof HangupCause>;
 
 /** How the call ended, from a business standpoint. Set during wrap-up. */
 export const Disposition = z.enum([
+  'LEAD_QUALIFIED',
   'ENROLMENT_INTEREST',
   'INFO_PROVIDED',
   'CALLBACK_REQUESTED',
@@ -165,6 +166,15 @@ export const Disposition = z.enum([
   'SPAM',
 ]);
 export type Disposition = z.infer<typeof Disposition>;
+
+/**
+ * What the inbox's outcome filter accepts: any disposition, plus `NONE` for the
+ * rows that have no outcome recorded. Those are a real category — a call nobody
+ * answered has nothing to record, and an unfilled wrap-up is a supervisor's
+ * problem — so they need to be reachable, not only excluded.
+ */
+export const DispositionFilter = z.union([Disposition, z.literal('NONE')]);
+export type DispositionFilter = z.infer<typeof DispositionFilter>;
 
 export const EvalReviewer = z.enum(['AUTO', 'HUMAN']);
 export type EvalReviewer = z.infer<typeof EvalReviewer>;
@@ -385,6 +395,7 @@ export const ESCALATION_REASON_LABELS: Record<EscalationReason, string> = {
 };
 
 export const DISPOSITION_LABELS: Record<Disposition, string> = {
+  LEAD_QUALIFIED: 'Lead qualified',
   ENROLMENT_INTEREST: 'Enrolment interest',
   INFO_PROVIDED: 'Information provided',
   CALLBACK_REQUESTED: 'Callback requested',
@@ -433,9 +444,33 @@ export const DISPOSITION_LABELS_BY_INDUSTRY: Partial<
   },
   GENERIC: {
     ENROLMENT_INTEREST: 'Sales interest',
+    FEE_ENQUIRY: 'Price enquiry',
     EXISTING_STUDENT_SUPPORT: 'Existing customer',
   },
 };
+
+/**
+ * What the "what are people ringing about" breakdown is called.
+ *
+ * The underlying column is `Contact.courseInterest`, named when the only tenant
+ * was a training institute. Renaming it is a migration; renaming what the chart
+ * says is a string, and a car rental desk reading "Most-asked-about courses"
+ * over a list of SUVs is the kind of detail that loses a demo.
+ */
+export const INTEREST_LABELS: Record<Industry, { title: string; empty: string }> = {
+  EDUCATION: { title: 'Most-asked-about courses', empty: 'No course interest recorded in this range.' },
+  CLINIC: { title: 'Most-asked-about treatments', empty: 'No treatment interest recorded in this range.' },
+  RESTAURANT: { title: 'Most-asked-about dishes', empty: 'No menu interest recorded in this range.' },
+  RETAIL: { title: 'Most-asked-about products', empty: 'No product interest recorded in this range.' },
+  FITNESS: { title: 'Most-asked-about classes', empty: 'No class interest recorded in this range.' },
+  PROFESSIONAL: { title: 'Most-asked-about services', empty: 'No service interest recorded in this range.' },
+  GENERIC: { title: 'What people ask about', empty: 'Nothing recorded in this range.' },
+};
+
+/** What the interest breakdown is called inside a given centre. */
+export function interestLabel(industry: Industry | null | undefined): { title: string; empty: string } {
+  return INTEREST_LABELS[industry ?? 'GENERIC'];
+}
 
 /** What an outcome is called inside a given centre. */
 export function dispositionLabel(

@@ -12,11 +12,13 @@
  * the whole database and resets it.
  *
  *   pnpm demo:seed --slug tamil-mart --days 45
+ *   pnpm demo:seed --slug tamil-mart --days 60 --volume 6 --reset
+ *   pnpm demo:seed --slug legend --pack CAR_RENTAL --days 60 --volume 12
  *   pnpm demo:seed --slug tamil-mart --name "Tamil Mart" --industry RETAIL --create
  */
 import { PrismaClient, type Prisma } from '@prisma/client';
 import argon2 from 'argon2';
-import { DEMO_PACKS, TAMIL_FIRST, TAMIL_LAST, type DemoPack } from '../src/data/demo-packs';
+import { DEMO_PACKS, type DemoPack } from '../src/data/demo-packs';
 import { chunk, embed, keywordsOf } from '../src/embedding';
 import { withOrg } from '../src/tenant';
 
@@ -48,6 +50,18 @@ const SLUG = arg('slug');
 const NAME = arg('name');
 const INDUSTRY = (arg('industry') ?? 'RETAIL') as Prisma.OrganizationCreateInput['industry'];
 const DAYS = Number(arg('days', '45'));
+/**
+ * Multiplier on the pack's daily call volume.
+ *
+ * The packs describe the real centres they are modelled on — FIT takes 14-26
+ * calls on a weekday — and against thirteen staff that reads as an empty room:
+ * occupancy lands under 1% and the boards look broken rather than quiet. A
+ * multiplier keeps the pack honest about its own centre while letting a demo
+ * be sized for the room it is being shown in.
+ */
+const VOLUME = Number(arg('volume', '1'));
+/** Which demo pack to pour in. Defaults to the org's industry. */
+const PACK = arg('pack');
 const CREATE = flag('create');
 /** Clear this centre's generated traffic first, so a re-run replaces rather than doubles. */
 const RESET = flag('reset');
@@ -79,8 +93,19 @@ async function main() {
     throw new Error(`No centre with slug "${SLUG}". Pass --create --name "…" to make one.`);
   }
 
-  const pack: DemoPack | undefined = DEMO_PACKS[org.industry];
-  if (!pack) throw new Error(`No demo pack for industry ${org.industry}`);
+  /*
+   * The pack decides what this centre talks about, and that is not always
+   * settled by its industry: a car rental desk and a grocery are both retail to
+   * the database and share none of their questions. Default to the industry,
+   * override with --pack.
+   */
+  const packKey = PACK ?? org.industry;
+  const pack: DemoPack | undefined = DEMO_PACKS[packKey];
+  if (!pack) {
+    throw new Error(
+      `No demo pack "${packKey}". Available: ${Object.keys(DEMO_PACKS).join(', ')}. Pass --pack to choose one.`,
+    );
+  }
 
   console.log(`▸ ${org.name} (${org.industry}) — ${DAYS} days of demo traffic`);
 
@@ -94,14 +119,23 @@ async function main() {
     const convIds = (
       await prisma.conversation.findMany({ select: { id: true } })
     ).map((c) => c.id);
-    if (convIds.length) {
-      await prisma.transcriptSegment.deleteMany({ where: { call: { conversationId: { in: convIds } } } });
-      await prisma.recording.deleteMany({ where: { call: { conversationId: { in: convIds } } } });
-      await prisma.callParticipant.deleteMany({ where: { call: { conversationId: { in: convIds } } } });
-      await prisma.call.deleteMany({ where: { conversationId: { in: convIds } } });
-      await prisma.message.deleteMany({ where: { conversationId: { in: convIds } } });
-      await prisma.aiSession.deleteMany({ where: { conversationId: { in: convIds } } });
-      await prisma.conversation.deleteMany({ where: { id: { in: convIds } } });
+    /*
+     * Delete in batches. Every id in an `IN (…)` list is a bind variable and
+     * Postgres refuses a statement with more than 32,767 of them, so a centre
+     * with 25k conversations — which is exactly what a high `--volume` run
+     * produces — cannot be reset in one statement. The cap is per statement,
+     * not per transaction, so batching is the whole fix.
+     */
+    const BATCH = 5_000;
+    for (let i = 0; i < convIds.length; i += BATCH) {
+      const ids = convIds.slice(i, i + BATCH);
+      await prisma.transcriptSegment.deleteMany({ where: { call: { conversationId: { in: ids } } } });
+      await prisma.recording.deleteMany({ where: { call: { conversationId: { in: ids } } } });
+      await prisma.callParticipant.deleteMany({ where: { call: { conversationId: { in: ids } } } });
+      await prisma.call.deleteMany({ where: { conversationId: { in: ids } } });
+      await prisma.message.deleteMany({ where: { conversationId: { in: ids } } });
+      await prisma.aiSession.deleteMany({ where: { conversationId: { in: ids } } });
+      await prisma.conversation.deleteMany({ where: { id: { in: ids } } });
     }
     await prisma.callMetricsDaily.deleteMany({});
     await prisma.agentStateEvent.deleteMany({});
@@ -117,24 +151,54 @@ async function main() {
   });
 
   /* --------------------------------- staff -------------------------------- */
-  const users = [];
+  /*
+   * Start from whoever already works here, then add only the pack staff who are
+   * missing. Reading the pack alone would ignore an established centre's real
+   * team, and every escalated call in a top-up run would be handed to the
+   * handful of people whose addresses happen to match the pack.
+   */
+  /*
+   * `email` is unique across the platform, so a pack address already taken by
+   * another centre cannot simply be created here. It must not be *adopted*
+   * either: that user belongs to someone else's org, their AgentState carries
+   * someone else's orgId, and handing them this centre's escalated calls writes
+   * one tenant's id into another tenant's rows. Suffix instead, and keep the
+   * pack's name, skills and location.
+   */
+  const users = await prisma.user.findMany();
   for (const s of pack.staff) {
-    const existing = await rawPrisma.user.findUnique({ where: { email: s.email } });
-    if (existing) {
-      users.push(existing);
-      continue;
+    if (users.some((u) => u.email === s.email)) continue;
+
+    let email = s.email;
+    if (await rawPrisma.user.findUnique({ where: { email } })) {
+      const [local, domain] = s.email.split('@');
+      email = `${local}+${org.slug}@${domain}`;
+      if (await rawPrisma.user.findUnique({ where: { email } })) continue;
     }
+
+    /*
+     * Extensions are unique within an org, and two packs both number their desk
+     * from 101. A centre that has been seeded once already — or re-pointed at a
+     * different pack — therefore collides on the extension rather than on
+     * anything meaningful. An unreachable extension is a far smaller problem
+     * than a seed that will not run, so give up the number, not the person.
+     */
+    const extTaken = await prisma.user.findFirst({
+      where: { orgId: org.id, extension: s.ext },
+      select: { id: true },
+    });
+
     users.push(
       await prisma.user.create({
         data: {
-          email: s.email,
+          email,
           name: s.name,
           passwordHash: password,
           role: s.role as Prisma.UserCreateInput['role'],
           location: s.location as Prisma.UserCreateInput['location'],
           timezone: TIMEZONES[s.location]!,
           skills: s.skills as unknown as Prisma.UserCreateInput['skills'],
-          extension: s.ext,
+          extension: extTaken ? null : s.ext,
           avatarColor: s.colour,
           presence: { create: { orgId: org.id, status: 'OFFLINE', since: new Date() } },
         },
@@ -243,14 +307,32 @@ async function main() {
   console.log(`  knowledge: ${await prisma.knowledgeDoc.count()} docs`);
 
   /* -------------------------------- numbers ------------------------------- */
+  /*
+   * `e164` is unique across the platform, and the RNG is seeded to a constant so
+   * that a demo's numbers do not move between the rehearsal and the meeting.
+   * Both are deliberate, and together they mean the second centre seeded draws
+   * the first centre's numbers and dies on a P2002 — which made the "safe to run
+   * against a database that already has real centres" promise above untrue.
+   *
+   * Keep drawing until the draw is free. Deterministic for the first centre,
+   * and every later one still gets a stable number for a given database.
+   */
+  const freeNumber = async (prefix: number): Promise<string> => {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+      const e164 = `+9714${int(prefix, prefix + 999_999)}`;
+      if (!(await rawPrisma.phoneNumber.findUnique({ where: { e164 } }))) return e164;
+    }
+    throw new Error('could not find a free number in 50 draws — is the range exhausted?');
+  };
+
   if ((await prisma.phoneNumber.count()) < 2) {
-    for (const [label, e164] of [
-      ['Main line', `+9714${int(2000000, 2999999)}`],
-      ['Orders & delivery', `+9714${int(3000000, 3999999)}`],
+    for (const [label, prefix] of [
+      ['Main line', 2_000_000],
+      ['Second line', 3_000_000],
     ] as const) {
       await prisma.phoneNumber.create({
         data: {
-          e164,
+          e164: await freeNumber(prefix),
           label,
           provider: 'mock',
           status: 'ASSIGNED',
@@ -284,6 +366,11 @@ async function main() {
     dailyMetrics.set(key, row);
   };
 
+  const isJunk = (e: DemoPack['exchanges'][number]) =>
+    e.disposition === 'WRONG_NUMBER' || e.disposition === 'SPAM';
+  const junkExchanges = pack.exchanges.filter(isJunk);
+  const realExchanges = pack.exchanges.filter((e) => !isJunk(e));
+
   let voice = 0;
   let whatsapp = 0;
   let outbound = 0;
@@ -298,10 +385,14 @@ async function main() {
     dayStart.setUTCDate(dayStart.getUTCDate() - d);
     const weekday = dayStart.getUTCDay();
 
-    // A grocery is busiest at the weekend — the opposite of an office, and the
-    // shape of the traffic chart is the first thing anyone looks at.
+    // The weekly shape comes from the pack: a grocery is busiest at the weekend,
+    // an admissions office is nearly shut, and that shape is the first thing
+    // anyone reads off the traffic chart.
     const isWeekend = weekday === 5 || weekday === 6;
-    const full = isWeekend ? int(18, 30) : int(10, 22);
+    const [volFrom, volTo] = isWeekend ? pack.volume.weekend : pack.volume.weekday;
+    // Draw first, then scale, so the multiplier stretches the pack's weekly
+    // shape rather than flattening it into a wider random range.
+    const full = Math.round(int(volFrom, volTo) * VOLUME);
 
     // Today is only partly over, so scale to the hours actually elapsed rather
     // than inventing calls from the future.
@@ -326,7 +417,7 @@ async function main() {
       const startedAt = new Date(dayStart);
       startedAt.setUTCHours(hourLocal - 4, int(0, 59), int(0, 59), 0);
 
-      const name = `${pick(TAMIL_FIRST)} ${pick(TAMIL_LAST)}`;
+      const name = `${pick(pack.callerNames.first)} ${pick(pack.callerNames.last)}`;
       const phone = `+9715${pick(['0', '2', '4', '5', '6'])}${int(1000000, 9999999)}`;
       const contact =
         (await prisma.contact.findFirst({ where: { phoneE164: phone } })) ??
@@ -354,7 +445,9 @@ async function main() {
             startedAt,
             endedAt: new Date(startedAt.getTime() + int(120, 1500) * 1000),
             aiContained: !escalated,
-            disposition: escalated ? 'CALLBACK_REQUESTED' : 'INFO_PROVIDED',
+            disposition: escalated
+              ? pick(['CALLBACK_REQUESTED', 'LEAD_QUALIFIED', 'EXISTING_STUDENT_SUPPORT'] as const)
+              : pick(['INFO_PROVIDED', 'INFO_PROVIDED', 'FEE_ENQUIRY'] as const),
           },
         });
         await prisma.message.createMany({
@@ -386,7 +479,13 @@ async function main() {
             startedAt,
             endedAt,
             aiContained: answered && !escalates,
-            disposition: answered ? (escalates ? 'CALLBACK_REQUESTED' : 'INFO_PROVIDED') : null,
+            disposition: answered
+              ? escalates
+                ? pick(['CALLBACK_REQUESTED', 'LEAD_QUALIFIED'] as const)
+                : // A dialled list goes stale: some of these numbers have moved
+                  // on to somebody else entirely.
+                  pick(['INFO_PROVIDED', 'INFO_PROVIDED', 'NOT_INTERESTED', 'WRONG_NUMBER'] as const)
+              : null,
             notes: `Campaign: ${campaign.name}`,
           },
         });
@@ -435,12 +534,23 @@ async function main() {
       }
 
       /* -------------------------------- voice ------------------------------ */
-      const exchange = pick(pack.exchanges);
+      /*
+       * Junk is drawn from its own pool at a fixed low rate rather than taken
+       * uniformly with everything else. A pack lists a handful of wrong numbers
+       * so the outcome filter has rows behind it, and picking uniformly would
+       * turn that handful into a tenth of the centre's traffic — which also
+       * flatters the containment rate, since a robocall is trivially contained.
+       */
+      const exchange = junkExchanges.length > 0 && chance(0.04)
+        ? pick(junkExchanges)
+        : pick(realExchanges);
       const queue = queueBySkill.get(exchange.skill) ?? generalQueue;
       const escalates = exchange.escalates;
       const abandons = escalates && chance(0.08);
-      const aiTurns = int(2, 5);
-      const aiTalkMs = aiTurns * int(8000, 15000);
+      // Junk gets one turn and a short call: nobody argues with a robocall.
+      const junk = exchange.disposition === 'WRONG_NUMBER' || exchange.disposition === 'SPAM';
+      const aiTurns = junk ? 1 : int(2, 5);
+      const aiTalkMs = junk ? int(8000, 20_000) : aiTurns * int(8000, 15000);
       const queueWaitMs = escalates ? int(2000, 48000) : 0;
       const agentTalkMs = escalates && !abandons ? int(70_000, 380_000) : 0;
       const wrapMs = escalates && !abandons ? int(8000, 40000) : 0;
@@ -511,8 +621,10 @@ async function main() {
           escalationReason: escalates
             ? ((exchange.reason ?? 'HUMAN_ONLY_INTENT') as Prisma.AiSessionCreateInput['escalationReason'])
             : null,
-          detectedIntent: exchange.skill.toLowerCase(),
-          courseOfInterest: contact.courseInterest,
+          detectedIntent: junk ? exchange.disposition.toLowerCase() : exchange.skill.toLowerCase(),
+          // A wrong number has no interest in anything, whatever the contact
+          // row remembers from an earlier call.
+          courseOfInterest: junk ? null : contact.courseInterest,
           sentiment: Number((rnd() * 1.4 - 0.4).toFixed(2)),
           summary: `${exchange.caller} — ${escalates ? 'passed to a colleague.' : 'answered by the assistant.'}`,
           avgLatencyMs: int(320, 850),
@@ -571,18 +683,72 @@ async function main() {
         talkMsTotal: BigInt(row.talkMs), handleMsTotal: BigInt(row.handleMs),
         queueWaitMsTotal: BigInt(row.queueWaitMs), wrapMsTotal: BigInt(row.wrapMs),
       },
-      update: {},
+      /*
+       * Add to the day rather than leave it alone. This script is additive, so
+       * a centre that already has history gets new calls on days that already
+       * have a rollup row — and a no-op update would keep the KPI tiles and the
+       * agents page reporting the old, smaller day. Matches what the live path
+       * in analytics.service does per call.
+       */
+      update: {
+        calls: { increment: row.calls },
+        aiContained: { increment: row.aiContained },
+        escalated: { increment: row.escalated },
+        abandoned: { increment: row.abandoned },
+        answeredWithinSla: { increment: row.answeredWithinSla },
+        answeredCount: { increment: row.answered },
+        talkMsTotal: { increment: BigInt(row.talkMs) },
+        handleMsTotal: { increment: BigInt(row.handleMs) },
+        queueWaitMsTotal: { increment: BigInt(row.queueWaitMs) },
+        wrapMsTotal: { increment: BigInt(row.wrapMs) },
+      },
     });
   }
 
   /* --------------------------- shift history ------------------------------ */
-  // Without this the agents page shows people with no occupancy at all.
+  /*
+   * Without this the agents page shows people with no occupancy at all. Written
+   * once per agent, though: occupancy and adherence are sums over this
+   * append-only log, so a second run would have everyone logged in twice and
+   * show occupancy over 100%.
+   */
+  const shiftFrom = new Date();
+  shiftFrom.setUTCDate(shiftFrom.getUTCDate() - 8);
+  const alreadyOnShift = new Set(
+    (
+      await prisma.agentStateEvent.findMany({
+        where: { at: { gte: shiftFrom } },
+        select: { userId: true },
+        distinct: ['userId'],
+      })
+    ).map((e) => e.userId),
+  );
   for (const a of agents) {
+    if (alreadyOnShift.has(a.id)) continue;
     for (let d = 7; d >= 1; d--) {
       const login = new Date();
       login.setUTCDate(login.getUTCDate() - d);
       login.setUTCHours(int(4, 6), int(0, 59), 0, 0);
       let cursor = login;
+      /*
+       * `from` is not decoration. Occupancy sums `prevMs` over the events whose
+       * `from` is a signed-in state — an agent is not "logged in" for the
+       * stretch that ended when they arrived — so an event written without it
+       * contributes nothing and every scorecard reads 0% occupancy against
+       * perfectly good talk time. seed.ts has always set it; this did not.
+       */
+      /*
+       * `prevMs` is how long the state being *left* lasted, which is why the
+       * readers pair it with `from`. Writing the duration of the state being
+       * entered lines every figure up against the wrong label: a BREAK event
+       * then carries the length of the shift that followed it, and the Agents
+       * page reports eleven hours of break in a week.
+       *
+       * The first event of a shift has no `prevMs` — nobody knows how long they
+       * were offline — and the readers filter those out.
+       */
+      let prev: string = 'OFFLINE';
+      let prevMs: number | null = null;
       for (const step of [
         { to: 'AVAILABLE', ms: int(40, 90) * 60_000 },
         { to: 'ON_CALL', ms: int(10, 30) * 60_000 },
@@ -595,11 +761,14 @@ async function main() {
         await prisma.agentStateEvent.create({
           data: {
             userId: a.id,
+            from: prev as Prisma.AgentStateEventCreateInput['from'],
             to: step.to as Prisma.AgentStateEventCreateInput['to'],
             at: cursor,
-            prevMs: step.ms || null,
+            prevMs,
           },
         });
+        prev = step.to;
+        prevMs = step.ms;
         cursor = new Date(cursor.getTime() + step.ms);
       }
     }

@@ -1,0 +1,135 @@
+/*
+ * utomic, scoped to its own root.
+ *
+ * Nine templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+
+.utomic-root {
+  --background: #ffffff;
+  --foreground: #0b0b12;
+  --surface: #f5f5f7;
+
+  --brand-white: #ffffff;
+  --brand-mist: #eeecff;
+  --brand-lilac: #dad6ff;
+  --brand-periwinkle: #aea6fb;
+  --brand-violet: #7e72e7;
+  --brand-plum: #574abc;
+  --brand-indigo: #2d2285;
+  --brand-midnight: #190f65;
+  --brand-abyss: #07003e;
+  --brand-black: #000000;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-brand-white: var(--brand-white);
+  --color-brand-mist: var(--brand-mist);
+  --color-brand-lilac: var(--brand-lilac);
+  --color-brand-periwinkle: var(--brand-periwinkle);
+  --color-brand-violet: var(--brand-violet);
+  --color-brand-plum: var(--brand-plum);
+  --color-brand-indigo: var(--brand-indigo);
+  --color-brand-midnight: var(--brand-midnight);
+  --color-brand-abyss: var(--brand-abyss);
+  --color-brand-black: var(--brand-black);
+  --font-sans: var(--font-sora);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+.utomic-root {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sora), "Sora", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Hero radial gradient — light center fading into deep purple/black */
+.gradient-hero {
+  background-image: radial-gradient(
+    150% 60% at 50.5% 0.85%,
+    #fff 12%,
+    #eeecff 18%,
+    #dad6ff 24%,
+    #aea6fb 32%,
+    #7e72e7 42%,
+    #574abc 52%,
+    #2d2285 64%,
+    #190f65 74%,
+    #07003e 86%,
+    #000 100%
+  );
+}
+
+/* Secondary radial gradient used on darker section headers */
+.gradient-secondary {
+  background-image: radial-gradient(
+    203.3% 90.5% at 50.5% 0%,
+    #f5f5f5 12%,
+    #eeecff 18%,
+    #dad6ff 24%,
+    #aea6fb 32%,
+    #7e72e7 42%,
+    #574abc 52%,
+    #2d2285 64%,
+    #190f65 74%,
+    #07003e 86%,
+    #000 100%
+  );
+}
+
+.text-gradient {
+  background: linear-gradient(180deg, #ffffff 0%, #cfc8ff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.7s ease both;
+}
+
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 28s linear infinite;
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * Several of these templates bring cards in from `x: 100`, and a card below
+ * the fold sits at that offset until it scrolls into view — 100px of push on a
+ * 390px screen, which is 76px of sideways scroll on a phone. `clip` rather
+ * than `hidden`: it stops the overflow without making this a scroll container,
+ * so `position: sticky` inside still works.
+ */
+.utomic-root {
+  overflow-x: clip;
+}

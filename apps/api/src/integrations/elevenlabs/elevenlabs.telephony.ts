@@ -100,9 +100,16 @@ export class ElevenLabsTelephony implements TelephonyProvider {
     const numbers = await this.service.listPhoneNumbers();
     const from = numbers.find((n) => n.phone_number === params.fromNumber) ?? numbers[0];
     if (!from) {
-      throw new Error(
-        'No phone number attached to the ElevenLabs workspace — import a Twilio number or ' +
-          'connect a SIP trunk first',
+      // NotImplementedByDriverError, not a bare Error: the line above already
+      // uses it, and DriverErrorFilter turns it into a 501 carrying this
+      // sentence. A plain Error becomes a bare 500 "Internal server error",
+      // which tells whoever pressed Call nothing and sends whoever debugs it
+      // hunting for a crash that never happened.
+      throw new NotImplementedByDriverError(
+        'elevenlabs',
+        'place the call',
+        'no phone number is attached to the ElevenLabs workspace. Import a Twilio number, ' +
+          'or connect a SIP trunk, then assign it to the agent',
       );
     }
 

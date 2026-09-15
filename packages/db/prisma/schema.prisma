@@ -134,6 +134,7 @@ enum HangupCause {
 }
 
 enum Disposition {
+  LEAD_QUALIFIED
   ENROLMENT_INTEREST
   INFO_PROVIDED
   CALLBACK_REQUESTED
@@ -220,6 +221,30 @@ model Organization {
   logoUrl   String?
   /// One line under the name, on the landing page and in the app shell.
   tagline   String?
+  /// The client's real website, if the operator supplied one at onboarding.
+  /// Kept after enrichment so the page and agent can be regenerated when their
+  /// site changes — the alternative is asking for the URL a second time.
+  websiteUrl String?
+  /// Whether this centre uses the landing-page feature at all.
+  ///
+  /// Not the same question as `Site.isPublished`, which is "is the page live
+  /// right now" — a draft the operator is still writing. This is "does this
+  /// client want a page from us", and plenty do not: they already have a
+  /// website and bought a contact centre. For those, the Website section is
+  /// noise in the sidebar and the public URL should not resolve at all.
+  ///
+  /// Defaults true because every centre that exists today has a page and a
+  /// migration that silently took them offline would be the wrong surprise.
+  websiteEnabled Boolean @default(true)
+  /// Whether this centre keeps the call simulator.
+  ///
+  /// It is a demo and training surface — it invents a caller and walks a
+  /// scripted conversation through the real routing — which is exactly what
+  /// you want when showing the product and clutter once a centre is live on
+  /// real traffic. Unlike the website there is no public surface behind it, so
+  /// off means the section and its two shortcuts disappear and the endpoints
+  /// refuse; nothing stops being reachable from outside.
+  simulatorEnabled Boolean @default(true)
   /// URL-safe handle, unique across the platform. Stable once issued — the
   /// superadmin can rename an org's display name without breaking anything.
   slug      String   @unique
@@ -1005,6 +1030,45 @@ model Setting {
   /// credential, and adding a sixth provider must not need a migration.
   crmSecretsEnc         String?
   crmUpdatedAt          DateTime?
+
+  /// Dograh (self-hosted voice agents) behind this centre's landing page.
+  /// Null means not connected, and the page falls back to a plain `tel:` link.
+  /// Deliberately not a TELEPHONY_DRIVER: see packages/contracts/src/dograh.ts.
+  dograhBaseUrl         String?
+  /// DograhPublic: workflow id and name, the minted embed token, the domains
+  /// Dograh will honour it on, and which of the two call paths the page offers.
+  /// The embed token lives here rather than in the encrypted blob because it is
+  /// rendered into public HTML — Dograh gates it on domain, not on secrecy.
+  dograhPublic          Json?
+  /// The Dograh API key as one AES-256-GCM blob — see shared/secret-box.ts.
+  /// This one *is* a bearer credential for the client's whole voice platform.
+  /// Null means inherit DOGRAH_API_KEY, the way an unset crmProvider inherits
+  /// CRM_DRIVER.
+  dograhSecretsEnc      String?
+  dograhUpdatedAt       DateTime?
+  /// DograhDialers: the three demo-call slots — inbound, outbound, info — each
+  /// naming a workflow on this centre's Dograh. Separate from `dograhPublic`
+  /// because that object is the *landing page's* one agent, rendered into
+  /// public HTML; these are internal testing targets and never leave the
+  /// dashboard. Null means none configured, which is the normal state.
+  dograhDialers         Json?
+
+  /// Website-to-centre enrichment: scrape the client's site, then generate the
+  /// landing-page copy and the Dograh agent brief from what it says.
+  ///
+  /// A status rather than a boolean, because this is the one part of onboarding
+  /// that is slow and can fail on somebody else's infrastructure — a fetch of a
+  /// stranger's site, an LLM call, and a workflow build on the client's Dograh.
+  /// The centre is created and usable before any of it runs, so an operator
+  /// needs to see which stage it reached and why it stopped.
+  /// none | queued | running | ready | failed
+  enrichStatus          String   @default("none")
+  /// The URL this enrichment actually read, which may differ from the org's
+  /// current websiteUrl once somebody edits it.
+  enrichSourceUrl       String?
+  /// The last failure, shown to the operator verbatim. Never a stack trace.
+  enrichError           String?
+  enrichedAt            DateTime?
 
   updatedAt             DateTime @updatedAt
 

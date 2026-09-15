@@ -20,10 +20,13 @@
     "db:migrate": "pnpm --filter @superdemo/db migrate",
     "db:push": "pnpm --filter @superdemo/db push",
     "db:seed": "pnpm --filter @superdemo/db seed",
+    "demo:seed": "pnpm --filter @superdemo/db demo:seed",
     "db:studio": "pnpm --filter @superdemo/db studio",
     "db:reset": "pnpm --filter @superdemo/db reset",
     "setup": "pnpm install && pnpm services:up && pnpm db:generate && pnpm db:push && pnpm db:seed",
-    "format": "prettier --write \"**/*.{ts,tsx,md,json}\""
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "demo:tenant": "pnpm --filter @superdemo/db demo:tenant",
+    "demo:site": "pnpm --filter @superdemo/db demo:site"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

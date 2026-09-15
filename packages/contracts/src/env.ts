@@ -70,6 +70,42 @@ export const ApiEnv = z
      * rather than storing the credential in the clear.
      */
     CRM_SECRET_KEY: optionalStr,
+
+    /**
+     * Deployment-wide Dograh, inherited by any centre that has not saved its
+     * own. Optional: a deployment with no Dograh at all is the normal case, and
+     * a landing page simply keeps its `tel:` link.
+     */
+    DOGRAH_BASE_URL: optionalStr,
+    DOGRAH_API_KEY: optionalStr,
+
+    /**
+     * Which model writes the landing-page copy during website enrichment.
+     *
+     * Separate from LLM_DRIVER, which is the *conversation* brain: that one runs
+     * on every turn of every call and its latency is a caller waiting. This one
+     * runs once per centre and writes prose a client will read, so the right
+     * choice for each is different and they should not be forced to agree.
+     *
+     * `auto` picks whichever key is present — Groq first, since a deployment
+     * that set one deliberately probably means it — and falls back to
+     * extracting copy from the page itself when neither is set, so onboarding
+     * never hard-fails on a missing key.
+     */
+    ENRICH_LLM: z.enum(['auto', 'anthropic', 'groq', 'none']).default('auto'),
+
+    /**
+     * Groq, used through its OpenAI-compatible endpoint.
+     *
+     * GROQ_MODEL is optional and normally left unset. Rather than baking in an
+     * id that Groq will eventually retire — a 404 waiting to happen on a
+     * deployment nobody has touched in six months — the generator asks
+     * `GET /models` what this key can actually use and picks the best fit.
+     * Setting it here pins that choice and skips the lookup.
+     */
+    GROQ_API_KEY: optionalStr,
+    GROQ_MODEL: optionalStr,
+    GROQ_BASE_URL: z.string().default('https://api.groq.com/openai/v1'),
     BITRIX_WEBHOOK_URL: optionalStr,
     BITRIX_INBOUND_TOKEN: optionalStr,
 
@@ -178,6 +214,25 @@ export const ApiEnv = z
           'BITRIX_WEBHOOK_URL is required when CRM_DRIVER=bitrix (Bitrix24 → Developer resources → Inbound webhook)',
       });
     }
+    /*
+     * Strict only when Groq was asked for by name.
+     *
+     * `auto` must never be fatal. It is a preference about who writes marketing
+     * copy, and refusing to boot the whole API over it would take down calls,
+     * queues and the dashboard because somebody pasted a key and not a model —
+     * which is exactly what happened while building this. Under `auto` a
+     * half-configured Groq is skipped, loudly, at the point it would have run.
+     */
+    if (env.ENRICH_LLM === 'groq') {
+      if (!env.GROQ_API_KEY) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['GROQ_API_KEY'],
+          message: 'GROQ_API_KEY is required when ENRICH_LLM=groq',
+        });
+      }
+    }
+
     if (env.TELEPHONY_DRIVER === 'elevenlabs') {
       if (!env.ELEVENLABS_API_KEY) {
         ctx.addIssue({

@@ -15,6 +15,7 @@ import {
   themeToCss,
 } from '@superdemo/contracts';
 import { SiteRender } from '@/components/site/templates';
+import { DograhWidget } from '@/components/site/dograh-widget';
 
 /**
  * A tenant's public landing page.
@@ -144,7 +145,7 @@ export default async function TenantSitePage({ params, searchParams }: Params) {
   const fetched = await fetchSite(slug);
   if (!fetched) notFound();
 
-  const { site } = applyPreview(fetched, await searchParams);
+  const { site, previewing } = applyPreview(fetched, await searchParams);
 
   const themeCss = themeToCss(resolveThemeTokens(site.themePreset, site.themeTokens));
   const styleCss = siteStyleToCss(site.style);
@@ -161,6 +162,15 @@ export default async function TenantSitePage({ params, searchParams }: Params) {
       {themeCss && <style dangerouslySetInnerHTML={{ __html: themeCss }} />}
       <style dangerouslySetInnerHTML={{ __html: styleCss }} />
       <SiteRender site={site} />
+      {/*
+        Decided here, not in the widget: the prop is serialised into the flight
+        payload, so anything passed is public. Preview renders nothing at all.
+      */}
+      <DograhWidget
+        src={previewing || !site.dograh.enabled ? null : site.dograh.scriptSrc}
+        chatSrc={previewing || !site.dograh.enabled ? null : site.dograh.chatScriptSrc}
+        chatContainerId={site.dograh.chatContainerId}
+      />
     </>
   );
 }

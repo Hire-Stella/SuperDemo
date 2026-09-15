@@ -1,0 +1,152 @@
+# The API as a Container App.
+#
+# YAML rather than `az containerapp create` flags, because three things this
+# service needs cannot be expressed on the command line: health probes, the
+# Azure Files volume for recordings, and a scale block pinned to one replica.
+#
+# ── Single replica is not a cost decision ────────────────────────────────────
+# `@socket.io/redis-adapter` is a dependency but is never wired up, so a socket
+# event emitted on one replica never reaches a client connected to another. And
+# the dialer's @Interval plus the @Cron jobs in maintenance.service.ts would
+# double-fire on every extra replica. Raise minReplicas/maxReplicas only after
+# both are fixed.
+#
+# ── Placeholders ─────────────────────────────────────────────────────────────
+# The double-underscore placeholders below are filled by `bash azure/render.sh`,
+# which writes containerapp.local.yaml — gitignored, because that render holds
+# real secret values. render.sh refuses to write a file with any placeholder
+# left in it, so keep them in that shape and add the name to its VARS list.
+location: __LOCATION__
+type: Microsoft.App/containerApps
+properties:
+  managedEnvironmentId: __ENV_ID__
+  configuration:
+    activeRevisionsMode: Single
+    ingress:
+      external: true
+      targetPort: 8080
+      # `auto` negotiates HTTP/1.1, which is what the socket.io upgrade needs.
+      # Do not set this to http2 — websockets do not survive it.
+      transport: auto
+      allowInsecure: false
+    registries:
+      - server: __ACR__.azurecr.io
+        username: __ACR__
+        passwordSecretRef: acr-password
+    secrets:
+      - name: acr-password
+        value: __ACR_PASSWORD__
+      - name: database-url
+        value: __DATABASE_URL__
+      - name: redis-url
+        value: __REDIS_URL__
+      - name: jwt-access-secret
+        value: __JWT_ACCESS_SECRET__
+      - name: jwt-refresh-secret
+        value: __JWT_REFRESH_SECRET__
+      - name: crm-secret-key
+        value: __CRM_SECRET_KEY__
+      - name: elevenlabs-api-key
+        value: __ELEVENLABS_API_KEY__
+      - name: elevenlabs-bridge-secret
+        value: __ELEVENLABS_BRIDGE_SECRET__
+      - name: elevenlabs-webhook-secret
+        value: __ELEVENLABS_WEBHOOK_SECRET__
+  template:
+    containers:
+      - name: api
+        image: __ACR__.azurecr.io/__IMAGE_REPO__:__TAG__
+        resources:
+          cpu: 0.5
+          memory: 1.0Gi
+        env:
+          - name: NODE_ENV
+            value: production
+          # The image defaults to 8080; stated here so the ingress port and the
+          # listener can never drift apart silently.
+          - name: PORT
+            value: "8080"
+          - name: DATABASE_URL
+            secretRef: database-url
+          - name: REDIS_URL
+            secretRef: redis-url
+          - name: JWT_ACCESS_SECRET
+            secretRef: jwt-access-secret
+          - name: JWT_REFRESH_SECRET
+            secretRef: jwt-refresh-secret
+          - name: CRM_SECRET_KEY
+            secretRef: crm-secret-key
+          # CORS is a single allowed origin, not a list — this must be the exact
+          # Vercel origin, no trailing slash.
+          - name: WEB_ORIGIN
+            value: __WEB_ORIGIN__
+          # This app's own public origin. ElevenLabs reaches four inbound
+          # webhooks at it and the driver refuses to boot without it.
+          - name: PUBLIC_BASE_URL
+            value: __PUBLIC_BASE_URL__
+          - name: TELEPHONY_DRIVER
+            value: elevenlabs
+          - name: ELEVENLABS_API_KEY
+            secretRef: elevenlabs-api-key
+          - name: ELEVENLABS_AGENT_ID
+            value: __ELEVENLABS_AGENT_ID__
+          - name: ELEVENLABS_BRIDGE_SECRET
+            secretRef: elevenlabs-bridge-secret
+          - name: ELEVENLABS_WEBHOOK_SECRET
+            secretRef: elevenlabs-webhook-secret
+          # Recordings land on the mounted share below, not the container disk.
+          - name: STORAGE_DRIVER
+            value: local
+          - name: STORAGE_LOCAL_DIR
+            value: /app/.storage
+        probes:
+          # Liveness is /health — process up, nothing else. Deliberately NOT
+          # /ready: that one reports degraded when Postgres or Redis blips, and
+          # wiring it here would have Azure restart the container over a
+          # transient Redis hiccup mid-call.
+          - type: Liveness
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Readiness gates traffic on Postgres and Redis actually answering.
+          - type: Readiness
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            # Azure defaults timeoutSeconds to 1 when it is omitted, and /ready
+            # round-trips both Postgres and Redis. Omitting it measured latency
+            # instead of health: a cold pool or a Redis blip blew the 1s budget,
+            # failed three times, and pulled the only replica out of rotation —
+            # ingress then accepted TLS and answered nothing, which is what took
+            # the Vercel frontend down to a permanent "Loading…".
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Startup gets a longer leash: Prisma's first connection and three
+          # Redis connections open before the listener binds.
+          - type: Startup
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 24
+        volumeMounts:
+          - volumeName: recordings
+            mountPath: /app/.storage
+    scale:
+      minReplicas: 1
+      maxReplicas: 1
+    volumes:
+      # `name` is local to this app; `storageName` is the environment-level link,
+      # which carries the app name so SuperDemo and SuperApp mount their own
+      # shares from the one storage account.
+      - name: recordings
+        storageType: AzureFile
+        storageName: __SHARE__

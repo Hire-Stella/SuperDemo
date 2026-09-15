@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -14,7 +15,10 @@ import {
 } from 'lucide-react';
 import {
   CRM_DRIVER_LABELS,
+  DEMO_DIALER_LABELS,
   type CrmDriver,
+  type DemoCallsView,
+  type DemoDialerKind,
 } from '@superdemo/contracts';
 import type {
   AvailableNumberDto,
@@ -25,6 +29,7 @@ import type {
   TestCrmConnectionOutput,
 } from '@superdemo/contracts';
 import { api, qs } from '@/lib/api';
+import { useSession } from '@/components/providers';
 import { dateTime, money, phone } from '@/lib/format';
 import { CrmConfigPanel } from '@/components/crm-config';
 import {
@@ -44,6 +49,7 @@ import {
 
 export default function SettingsPage() {
   const queryClient = useQueryClient();
+  const { refreshSession } = useSession();
 
   const numbers = useQuery({
     queryKey: ['numbers'],
@@ -76,7 +82,59 @@ export default function SettingsPage() {
   const settings = useQuery({
     queryKey: ['settings'],
     queryFn: () =>
-      api.get<{ drivers: Record<string, string>; instituteName: string }>('/settings'),
+      api.get<{
+        drivers: Record<string, string>;
+        instituteName: string;
+        websiteEnabled: boolean;
+        simulatorEnabled: boolean;
+        slug: string | null;
+      }>('/settings'),
+  });
+
+  /*
+   * Refreshes the session as well as the settings row. The Website nav item is
+   * drawn from the session, so without that the toggle appears to do nothing
+   * until the next reload — the same reason refreshSession exists for branding.
+   */
+  /*
+   * The three demo dialers, mirrored from the Demo calls page.
+   *
+   * Same endpoint and same controls, because the two audiences arrive at
+   * different moments: somebody setting a centre up works through Settings top
+   * to bottom, and somebody about to show it opens Demo calls and expects to
+   * fix a slot where they found it.
+   */
+  const demoCalls = useQuery({
+    queryKey: ['demo-calls'],
+    queryFn: () => api.get<DemoCallsView>('/demo-calls'),
+  });
+
+  const setSimulatorEnabled = useMutation({
+    mutationFn: (simulatorEnabled: boolean) => api.put('/settings', { simulatorEnabled }),
+    onSuccess: (_r, simulatorEnabled) => {
+      toast.success(
+        simulatorEnabled
+          ? 'Simulator enabled'
+          : 'Simulator disabled — the section and its shortcuts are hidden',
+      );
+      void queryClient.invalidateQueries({ queryKey: ['settings'] });
+      void refreshSession();
+    },
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const setWebsiteEnabled = useMutation({
+    mutationFn: (websiteEnabled: boolean) => api.put('/settings', { websiteEnabled }),
+    onSuccess: (_r, websiteEnabled) => {
+      toast.success(
+        websiteEnabled
+          ? 'Website enabled — the page is live and the section is back in the sidebar'
+          : 'Website disabled — the public page now returns 404. Nothing was deleted.',
+      );
+      void queryClient.invalidateQueries({ queryKey: ['settings'] });
+      void refreshSession();
+    },
+    onError: (e) => toast.error((e as Error).message),
   });
 
   /* ------------------------------ numbers -------------------------------- */
@@ -126,8 +184,159 @@ export default function SettingsPage() {
         <h1 className="flex items-center gap-2 text-xl font-semibold">
           <SettingsIcon className="size-5 text-primary" aria-hidden /> Settings
         </h1>
-        <p className="mt-0.5 text-sm text-muted-foreground">Numbers, CRM connection, and active drivers.</p>
+        <p className="mt-0.5 text-sm text-muted-foreground">
+          Website, numbers, CRM connection, and active drivers.
+        </p>
       </header>
+
+      {/*
+        Website on/off.
+        First card because it is the one setting that changes what the rest of
+        the product looks like — it adds or removes a whole section — and
+        because a client who does not want a public page should not have to
+        scroll past numbers and CRM to say so.
+      */}
+      <Card
+        className="mb-4"
+        title="Website"
+        subtitle="A public landing page for this centre, at its own handle"
+        contentClassName="p-4"
+      >
+        {settings.isLoading ? (
+          <Spinner label="Loading…" />
+        ) : (
+          <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+              checked={settings.data?.websiteEnabled ?? true}
+              disabled={setWebsiteEnabled.isPending}
+              onChange={(e) => setWebsiteEnabled.mutate(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium">
+                {settings.data?.websiteEnabled ? 'Website is on' : 'Website is off'}
+              </span>
+              <span className="mt-0.5 block max-w-prose text-[11px] leading-relaxed text-muted-foreground">
+                {settings.data?.websiteEnabled ? (
+                  <>
+                    Your page is served at{' '}
+                    <code className="font-mono">/{settings.data?.slug ?? ''}</code>, and the Website
+                    section in the sidebar is where you edit it. Turn this off if you already have a
+                    website — the public page stops resolving and the section disappears, but nothing
+                    you have written is deleted.
+                  </>
+                ) : (
+                  <>
+                    Nothing is served at{' '}
+                    <code className="font-mono">/{settings.data?.slug ?? ''}</code> and the Website
+                    section is hidden. Turning it back on restores the page exactly as it was —
+                    disabling never deleted the content.
+                  </>
+                )}
+              </span>
+            </span>
+          </label>
+        )}
+      </Card>
+
+      <Card
+        className="mb-4"
+        title="Call simulator"
+        subtitle="A scripted caller driven through the real routing — no carrier involved"
+        contentClassName="p-4"
+      >
+        {settings.isLoading ? (
+          <Spinner label="Loading…" />
+        ) : (
+          <label className="flex cursor-pointer items-start gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+              checked={settings.data?.simulatorEnabled ?? true}
+              disabled={setSimulatorEnabled.isPending}
+              onChange={(e) => setSimulatorEnabled.mutate(e.target.checked)}
+            />
+            <span>
+              <span className="font-medium">
+                {settings.data?.simulatorEnabled ? 'Simulator is on' : 'Simulator is off'}
+              </span>
+              <span className="mt-0.5 block max-w-prose text-[11px] leading-relaxed text-muted-foreground">
+                {settings.data?.simulatorEnabled ? (
+                  <>
+                    The Simulator section invents a caller and walks a scripted conversation through
+                    your real routing, AI handoff and queueing. Useful while setting a centre up and
+                    for training; turn it off once you are live on real traffic and a button that
+                    invents a call is a distraction.
+                  </>
+                ) : (
+                  <>
+                    The Simulator section is hidden, along with the &ldquo;Simulate a call&rdquo;
+                    shortcuts on Live ops, and the endpoints refuse. Real calls, the softphone and
+                    everything else are untouched.
+                  </>
+                )}
+              </span>
+            </span>
+          </label>
+        )}
+      </Card>
+
+      <Card
+        className="mb-4"
+        title="Demo calls"
+        subtitle="Which agent answers each slot — set by the platform operator"
+        contentClassName="p-4"
+      >
+        {demoCalls.isLoading ? (
+          <Spinner label="Loading…" />
+        ) : demoCalls.isError ? (
+          <p className="text-sm text-muted-foreground">
+            Could not read the dialers — {(demoCalls.error as Error).message}
+          </p>
+        ) : !demoCalls.data?.dograhConnected ? (
+          <p className="max-w-prose text-sm text-muted-foreground">
+            No voice platform is connected for this centre yet. Your platform operator sets this
+            up.
+          </p>
+        ) : (
+          <>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {demoCalls.data.dialers.map((dialer) => (
+                <div key={dialer.kind} className="rounded-md border border-border p-3">
+                  <p className="text-sm font-medium">{DEMO_DIALER_LABELS[dialer.kind].label}</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+                    {DEMO_DIALER_LABELS[dialer.kind].note}
+                  </p>
+                  <p className="mt-2">
+                    <Badge dot={dialer.ready ? 'bg-live' : 'bg-muted-foreground'}>
+                      {dialer.ready ? 'Ready' : dialer.enabled ? 'Not set up' : 'Off'}
+                    </Badge>
+                  </p>
+                  <p className="mt-1.5 text-[11px] text-muted-foreground">
+                    {dialer.workflowName || 'No agent chosen'}
+                  </p>
+                </div>
+              ))}
+            </div>
+            {/*
+              Read-only, deliberately.
+              Choosing an agent means listing every workflow on the voice host,
+              and a centre without its own key is on the deployment's — so that
+              list is other clients' agents. Picking from it is the operator's
+              act, not a tenant admin's. See PlatformVoiceController.
+            */}
+            <p className="mt-3 max-w-prose text-[11px] leading-relaxed text-muted-foreground">
+              Ring these, or talk to them in the browser, from{' '}
+              <Link href="/demo-calls" className="underline underline-offset-2">
+                Demo calls
+              </Link>
+              . Changing which agent answers is done by your platform operator — the agent list
+              spans the whole voice host, so it is not shown inside a single centre.
+            </p>
+          </>
+        )}
+      </Card>
 
       {/* Active drivers — the honesty panel */}
       <Card
