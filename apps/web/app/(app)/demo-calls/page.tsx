@@ -104,13 +104,7 @@ export default function DemoCallsPage() {
         ))}
       </div>
 
-      {webCall && (
-        <WebCallHost
-          kind={webCall.kind}
-          src={webCall.src}
-          onClose={() => setWebCall(null)}
-        />
-      )}
+      {webCall && <WebCallHost kind={webCall.kind} src={webCall.src} />}
     </div>
   );
 }
@@ -124,15 +118,7 @@ export default function DemoCallsPage() {
  * load may keep talking to the first, which is why the other cards say so
  * rather than pretending otherwise.
  */
-function WebCallHost({
-  kind,
-  src,
-  onClose,
-}: {
-  kind: DemoDialerKind;
-  src: string;
-  onClose: () => void;
-}) {
+function WebCallHost({ kind, src }: { kind: DemoDialerKind; src: string }) {
   useEffect(() => {
     const tag = document.createElement('script');
     tag.src = src;
@@ -171,13 +157,32 @@ function WebCallHost({
         </p>
         <button
           type="button"
-          aria-label="End the browser call"
+          aria-label="Finish and reload"
           className="shrink-0 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-          onClick={onClose}
+          onClick={() => window.location.reload()}
         >
           <X className="size-4" aria-hidden />
         </button>
       </div>
+      {/*
+        Hanging up inside Dograh's own widget tells this page nothing — the
+        bundle fires no event we can listen for — so the three cards would
+        otherwise sit locked after a finished call with no obvious way back.
+        Hence an explicit way out, said in words rather than a bare icon.
+
+        Reload rather than clearing state: the script has already run and can
+        stay bound to this workflow, so dropping the React state alone would
+        re-enable the other two cards while a stale bundle is still live —
+        offering agents that would quietly keep talking to this one. A fresh
+        page is the only honest way to hand the other two back.
+      */}
+      <button
+        type="button"
+        className="mt-2.5 w-full rounded-md border border-border px-2 py-1.5 font-medium transition hover:bg-muted"
+        onClick={() => window.location.reload()}
+      >
+        Done — reload to free the other agents
+      </button>
     </div>
   );
 }
@@ -295,17 +300,28 @@ function DialerCard({
           because the phone path is the one that proves the whole loop, but it
           is the faster of the two to try.
         */}
+        {/*
+          While this slot is loaded the button becomes the way out, not a dead
+          label. Dograh tells us nothing when a call ends, so if the only exit
+          were the floating notice's icon, a finished call would leave all three
+          cards stuck — which is exactly what it did.
+        */}
         <Button
+          variant={talking ? 'outline' : 'default'}
           disabled={!dialer.canWebCall || webCall.isPending || (anyTalking && !talking)}
           title={
             anyTalking && !talking
-              ? 'Close the other browser call first — the widget only supports one at a time'
+              ? 'Finish the other browser call first — the widget only supports one at a time'
               : undefined
           }
-          onClick={() => webCall.mutate()}
+          onClick={() => (talking ? window.location.reload() : webCall.mutate())}
         >
           <Mic className="size-4" aria-hidden />
-          {talking ? 'Loaded — button is bottom-right' : webCall.isPending ? 'Connecting…' : 'Talk in browser'}
+          {talking
+            ? 'Done — reload to free the others'
+            : webCall.isPending
+              ? 'Connecting…'
+              : 'Talk in browser'}
         </Button>
 
         {!dialer.ready && (
