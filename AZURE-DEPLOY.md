@@ -335,6 +335,33 @@ currently no history and no way back.
 exists. To add traffic to a centre later without destroying anything, use the
 additive seeder instead: `pnpm demo:seed --slug fit-ai --days 90`.
 
+### Seeding over a remote link: tune the connection first
+
+Append these to `DATABASE_URL` for any seed run that is not against a local
+database:
+
+```
+?sslmode=require&connect_timeout=30&pool_timeout=30&connection_limit=5
+```
+
+Without them a long seed fails repeatedly, and the errors point everywhere
+except the cause — `P1017 Server has closed the connection` mid-run, a
+`PrismaClientInitializationError` on the very first query, or a process that
+hangs for hours having silently stopped working. Prisma's defaults are a
+5-second connect timeout and a pool sized for a database on the same machine;
+neither survives an occasional blip over ~130ms of latency. A 30-day seed that
+had failed five times completed on the first attempt once these were set.
+
+Latency is also why these runs are slow — roughly 40 conversations a minute
+from a laptop, against thousands locally, because each call costs many
+sequential round trips. A full `--volume 12 --days 60` run is therefore five
+hours from a laptop and under a minute from inside the region. Seed from
+Azure if you need the full density; from a laptop, build it up in layers
+(`--days 7`, then `--days 30`, then `--days 60`) so an interruption costs one
+layer rather than everything. The day loop fills oldest-first, so a partial
+run leaves *recent* days empty — which is the half a demo is judged on. Run
+the short, recent windows first.
+
 ## 8. Vercel
 
 Point the existing project at the new API. Both are `NEXT_PUBLIC_`, so they are
