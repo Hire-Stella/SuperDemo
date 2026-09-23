@@ -20,9 +20,11 @@ import { PrismaClient, type Prisma } from '@prisma/client';
 import argon2 from 'argon2';
 import { DEMO_PACKS, type DemoPack } from '../src/data/demo-packs';
 import { chunk, embed, keywordsOf } from '../src/embedding';
-import { withOrg } from '../src/tenant';
+import { withConnectionRetry, withOrg } from '../src/tenant';
 
-const rawPrisma = new PrismaClient();
+// Retried at the client, so a connection Azure closes mid-run costs one
+// query rather than the whole seed. See withConnectionRetry.
+const rawPrisma = withConnectionRetry(new PrismaClient());
 
 /* --------------------------- deterministic RNG ---------------------------- */
 // Same generator as seed.ts: a demo whose numbers move between the rehearsal

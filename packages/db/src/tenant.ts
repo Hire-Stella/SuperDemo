@@ -142,6 +142,52 @@ export function tenantExtension(getOrgId: OrgIdResolver) {
 }
 
 /**
+ * Retry a query whose connection went away underneath it.
+ *
+ * Seeding a remote database from a laptop runs for tens of minutes on one
+ * connection, and Azure closes it periodically — Prisma reports `P1017 Server
+ * has closed the connection`, or `P1001` if it is gone when the next query
+ * starts. Neither is fatal: the very next attempt opens a fresh connection and
+ * succeeds. Without this, though, the failure lands on whichever insert
+ * happened to be in flight and takes the whole run down with it, discarding
+ * everything still buffered — which is how a sixty-day seed comes to die four
+ * times in a row twenty minutes in.
+ *
+ * Deliberately narrow: only the two connection codes are retried, so a real
+ * error (a constraint violation, a bad argument) still fails immediately
+ * rather than being attempted four times and then reported late.
+ */
+export function withConnectionRetry<T extends PrismaClient>(client: T): T {
+  return client.$extends({
+    query: {
+      async $allOperations({ args, query }: { args: unknown; query: (a: unknown) => Promise<unknown> }) {
+        let last: unknown;
+        /*
+         * Patient on purpose. Four quick attempts covers a connection the far
+         * end closed and immediately reopens, but not the longer outages that
+         * actually happen here: a laptop whose public address changes mid-run
+         * is unreachable until its new one is allowed through, which is tens
+         * of seconds at best. Ten attempts backing off to eight seconds gives
+         * roughly a minute of tolerance, which turns most of those from a dead
+         * run into a pause.
+         */
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+          try {
+            return await query(args);
+          } catch (err) {
+            const code = (err as { code?: string }).code;
+            if (code !== 'P1017' && code !== 'P1001') throw err;
+            last = err;
+            await new Promise((r) => setTimeout(r, Math.min(8000, 400 * 2 ** attempt)));
+          }
+        }
+        throw last;
+      },
+    },
+  }) as unknown as T;
+}
+
+/**
  * Pin a client to one organisation. Used by the seed and by any script that
  * works on a single tenant; the API uses the request-scoped resolver instead.
  */
