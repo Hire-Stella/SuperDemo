@@ -19,6 +19,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import {
+  INDUSTRY_LABELS,
   SITE_CORNERS_LABELS,
   SITE_DENSITY_LABELS,
   SITE_DISPLAY_LABELS,
@@ -29,6 +30,7 @@ import {
   THEME_PRESETS,
   ThemePreset as ThemePresetEnum,
   type CampaignSummary,
+  type Industry,
   type SiteContent,
   type SiteCorners,
   type SiteDensity,
@@ -98,6 +100,11 @@ export default function WebsitePage() {
   useEffect(() => {
     if (site.data && !draft) setDraft(site.data);
   }, [site.data, draft]);
+
+  /** Narrows the Template grid below to designs built for one vertical. */
+  const [industryFilter, setIndustryFilter] = useState<Industry | 'all'>('all');
+  /** Free-text search — a business name, a kind of business, or a pasted URL. */
+  const [templateSearch, setTemplateSearch] = useState('');
 
   const [viewport, setViewport] = useState<'desktop' | 'phone'>('desktop');
   /** Bumped to remount the iframe; a src that has not changed will not reload. */
@@ -180,6 +187,35 @@ export default function WebsitePage() {
   const frameWidth = viewport === 'desktop' ? 1280 : 400;
   const previewScale = viewport === 'desktop' ? 0.33 : 0.72;
 
+  /**
+   * Words worth matching against a template's own text.
+   *
+   * Accepts a plain business name ("boutique gym") or a pasted URL
+   * ("https://www.ironclad-fitness.com") equally — a URL is just split on its
+   * non-letters so "ironclad", "fitness" etc. become ordinary search words,
+   * and the common `www`/`com`/`http(s)` noise is dropped rather than ever
+   * matching a template by accident.
+   */
+  const templateSearchWords = templateSearch
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((w) => w.length >= 3 && !['www', 'com', 'net', 'org', 'https', 'http'].includes(w));
+
+  const templateMatchesSearch = (key: SiteTemplate) => {
+    if (templateSearchWords.length === 0) return true;
+    const t = SITE_TEMPLATES[key];
+    const haystack = [
+      key,
+      t.label,
+      t.note,
+      t.bestFor,
+      ...(t.industries ?? []).map((i) => INDUSTRY_LABELS[i]),
+    ]
+      .join(' ')
+      .toLowerCase();
+    return templateSearchWords.some((w) => haystack.includes(w));
+  };
+
   const variationCount =
     Object.keys(SITE_TEMPLATES).length *
     ThemePresetEnum.options.length *
@@ -260,57 +296,117 @@ export default function WebsitePage() {
         title="Template"
         subtitle="Pick a finished design. Everything on the page is filled from your website — there is nothing else to set."
       >
-        <div className="grid gap-3 p-4 sm:grid-cols-3">
-          {(Object.keys(SITE_TEMPLATES) as SiteTemplate[]).map((key) => {
-            const t = SITE_TEMPLATES[key];
-            const active = draft.template === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => patch({ template: key })}
-                aria-pressed={active}
-                className={cn(
-                  'group overflow-hidden rounded-xl border text-left transition',
-                  active
-                    ? 'border-primary ring-2 ring-primary/25'
-                    : 'border-border hover:border-primary/40',
-                )}
-              >
-                {/*
-                  A live thumbnail of the real page in that template, not a
-                  hand-drawn sketch. The old picker had SVG mock-ups that were
-                  wrong the moment a template changed — and with the layouts
-                  gone the difference between these is entirely the design, so
-                  a sketch could not show it at all.
-                */}
-                <span className="block h-36 overflow-hidden bg-muted">
-                  <iframe
-                    src={`/${draft.slug}?template=${key}`}
-                    title={`${t.label} preview`}
-                    aria-hidden
-                    tabIndex={-1}
-                    scrolling="no"
-                    className="pointer-events-none h-[520px] w-[1280px] origin-top-left border-0"
-                    style={{ transform: 'scale(0.28)' }}
-                  />
-                </span>
-                <span className="block border-t border-border p-3">
-                  <span className="flex items-center gap-2 text-sm font-medium">
-                    {t.label}
-                    {active && <Badge dot="bg-live">In use</Badge>}
-                  </span>
-                  <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">
-                    {t.note}
-                  </span>
-                  <span className="mt-1.5 block text-[11px] leading-relaxed text-muted-foreground/80">
-                    {t.bestFor}
-                  </span>
-                </span>
-              </button>
-            );
-          })}
+        <div className="border-b border-border px-4 pt-4 pb-3">
+          <Input
+            aria-label="Search templates by business name or URL"
+            placeholder="Search by business name, kind of business, or paste their website URL…"
+            value={templateSearch}
+            onChange={(e) => setTemplateSearch(e.target.value)}
+          />
         </div>
+        <div className="flex flex-wrap gap-1.5 border-b border-border px-4 pt-3 pb-3">
+          <button
+            type="button"
+            onClick={() => setIndustryFilter('all')}
+            aria-pressed={industryFilter === 'all'}
+            className={cn(
+              'rounded-lg border px-3 py-1.5 text-xs font-medium transition',
+              industryFilter === 'all'
+                ? 'border-primary bg-brand-soft text-primary'
+                : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
+            )}
+          >
+            All
+          </button>
+          {(Object.keys(INDUSTRY_LABELS) as Industry[]).map((key) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setIndustryFilter(key)}
+              aria-pressed={industryFilter === key}
+              className={cn(
+                'rounded-lg border px-3 py-1.5 text-xs font-medium transition',
+                industryFilter === key
+                  ? 'border-primary bg-brand-soft text-primary'
+                  : 'border-border text-muted-foreground hover:bg-accent hover:text-foreground',
+              )}
+            >
+              {INDUSTRY_LABELS[key]}
+            </button>
+          ))}
+        </div>
+        {(() => {
+          const visible = (Object.keys(SITE_TEMPLATES) as SiteTemplate[]).filter((key) => {
+            const tagged = SITE_TEMPLATES[key].industries;
+            const passesIndustry =
+              industryFilter === 'all' || !tagged || tagged.includes(industryFilter);
+            return passesIndustry && templateMatchesSearch(key);
+          });
+          if (visible.length === 0) {
+            return (
+              <div className="p-4">
+                <EmptyState
+                  icon={<Sparkles className="size-8" aria-hidden />}
+                  title="No templates match"
+                  hint="Try a different word, or clear the search and use the industry filters above."
+                />
+              </div>
+            );
+          }
+          return (
+            <div className="grid gap-3 p-4 sm:grid-cols-3">
+              {visible.map((key) => {
+              const t = SITE_TEMPLATES[key];
+              const active = draft.template === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => patch({ template: key })}
+                  aria-pressed={active}
+                  className={cn(
+                    'group overflow-hidden rounded-xl border text-left transition',
+                    active
+                      ? 'border-primary ring-2 ring-primary/25'
+                      : 'border-border hover:border-primary/40',
+                  )}
+                >
+                  {/*
+                    A live thumbnail of the real page in that template, not a
+                    hand-drawn sketch. The old picker had SVG mock-ups that were
+                    wrong the moment a template changed — and with the layouts
+                    gone the difference between these is entirely the design, so
+                    a sketch could not show it at all.
+                  */}
+                  <span className="block h-36 overflow-hidden bg-muted">
+                    <iframe
+                      src={`/${draft.slug}?template=${key}`}
+                      title={`${t.label} preview`}
+                      aria-hidden
+                      tabIndex={-1}
+                      scrolling="no"
+                      className="pointer-events-none h-[520px] w-[1280px] origin-top-left border-0"
+                      style={{ transform: 'scale(0.28)' }}
+                    />
+                  </span>
+                  <span className="block border-t border-border p-3">
+                    <span className="flex items-center gap-2 text-sm font-medium">
+                      {t.label}
+                      {active && <Badge dot="bg-live">In use</Badge>}
+                    </span>
+                    <span className="mt-1 block text-[11px] leading-relaxed text-muted-foreground">
+                      {t.note}
+                    </span>
+                    <span className="mt-1.5 block text-[11px] leading-relaxed text-muted-foreground/80">
+                      {t.bestFor}
+                    </span>
+                  </span>
+                </button>
+                );
+              })}
+            </div>
+          );
+        })()}
       </Card>
 
       <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,30rem)]">
