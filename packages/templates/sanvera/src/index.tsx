@@ -40,6 +40,28 @@ export const manifest: TemplateManifest = {
   source: 'https://sanvera.framer.website/',
   supports: SANVERA_SUPPORTS,
   preview: '/previews/sanvera.png',
+  /**
+   * Derived from the source's own `.btn-orange` class (`theme.css`), the
+   * literal CTA button used for the hero's "Book a Session"-style link
+   * (`components/Hero.tsx`) and every other CTA across the page:
+   * `background: var(--orange)` (`#dd6b3a`) with `color: var(--cream)`
+   * (`#fdecd4`) — `accent`/`onAccent` are that real fill and label colour,
+   * not the maroon body ink. `radius` is that same class's own
+   * `border-radius: 999px`. `font`: `.btn-orange` carries no `font-display`
+   * class, so it never opts into "Passion One" — it inherits
+   * `.sanvera-root`'s own `font-family: var(--font-body), Arial, Helvetica,
+   * sans-serif`, and this package defines no `--font-body` value anywhere,
+   * so its real, rendered face is that literal fallback chain, Arial.
+   * `transition` is `.btn-orange`'s own declared `transition: transform
+   * 0.25s ease, background 0.25s ease`.
+   */
+  widgetTheme: {
+    accent: '#dd6b3a',
+    onAccent: '#fdecd4',
+    radius: '999px',
+    font: 'Arial, Helvetica, sans-serif',
+    transition: 'transform 0.25s ease, background-color 0.25s ease',
+  },
 };
 
 /**

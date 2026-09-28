@@ -82,16 +82,18 @@ export function DograhWidget({
             dangerouslySetInnerHTML={{
               __html: `
 #dograh-chat-launcher{position:fixed;right:1.25rem;bottom:6.25rem;z-index:2147483000;
-  display:flex;flex-direction:column;align-items:flex-end;gap:.5rem;}
+  display:flex;flex-direction:column;align-items:flex-end;gap:.5rem;
+  font-family:var(--widget-font,inherit);}
 #dograh-chat-launcher[data-open="false"] #${chatContainerId}{display:none;}
 #dograh-chat-launcher[data-open="true"] #${chatContainerId}{
   width:min(22rem,calc(100vw - 2.5rem));max-height:min(30rem,calc(100vh - 12rem));
-  overflow:auto;border-radius:1rem;
+  overflow:auto;border-radius:var(--widget-radius,1rem);
   box-shadow:0 1.5rem 3rem -0.75rem rgba(0,0,0,.35);}
 #dograh-chat-toggle{display:inline-flex;align-items:center;justify-content:center;
-  width:3.5rem;height:3.5rem;border:0;border-radius:999px;cursor:pointer;
-  background:var(--primary,#2563eb);color:var(--primary-foreground,#fff);
-  box-shadow:0 .5rem 1.25rem -0.25rem rgba(0,0,0,.35);transition:transform .15s ease;}
+  width:3.5rem;height:3.5rem;border:0;border-radius:var(--widget-radius,999px);cursor:pointer;
+  background:var(--widget-accent,var(--primary,#2563eb));color:var(--widget-on-accent,var(--primary-foreground,#fff));
+  box-shadow:0 .5rem 1.25rem -0.25rem rgba(0,0,0,.35);
+  transition:var(--widget-transition,transform .15s ease);}
 #dograh-chat-toggle:hover{transform:scale(1.06);}
 @media (prefers-reduced-motion:reduce){#dograh-chat-toggle{transition:none;}}
 `,

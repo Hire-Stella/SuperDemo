@@ -22,6 +22,29 @@ export const manifest: TemplateManifest = {
   source: 'Templates-Vedant/template-vedant-zova-saas-clone',
   supports: SUPPORTS,
   preview: '/previews/zova.png',
+  /**
+   * Derived from the source's own `.zv-btn-primary` class (`theme.css`),
+   * used verbatim for the hero's own CTA (`components/HeroSection.tsx`):
+   * `background-image: linear-gradient(111deg, #545454 0%, #000000 100%)`
+   * under `color: #ffffff` — a gradient, not a flat fill. `accent` takes
+   * that gradient's own black anchor, matched by the source's own literal
+   * solid ink, `--zv-ink` (`#0a0a0a`, also its `::selection` background) —
+   * not the lighter `#545454` starting stop, which never appears on its
+   * own. `onAccent` is that same button's literal `#ffffff`. `radius` is
+   * `.zv-btn-primary`'s own `border-radius: 9999px`. `font` is the root's
+   * body face, Inter (`--font-sans`/`.zova-root` in `theme.css`) — the
+   * button carries neither the `zv-heading` (Geist) nor `zv-eyebrow`
+   * (Manrope) classes. `transition` mirrors the button's own real
+   * `transition-transform hover:scale-[1.03]` as used on the hero CTA
+   * (Tailwind's default 150ms transform easing).
+   */
+  widgetTheme: {
+    accent: '#0a0a0a',
+    onAccent: '#ffffff',
+    radius: '9999px',
+    font: '"Inter", ui-sans-serif, system-ui, sans-serif',
+    transition: 'transform 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+  },
 };
 
 /**
