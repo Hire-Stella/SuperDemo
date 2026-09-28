@@ -1,0 +1,235 @@
+/*
+ * summit, scoped to its own root.
+ *
+ * Nine-plus templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one imported
+ * wins for every other template and the surrounding dashboard inherits
+ * whichever that was. The template root div carries this class, so every
+ * custom property still resolves.
+ */
+
+/*
+ * Typography, self-hosted. Three real Google Fonts variable-font files —
+ * "Bricolage Grotesque" (weight axis 200–800, used here for every headline),
+ * "Figtree" (weight axis 300–900, used for nav, body copy and button
+ * labels) and "Martian Mono" (weight axis 100–800, used for every stat and
+ * price digit) — vendored locally into this repo's own /t/summit/fonts/
+ * rather than linked from Google's own CDN, the same reasoning aurelia,
+ * tavola, forno, kiln and sucre give: a page that silently falls back
+ * because a font host was unreachable is worse than one that never asked.
+ * Each is a single variable-font file, confirmed against Google Fonts' own
+ * served CSS for a modern user agent, which points every requested weight
+ * of a family at the same "latin" subset URL.
+ *
+ * The source itself sets body copy in plain "Inter" (already used by
+ * aurelia, elianvalen, rescale and zova in this library) and only reaches
+ * for a distinct display face — "Bricolage Grotesque" among them — on its
+ * fake "trusted by" logo wordmarks, not its real headlines. This port
+ * promotes that display face to the template's own headline type instead
+ * of repeating Inter as a sixth template's body face, and pairs it with
+ * Figtree rather than Inter for the same reason. A deliberately different
+ * pairing from every sibling in the library, cryptix and fluxo included:
+ * two grotesque sans faces (no serif, no rounded display face, no repeat of
+ * Space Grotesk/Manrope/Instrument Sans) plus a mono reserved for numerals
+ * only, the same three-family shape kiln uses but with none of kiln's three
+ * fonts.
+ */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('/t/summit/fonts/bricolage-grotesque-variable.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 200 800;
+}
+@font-face {
+  font-family: 'Figtree';
+  src: url('/t/summit/fonts/figtree-variable.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 300 900;
+}
+@font-face {
+  font-family: 'Martian Mono';
+  src: url('/t/summit/fonts/martian-mono-variable.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 100 800;
+}
+
+/* ==========================================================================
+   SUMMIT — design tokens, measured from the source Framer HTML/CSS.
+
+   A dark, warm-glow wealth-tech palette: near-black page background
+   (`rgb(23,23,23)`, the source's own literal `:root body` background token)
+   and a slightly lighter card fill (`rgb(28,28,28)`, its own card token)
+   against white ink — with the source's own real gradient, a gold-to-umber
+   sweep (`#fabb00` → `#ff4d00` → `#cc3d00` → `#b85c00` → `#3e2013`, all five
+   literal `--token-*` custom-property fallbacks confirmed in its compiled
+   CSS) used for the hero's abstract visual, every feature-card "Icon" badge
+   and the accent glow behind the plan cards, plus that same darkest umber
+   stop reused as every card's literal 1px border colour. No blue, green or
+   purple anywhere in the source's real content (the one `rgb(0,153,255)`
+   token in its CSS is Framer's own unused default rich-text link colour,
+   the same red herring kiln's own notes flag and ignore). Genuinely
+   distinct from every other template in the library — the only dark-mode
+   template built around a gold/ember gradient rather than a light palette,
+   a single flat accent, or no accent at all.
+   ========================================================================== */
+
+@theme inline {
+  --color-summit-bg: #171717;
+  --color-summit-surface: #1c1c1c;
+  --color-summit-ink: #ffffff;
+  --color-summit-muted: #c9c5c0;
+  --color-summit-faint: #8a8a8a;
+  --color-summit-border: #3e2013;
+
+  --color-summit-gold: #fabb00;
+  --color-summit-orange: #ff4d00;
+  --color-summit-rust: #cc3d00;
+  --color-summit-amber: #b85c00;
+  --color-summit-umber: #3e2013;
+
+  /*
+   * Namespaced, not the generic `--font-display` / `--font-body` every
+   * sibling template (and the host shell itself) also declares — see
+   * forno's own note on why a shared name loses a collision silently.
+   */
+  --font-summit-display: 'Bricolage Grotesque', sans-serif;
+  --font-summit-body: 'Figtree', sans-serif;
+  --font-summit-mono: 'Martian Mono', monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.summit-root {
+  background: var(--color-summit-bg);
+  color: var(--color-summit-muted);
+  font-family: var(--font-summit-body);
+}
+
+.summit-root h1,
+.summit-root h2,
+.summit-root h3,
+.summit-root h4,
+.summit-root .font-summit-display {
+  font-family: var(--font-summit-display);
+  font-weight: 700;
+}
+
+.summit-root .font-summit-mono {
+  font-family: var(--font-summit-mono);
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums lining-nums;
+}
+
+/*
+ * The source's real gradient, as a reusable background.
+ *
+ * The literal five-stop sweep confirmed across its hero visual, its "Icon"
+ * badges and its card-border tokens — not a generic two-stop CSS gradient
+ * invented to approximate it.
+ */
+.summit-glow {
+  background: linear-gradient(
+    135deg,
+    var(--color-summit-gold) 0%,
+    var(--color-summit-orange) 32%,
+    var(--color-summit-rust) 58%,
+    var(--color-summit-amber) 78%,
+    var(--color-summit-umber) 100%
+  );
+}
+
+/*
+ * The source's real corner language, kept apart on purpose.
+ *
+ * `.summit-card` is the source's own literal `border-radius:10px` — found
+ * on every feature/step/pricing card's own "Desktop" wrapper in its
+ * compiled CSS, paired with its own literal card fill-to-border gradient
+ * (`#1c1c1c` at 15% to `#3e2013` at 131%). `.summit-pill` is its own
+ * literal `border-radius:20px` — found on both its CTA buttons and its
+ * glassmorphism "Learn More" ghost button. `.summit-accordion` is its own
+ * literal `border-radius:15px`, found on its FAQ item wrapper — its own
+ * middle ground between the two, not reused from either.
+ */
+.summit-card {
+  border-radius: 10px;
+  border: 1px solid var(--color-summit-border);
+  background: linear-gradient(180deg, var(--color-summit-surface) 15%, var(--color-summit-umber) 131%);
+}
+.summit-pill {
+  border-radius: 20px;
+}
+.summit-accordion {
+  border-radius: 15px;
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS, no motion library. See Reveal.tsx for the full
+   comparison against every sibling's own animation language.
+   -------------------------------------------------------------------------- */
+
+/*
+ * The source's own testimonial band is a two-row looping marquee (confirmed
+ * by its tripled DOM nodes carrying the same eight quotes — see defaults.ts).
+ * The track renders its items twice back to back and scrolls exactly one
+ * copy's width, so the seam is invisible.
+ */
+@keyframes summit-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.summit-marquee-track {
+  animation: summit-marquee 36s linear infinite;
+}
+.summit-marquee-track-reverse {
+  animation: summit-marquee 40s linear infinite reverse;
+}
+
+.summit-reveal {
+  perspective: 1200px;
+  opacity: 0;
+  transform: rotateX(-14deg) translateY(18px);
+  transform-origin: 50% 100%;
+  transition:
+    opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.summit-reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .summit-reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+  .summit-marquee-track,
+  .summit-marquee-track-reverse {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * `clip` rather than `hidden`: it stops the overflow without making this a
+ * scroll container, so `position: sticky` inside still works.
+ */
+.summit-root {
+  overflow-x: clip;
+}

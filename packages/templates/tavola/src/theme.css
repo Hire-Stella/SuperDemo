@@ -1,0 +1,171 @@
+/*
+ * tavola, scoped to its own root.
+ *
+ * Nine templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+/*
+ * Typography, self-hosted rather than left to a `next/font` variable that
+ * was never wired up for this template (several sibling templates reference
+ * `var(--font-cormorant)` / `var(--font-manrope)` etc. that no layout defines,
+ * so they silently fall back to the host's own sans). Two real families back
+ * the source site: "Forum" (a Google-hosted display serif — the source loads
+ * it straight from fonts.gstatic.com, so this does the same rather than
+ * vendoring a copy of a font Google already serves) and "Satoshi" (a
+ * Fontshare sans that the source genuinely does vendor locally — those five
+ * files are copied into this repo's own /t/tavola/fonts/).
+ */
+@font-face {
+  font-family: 'Forum';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url(https://fonts.gstatic.com/s/forum/v19/6aey4Ky-Vb8Ew8IROpI.woff2) format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/t/tavola/fonts/satoshi-300.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 300;
+}
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/t/tavola/fonts/satoshi-400.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/t/tavola/fonts/satoshi-400-italic.woff2') format('woff2');
+  font-display: swap;
+  font-style: italic;
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/t/tavola/fonts/satoshi-700.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+@font-face {
+  font-family: 'Satoshi';
+  src: url('/t/tavola/fonts/satoshi-700-italic.woff2') format('woff2');
+  font-display: swap;
+  font-style: italic;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   TAVOLA — design tokens, measured from the source Framer HTML/CSS.
+
+   A dark, warm fine-dining palette: near-black ink for the hero and the
+   circular icon-buttons, a warm ivory page background everywhere else, cream
+   text on dark surfaces, and a muted gold accent for eyebrows and CTA labels.
+   Every value below is a literal colour lifted from the source's own inline
+   styles (`rgb(10,11,10)`, `rgb(253,251,246)`, `rgb(239,231,210)`, `#dac5a7`,
+   `rgb(51,51,48)`), not a guess. Prefixed `tavola-` (after rescale's own
+   convention) rather than left generic like momentum's `--color-ink`: these
+   are registered globally by `@theme inline`, and nine templates picking
+   from the same handful of generic names is exactly how one import order
+   would make two templates share a palette neither chose.
+   ========================================================================== */
+
+@theme inline {
+  --color-tavola-bg: #fdfbf6;
+  --color-tavola-ink: #0a0b0a;
+  --color-tavola-ink-soft: #151515;
+  --color-tavola-text: #242422;
+  --color-tavola-muted: #333330;
+  --color-tavola-cream: #efe7d2;
+  --color-tavola-gold: #dac5a7;
+  --color-tavola-gold-muted: #cfbe91;
+
+  --font-display: 'Forum', serif;
+  --font-body: 'Satoshi', 'Satoshi Placeholder', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.tavola-root {
+  background: var(--color-tavola-bg);
+  color: var(--color-tavola-text);
+  font-family: var(--font-body);
+}
+
+.tavola-root h1,
+.tavola-root h2,
+.tavola-root h3,
+.tavola-root .font-display {
+  font-family: var(--font-display);
+}
+
+/*
+ * The source's real button shapes, kept apart on purpose.
+ *
+ * Text buttons ("Book a Table") are an 8px soft square — literally
+ * `border-radius: 8px` in the source, not a pill. The small circular
+ * icon-only badges layered over photos are literally `border-radius: 500px`
+ * (a true circle). Two different corner languages for two different kinds
+ * of control, both real.
+ */
+.tavola-btn {
+  border-radius: 8px;
+}
+.tavola-badge {
+  border-radius: 500px;
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS transitions, no motion library
+   -------------------------------------------------------------------------- */
+
+/* Scroll-triggered reveal — the class is toggled by components/Reveal.tsx */
+.tavola-reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition:
+    opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.tavola-reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tavola-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * Several of these templates bring cards in from `x: 100`, and a card below
+ * the fold sits at that offset until it scrolls into view — 100px of push on a
+ * 390px screen, which is 76px of sideways scroll on a phone. `clip` rather
+ * than `hidden`: it stops the overflow without making this a scroll container,
+ * so `position: sticky` inside still works.
+ */
+.tavola-root {
+  overflow-x: clip;
+}

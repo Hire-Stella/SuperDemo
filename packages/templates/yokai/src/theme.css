@@ -1,0 +1,233 @@
+/*
+ * yokai, scoped to its own root.
+ *
+ * Nine-plus templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+/*
+ * Typography, self-hosted. Two real Google fonts — "Yuji Boku" (a
+ * brush-calligraphy display face, weight 400 only, whose Latin glyphs are
+ * drawn with the same ink-stroke energy as its Japanese ones — a fitting
+ * display face for a noodle-bar sign, not a mirrored one) for every
+ * headline and the wordmark, and "IBM Plex Sans" (four static weights,
+ * 400/500/600/700) for body copy and buttons — both vendored locally into
+ * this repo's own /t/yokai/fonts/ rather than linked from a font CDN, the
+ * same reasoning every sibling template gives: a page that silently falls
+ * back because a font host was unreachable is worse than one that never
+ * asked.
+ *
+ * A fifth, genuinely different pairing: a brush-stroke display face (not
+ * Forum's serif, not Cherry Bomb One's bubble cursive, not Gilda Display's
+ * transitional serif, not Germania One's blunt slab) on a plain humanist-
+ * technical sans (not Satoshi, Gabarito, Inter or Plus Jakarta Sans).
+ */
+@font-face {
+  font-family: 'Yuji Boku';
+  src: url('/t/yokai/fonts/yuji-boku-400.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/t/yokai/fonts/ibm-plex-sans-400.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/t/yokai/fonts/ibm-plex-sans-500.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/t/yokai/fonts/ibm-plex-sans-600.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+@font-face {
+  font-family: 'IBM Plex Sans';
+  src: url('/t/yokai/fonts/ibm-plex-sans-700.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   YOKAI — an original design system, not measured from any source template.
+
+   Where every sibling template's page background is a light or near-white
+   ground with a dark band or two (tavola's hero, aurelia's stats band,
+   brasa's highlights band), Yokai inverts that: a warm soot-charcoal ink
+   (`#17130f` — warmer than tavola's cool near-black `#0a0b0a`) is the
+   *dominant* background across most of the page, the way an actual
+   izakaya counter reads after dark, with a warm rice-paper cream
+   (`#f3e9d8`) reserved for card fills and text-on-dark. One saturated
+   accent — a lit-lantern red-orange (`#ff4b2b`) — does every button, tag
+   and CTA; a muted jade ("nori") green and a warm amber ("gold") sit
+   underneath it for tags and small numerals. Genuinely distinct from
+   tavola's single gold-on-near-black, forno's red/orange/yellow-on-white,
+   aurelia's plum-and-gold-on-blush and brasa's marigold-and-chili-on-cream:
+   this is the only one of the five where the dark tone is the page itself,
+   not a single accent band inside a light one.
+
+   Contrast was checked with the actual formula, not eyeballed (see the
+   numbers in each comment below) — the same hard lesson tavola's original
+   gradient bug and every sibling's own muted-grey fix describe.
+   ========================================================================== */
+
+@theme inline {
+  --color-yokai-ink: #17130f;
+  --color-yokai-surface: #221d17;
+  --color-yokai-paper: #f3e9d8;
+  --color-yokai-text: #ece2d0;
+  /* #b8ab92 on #17130f is 8.16:1 — safe for body-sized secondary text on the dark ground. */
+  --color-yokai-muted: #b8ab92;
+  /* A second, much darker muted for the same role on *paper* card fills — #b8ab92 on
+     #f3e9d8 is only 1.88:1, which is why this is a separate token rather than reused:
+     #5a4f3e on #f3e9d8 is 6.66:1. */
+  --color-yokai-muted-paper: #5a4f3e;
+  --color-yokai-lantern: #ff4b2b;
+  /* #74a682 on #17130f is 6.62:1 — bumped up from a first pass at #4f7a5c (3.76:1, under
+     the 4.5:1 AA minimum for body-sized text) once actually measured. */
+  --color-yokai-nori: #74a682;
+  --color-yokai-gold: #e0a63a;
+  --color-yokai-border: #3a332a;
+
+  /*
+   * Namespaced, not the generic `--font-display` / `--font-body` every
+   * sibling template (and the host shell itself) also declares — see
+   * forno's own note on why a shared name loses a collision silently.
+   */
+  --font-yokai-display: 'Yuji Boku', serif;
+  --font-yokai-body: 'IBM Plex Sans', 'IBM Plex Sans Placeholder', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.yokai-root {
+  background: var(--color-yokai-ink);
+  color: var(--color-yokai-text);
+  font-family: var(--font-yokai-body);
+}
+
+.yokai-root h1,
+.yokai-root h2,
+.yokai-root h3,
+.yokai-root .font-yokai-display {
+  font-family: var(--font-yokai-display);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+/*
+ * This template's own corner language, kept apart on purpose from every
+ * sibling's: a diagonal "tag" radius — sharp on the top-left and
+ * bottom-right corners, rounded on the other two — for photo frames and
+ * cards, a smaller version of the same shape for buttons (the literal
+ * shape cited in index.tsx's `widgetTheme.radius`), and a true circle
+ * reserved for the one icon-only control, the hero's hanko-style seal
+ * badge. Three corner values, same discipline as every sibling's own
+ * split, a genuinely different shape from tavola's soft-square-vs-circle,
+ * forno's and aurelia's pill-vs-soft-card, and brasa's sharp-vs-circle.
+ */
+.yokai-frame {
+  border-radius: 0 22px 0 22px;
+}
+.yokai-btn {
+  border-radius: 0 12px 0 12px;
+}
+.yokai-seal {
+  border-radius: 999px;
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS, no motion library.
+
+   A fifth, genuinely different animation language: tavola fades a plain
+   translateY/opacity in, forno bounces in with scale + rotate overshoot,
+   aurelia softens into focus with a blur, brasa wipes into view with a
+   clip-path. Yokai lifts and settles instead — elements rise a short
+   distance while scaling up from 96% to their full size on a no-overshoot
+   deceleration curve, reading as a plate being set down rather than a
+   fade, a bounce, a blur or a wipe.
+   -------------------------------------------------------------------------- */
+
+.yokai-reveal {
+  opacity: 0;
+  transform: translateY(18px) scale(0.96);
+  transition:
+    opacity 0.6s cubic-bezier(0.19, 1, 0.22, 1),
+    transform 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+.yokai-reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+/*
+ * A continuous, independent third motion: rising steam — small soft-edged
+ * wisps that drift upward and widen while fading out, looping — matching
+ * the hero's ramen bowl rather than borrowing brasa's spin, forno's
+ * vertical float/bob or aurelia's horizontal marquee. Each instance sets
+ * its own duration/delay inline (see Hero.tsx) so identical wisps don't
+ * drift in lockstep.
+ */
+@keyframes yokai-steam {
+  0% {
+    opacity: 0;
+    transform: translateY(0) scaleX(1);
+  }
+  25% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-48px) scaleX(1.6);
+  }
+}
+
+.yokai-steam {
+  animation: yokai-steam var(--yokai-steam-duration, 4.5s) ease-in infinite;
+  animation-delay: var(--yokai-steam-delay, 0s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .yokai-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .yokai-steam {
+    animation: none;
+    opacity: 0;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * The hero's edge-bled photo panel deliberately extends past the page
+ * gutter to the true viewport edge (see Hero.tsx), and every reveal's
+ * scale-in start state sits slightly *smaller* than its settled size (never
+ * larger, so it can't itself cause overflow). `clip` rather than `hidden`:
+ * it stops the overflow without making this a scroll container, so
+ * `position: sticky` inside still works.
+ */
+.yokai-root {
+  overflow-x: clip;
+}
