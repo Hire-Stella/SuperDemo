@@ -22,6 +22,28 @@ export const manifest: TemplateManifest = {
   source: 'Templates-Vedant/template-vedant-utomic-clone',
   supports: SUPPORTS,
   preview: '/previews/utomic.png',
+  /**
+   * The source never fills a button with its own violet/indigo brand
+   * swatches (`--brand-violet`, `--brand-plum`, etc. in `theme.css`) — those
+   * are used only for the hero's radial gradient and small eyebrow labels.
+   * Its actual, repeated primary-CTA treatment, on every dark section
+   * (`components/CtaBanner.tsx`'s "Let's start today", and the matching
+   * dark-card pricing CTA in `page.tsx`), is a plain high-contrast pill:
+   * `rounded-full bg-white ... text-black`. `accent`/`onAccent` are that
+   * literal `bg-white`/`text-black`, `#ffffff`/`#000000`. `radius` is that
+   * same button's `rounded-full`. `font` is the root's own body face, Sora
+   * (`--font-sans`/`.utomic-root` in `theme.css`) — the button has no
+   * separate display face to opt out of. `transition` mirrors
+   * `CtaBanner.tsx`'s own `transition-transform hover:-translate-y-0.5`
+   * (Tailwind's default 150ms transform easing).
+   */
+  widgetTheme: {
+    accent: '#ffffff',
+    onAccent: '#000000',
+    radius: '9999px',
+    font: '"Sora", ui-sans-serif, system-ui, sans-serif',
+    transition: 'transform 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+  },
 };
 
 /**

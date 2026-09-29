@@ -1,0 +1,169 @@
+/*
+ * insunet, scoped to its own root.
+ *
+ * Nine-plus templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one imported
+ * wins for every other template and the surrounding dashboard inherits
+ * whichever that was. The template root div carries this class, so every
+ * custom property still resolves.
+ */
+
+/*
+ * Typography, self-hosted — but deliberately not the source's own three
+ * fonts ("Manrope", "Urbanist" and "Inter", confirmed in the source's own
+ * compiled CSS `font-family` declarations). Inter already backs three other
+ * templates in this library (aurelia, elianvalen, rescale) and Manrope two
+ * more (rescale, zova) — porting the source's literal pairing here would
+ * repeat both. "Bricolage Grotesque" (a Google Fonts variable grotesque
+ * display face, weight axis 200–800, used here at 700 for every headline)
+ * and "Instrument Sans" (a Google Fonts variable humanist sans, weight axis
+ * 400–700, used for nav, body copy and every button label) are a pairing no
+ * other template in this library uses — vendored locally into this repo's
+ * own /t/insunet/fonts/ rather than linked from Google's own CDN, the same
+ * reasoning every sibling template gives: a page that silently falls back
+ * because a font host was unreachable is worse than one that never asked.
+ * Each is a single variable-font file — one file each covers its full
+ * weight range rather than a file per weight, the same choice sucre's and
+ * rescale's own fonts note makes for their own variable faces.
+ */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('/t/insunet/fonts/bricolage-grotesque-variable.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 200 800;
+}
+@font-face {
+  font-family: 'Instrument Sans';
+  src: url('/t/insunet/fonts/instrument-sans-variable.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 700;
+}
+
+/* ==========================================================================
+   INSUNET — design tokens, measured from the source Framer HTML/CSS.
+
+   A friendly insurtech palette: pure white (`#ffffff`, the source's own page
+   background) and a literal pale mint-white section alternate
+   (`rgb(248,251,246)`, its own token) against pure-black ink
+   (`rgb(0,0,0)`, its own literal heading and question colour) and a literal
+   mid-grey (`rgb(95,95,95)`, its own body and FAQ-answer colour) for muted
+   text — with two filled hues, a bright optimistic green
+   (`rgb(124,237,81)`, its own literal "Book An Appointment" button fill) as
+   the one CTA accent, and a sky blue (`rgb(0,153,255)`, its own literal link
+   and icon colour, used ninety-three separate times across the source's own
+   inline styles) for links, small icons and focus states. A light grey
+   (`rgb(222,222,222)`) for hairlines and card borders, confirmed identical
+   three separate times in the source's own inline styles. Genuinely
+   distinct from every sibling template's own palette: no sibling pairs a
+   saturated green accent with a sky-blue secondary on a near-white ground.
+   ========================================================================== */
+
+@theme inline {
+  --color-insunet-bg: #ffffff;
+  --color-insunet-surface: #f8fbf6;
+  --color-insunet-ink: #000000;
+  --color-insunet-muted: #5f5f5f;
+  --color-insunet-accent: #7ced51;
+  --color-insunet-accent-ink: #000000;
+  --color-insunet-primary: #0099ff;
+  --color-insunet-teal: #1c7e6e;
+  --color-insunet-border: #dedede;
+
+  /*
+   * Namespaced, not the generic `--font-display` / `--font-body` every
+   * sibling template (and the host shell itself) also declares — see
+   * forno's own note on why a shared name loses a collision silently.
+   */
+  --font-insunet-display: 'Bricolage Grotesque', sans-serif;
+  --font-insunet-body: 'Instrument Sans', 'Instrument Sans Placeholder', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.insunet-root {
+  background: var(--color-insunet-bg);
+  color: var(--color-insunet-muted);
+  font-family: var(--font-insunet-body);
+}
+
+.insunet-root h1,
+.insunet-root h2,
+.insunet-root h3,
+.insunet-root .font-insunet-display {
+  font-family: var(--font-insunet-display);
+  font-weight: 700;
+}
+
+/*
+ * The source's real corner language, kept apart on purpose.
+ *
+ * `.insunet-pill` is the source's own literal `border-radius:58px` on its
+ * "Book An Appointment" button — a true pill once generalised past that one
+ * control's own fixed size, the same treatment every sibling template's own
+ * radius note gives its source's fixed-pixel button corner. `.insunet-card`
+ * is the source's own second corner language, a literal `border-radius:16px`
+ * confirmed on its FAQ accordion items and team-photo frames — a soft round
+ * rather than kiln's near-square `4px` or aurelia's full pill.
+ */
+.insunet-pill {
+  border-radius: 999px;
+}
+.insunet-card {
+  border-radius: 16px;
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS, no motion library.
+
+   A deliberately different animation language from every sibling: kiln
+   snaps up fast with no blur, sucre eases into a soft scale-up bloom, natsu
+   bounces open with a clip-path circle. Insunet does neither — a slower,
+   confident rise with no scale change at all, eased on a pronounced
+   ease-out curve so the motion decelerates smoothly into its resting place
+   with no overshoot, reading as calm and reassuring rather than snappy or
+   playful — in keeping with a page whose whole job is to make insurance
+   feel less stressful. The source's own scroll-reveal is a JS-only Framer
+   "appear" effect built from runtime spring physics with no fixed value in
+   its static HTML/CSS (see the compiled bundle's own easing-curve
+   generator) — hand-matched here as this plain CSS transition instead of
+   ported literally, since no static curve exists to port.
+   -------------------------------------------------------------------------- */
+
+.insunet-reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition:
+    opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.insunet-reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .insunet-reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * `clip` rather than `hidden`: it stops the overflow without making this a
+ * scroll container, so `position: sticky` inside still works.
+ */
+.insunet-root {
+  overflow-x: clip;
+}

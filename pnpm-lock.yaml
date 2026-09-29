@@ -180,12 +180,45 @@ importers:
       '@elevenlabs/react':
         specifier: ^1.12.0
         version: 1.12.0(@types/dom-mediacapture-record@1.0.22)(react@19.2.8)
+      '@stella/template-aurelia':
+        specifier: workspace:*
+        version: link:../../packages/templates/aurelia
+      '@stella/template-brasa':
+        specifier: workspace:*
+        version: link:../../packages/templates/brasa
+      '@stella/template-cryptix':
+        specifier: workspace:*
+        version: link:../../packages/templates/cryptix
       '@stella/template-elianvalen':
         specifier: workspace:*
         version: link:../../packages/templates/elianvalen
+      '@stella/template-fluxo':
+        specifier: workspace:*
+        version: link:../../packages/templates/fluxo
+      '@stella/template-folio':
+        specifier: workspace:*
+        version: link:../../packages/templates/folio
+      '@stella/template-forno':
+        specifier: workspace:*
+        version: link:../../packages/templates/forno
+      '@stella/template-insunet':
+        specifier: workspace:*
+        version: link:../../packages/templates/insunet
+      '@stella/template-kiln':
+        specifier: workspace:*
+        version: link:../../packages/templates/kiln
       '@stella/template-momentum':
         specifier: workspace:*
         version: link:../../packages/templates/momentum
+      '@stella/template-natsu':
+        specifier: workspace:*
+        version: link:../../packages/templates/natsu
+      '@stella/template-oscar':
+        specifier: workspace:*
+        version: link:../../packages/templates/oscar
+      '@stella/template-pearl':
+        specifier: workspace:*
+        version: link:../../packages/templates/pearl
       '@stella/template-reodental':
         specifier: workspace:*
         version: link:../../packages/templates/reodental
@@ -204,12 +237,27 @@ importers:
       '@stella/template-stackgrid':
         specifier: workspace:*
         version: link:../../packages/templates/stackgrid
+      '@stella/template-sucre':
+        specifier: workspace:*
+        version: link:../../packages/templates/sucre
+      '@stella/template-summit':
+        specifier: workspace:*
+        version: link:../../packages/templates/summit
+      '@stella/template-tavola':
+        specifier: workspace:*
+        version: link:../../packages/templates/tavola
       '@stella/template-tripvanta':
         specifier: workspace:*
         version: link:../../packages/templates/tripvanta
       '@stella/template-utomic':
         specifier: workspace:*
         version: link:../../packages/templates/utomic
+      '@stella/template-vantra':
+        specifier: workspace:*
+        version: link:../../packages/templates/vantra
+      '@stella/template-yokai':
+        specifier: workspace:*
+        version: link:../../packages/templates/yokai
       '@stella/template-zova':
         specifier: workspace:*
         version: link:../../packages/templates/zova
@@ -340,7 +388,216 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/templates/aurelia:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/brasa:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/cryptix:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      lucide-react:
+        specifier: ^1.43.0
+        version: 1.45.0(react@19.2.8)
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   packages/templates/elianvalen:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/fluxo:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      lucide-react:
+        specifier: ^1.43.0
+        version: 1.45.0(react@19.2.8)
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/folio:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/forno:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/insunet:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      lucide-react:
+        specifier: ^1.43.0
+        version: 1.45.0(react@19.2.8)
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/kiln:
     dependencies:
       '@stella/template-schema':
         specifier: workspace:*
@@ -373,6 +630,84 @@ importers:
       framer-motion:
         specifier: ^13.2.0
         version: 13.2.0(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/natsu:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      lucide-react:
+        specifier: ^1.43.0
+        version: 1.45.0(react@19.2.8)
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/oscar:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/pearl:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
       next:
         specifier: '>=15'
         version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
@@ -451,12 +786,45 @@ importers:
 
   packages/templates/runtime:
     dependencies:
+      '@stella/template-aurelia':
+        specifier: workspace:*
+        version: link:../aurelia
+      '@stella/template-brasa':
+        specifier: workspace:*
+        version: link:../brasa
+      '@stella/template-cryptix':
+        specifier: workspace:*
+        version: link:../cryptix
       '@stella/template-elianvalen':
         specifier: workspace:*
         version: link:../elianvalen
+      '@stella/template-fluxo':
+        specifier: workspace:*
+        version: link:../fluxo
+      '@stella/template-folio':
+        specifier: workspace:*
+        version: link:../folio
+      '@stella/template-forno':
+        specifier: workspace:*
+        version: link:../forno
+      '@stella/template-insunet':
+        specifier: workspace:*
+        version: link:../insunet
+      '@stella/template-kiln':
+        specifier: workspace:*
+        version: link:../kiln
       '@stella/template-momentum':
         specifier: workspace:*
         version: link:../momentum
+      '@stella/template-natsu':
+        specifier: workspace:*
+        version: link:../natsu
+      '@stella/template-oscar':
+        specifier: workspace:*
+        version: link:../oscar
+      '@stella/template-pearl':
+        specifier: workspace:*
+        version: link:../pearl
       '@stella/template-reodental':
         specifier: workspace:*
         version: link:../reodental
@@ -472,12 +840,27 @@ importers:
       '@stella/template-stackgrid':
         specifier: workspace:*
         version: link:../stackgrid
+      '@stella/template-sucre':
+        specifier: workspace:*
+        version: link:../sucre
+      '@stella/template-summit':
+        specifier: workspace:*
+        version: link:../summit
+      '@stella/template-tavola':
+        specifier: workspace:*
+        version: link:../tavola
       '@stella/template-tripvanta':
         specifier: workspace:*
         version: link:../tripvanta
       '@stella/template-utomic':
         specifier: workspace:*
         version: link:../utomic
+      '@stella/template-vantra':
+        specifier: workspace:*
+        version: link:../vantra
+      '@stella/template-yokai':
+        specifier: workspace:*
+        version: link:../yokai
       '@stella/template-zova':
         specifier: workspace:*
         version: link:../zova
@@ -550,6 +933,87 @@ importers:
         specifier: ^5.7.2
         version: 5.9.3
 
+  packages/templates/sucre:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      lucide-react:
+        specifier: ^1.43.0
+        version: 1.45.0(react@19.2.8)
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/summit:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      lucide-react:
+        specifier: ^1.43.0
+        version: 1.45.0(react@19.2.8)
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/tavola:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
   packages/templates/tripvanta:
     dependencies:
       '@stella/template-schema':
@@ -582,6 +1046,56 @@ importers:
         version: 5.9.3
 
   packages/templates/utomic:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/vantra:
+    dependencies:
+      '@stella/template-schema':
+        specifier: workspace:*
+        version: link:../schema
+      next:
+        specifier: '>=15'
+        version: 15.5.22(@babel/core@7.29.7(supports-color@8.1.1))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      react:
+        specifier: '>=19'
+        version: 19.2.8
+      react-dom:
+        specifier: '>=19'
+        version: 19.2.8(react@19.2.8)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.2
+        version: 19.2.18
+      '@types/react-dom':
+        specifier: ^19.0.2
+        version: 19.2.4(@types/react@19.2.18)
+      typescript:
+        specifier: ^5.7.2
+        version: 5.9.3
+
+  packages/templates/yokai:
     dependencies:
       '@stella/template-schema':
         specifier: workspace:*
@@ -2898,6 +3412,7 @@ packages:
   cron-parser@4.9.0:
     resolution: {integrity: sha512-p0SaNjrHOnQeR8/VnfGbmg9te2kfyYSQ7Sc/j/6DtPL3JQvKxmjO9TSjNFpujqV3vEYYBvNNvXSxzyksBWAx1Q==}
     engines: {node: '>=12.0.0'}
+    deprecated: v4 is no longer maintained, upgrade to v5
 
   cron@3.5.0:
     resolution: {integrity: sha512-0eYZqCnapmxYcV06uktql93wNWdlTmmBFP2iYz+JPVcQqlyFYcn1lFuIk4R54pkOmE7mcldTAPZv6X5XA4Q46A==}

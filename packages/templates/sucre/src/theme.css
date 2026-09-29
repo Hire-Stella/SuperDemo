@@ -1,0 +1,167 @@
+/*
+ * sucre, scoped to its own root.
+ *
+ * Nine-plus templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one imported
+ * wins for every other template and the surrounding dashboard inherits
+ * whichever that was. The template root div carries this class, so every
+ * custom property still resolves.
+ */
+
+/*
+ * Typography, self-hosted. Two real families back the source site —
+ * "Fraunces" (a Google Fonts variable serif, weight axis 400–600, used here
+ * for every headline and price numeral) and "DM Sans" (a Google Fonts
+ * variable grotesk sans, weight axis 400–700, used for nav, body copy and
+ * every button label) — both vendored locally into this repo's own
+ * /t/sucre/fonts/ rather than linked from Google's own CDN, the same
+ * reasoning aurelia, tavola, forno and kiln give: a page that silently
+ * falls back because a font host was unreachable is worse than one that
+ * never asked. Each is a single variable-font file — confirmed against the
+ * source's own compiled `@font-face` rules, which point every weight of a
+ * family at the same "latin" subset URL — so one file each covers its full
+ * weight range rather than a file per weight.
+ *
+ * A deliberately different pairing from both siblings: a warm serif display
+ * face paired with a geometric sans, no rounded bold sans (natsu) and no
+ * all-sans grotesk pairing (kiln) — the only template in the library with a
+ * serif anywhere in it.
+ */
+@font-face {
+  font-family: 'Fraunces';
+  src: url('/t/sucre/fonts/fraunces-variable.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 600;
+}
+@font-face {
+  font-family: 'DM Sans';
+  src: url('/t/sucre/fonts/dm-sans-variable.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 700;
+}
+
+/* ==========================================================================
+   SUCRE — design tokens, measured from the source Framer HTML/CSS.
+
+   A blush patisserie palette: cream (`rgb(255,246,245)`, the source's own
+   page-background token) and a light peach section alternate
+   (`rgb(255,225,219)`, its own token) against cocoa-brown ink
+   (`rgb(112,71,52)`, its own heading colour) and a deep rose
+   (`rgb(186,70,102)`, its own nav-link and label colour) for body text —
+   with one filled accent hue, hot pink (`rgb(255,74,125)`, its own button
+   colour and box-shadow glow), a softer pink for its hover state
+   (`rgb(255,186,206)`), a warm gold for its decorative underline gradients
+   (`rgb(182,124,38)`), and a dusty blush for hairlines and borders
+   (`rgb(237,197,190)`). Genuinely distinct from natsu's burnt orange-on-cream
+   and kiln's total absence of colour — the only sibling built around a
+   saturated pink accent rather than an earth tone or no accent at all.
+   ========================================================================== */
+
+@theme inline {
+  --color-sucre-bg: #fff6f5;
+  --color-sucre-surface: #ffe1db;
+  --color-sucre-ink: #704734;
+  --color-sucre-muted: #99664e;
+  --color-sucre-rose: #ba4666;
+  --color-sucre-pink: #ff4a7d;
+  --color-sucre-pink-soft: #ffbace;
+  --color-sucre-gold: #b67c26;
+  --color-sucre-border: #edc5be;
+
+  /*
+   * Namespaced, not the generic `--font-display` / `--font-body` every
+   * sibling template (and the host shell itself) also declares — see
+   * forno's own note on why a shared name loses a collision silently.
+   */
+  --font-sucre-display: 'Fraunces', serif;
+  --font-sucre-body: 'DM Sans', 'DM Sans Placeholder', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.sucre-root {
+  background: var(--color-sucre-bg);
+  color: var(--color-sucre-muted);
+  font-family: var(--font-sucre-body);
+}
+
+.sucre-root h1,
+.sucre-root h2,
+.sucre-root h3,
+.sucre-root h4,
+.sucre-root .font-sucre-display {
+  font-family: var(--font-sucre-display);
+  font-weight: 600;
+}
+
+/*
+ * The source's real corner language, kept apart on purpose.
+ *
+ * `.sucre-pill` is the source's own literal `border-radius:999px` — found on
+ * every nav bar and every button in its compiled CSS, a true pill. `.sucre-card`
+ * is its own second-most-common non-pill radius, a literal `32px` — its
+ * photo cards' and product tiles' own corner, a soft round rather than
+ * aurelia's pill or kiln's near-square `4px`.
+ */
+.sucre-pill {
+  border-radius: 999px;
+}
+.sucre-card {
+  border-radius: 32px;
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS, no motion library.
+
+   A deliberately different animation language from every sibling: kiln
+   snaps up fast with no blur on a brisk near-linear curve, natsu's own
+   reveal bounces with a scale-and-rotate overshoot. Sucre does neither — a
+   slower, softer bloom: a slight scale-up from 97% combined with a rise,
+   eased on a pronounced ease-out curve so the motion decelerates hard into
+   place, reading as a delicate "settling" rather than a snap or a bounce —
+   the pastry-case equivalent of a box lid easing open. The source's own
+   scroll-reveal is a JS-only Framer "appear" effect built from runtime
+   spring physics with no fixed value in its static HTML/CSS (see the
+   compiled bundle's own easing-curve generator) — hand-matched here as this
+   plain CSS transition instead of ported literally, since no static curve
+   exists to port.
+   -------------------------------------------------------------------------- */
+
+.sucre-reveal {
+  opacity: 0;
+  transform: translateY(16px) scale(0.97);
+  transition:
+    opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.sucre-reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sucre-reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * `clip` rather than `hidden`: it stops the overflow without making this a
+ * scroll container, so `position: sticky` inside still works.
+ */
+.sucre-root {
+  overflow-x: clip;
+}

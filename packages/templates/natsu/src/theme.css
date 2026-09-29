@@ -1,0 +1,197 @@
+/*
+ * natsu, scoped to its own root.
+ *
+ * Nine-plus templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+/*
+ * Typography, self-hosted. Two real families back the source site — both
+ * recovered from its own compiled `<style>` block: "Akshar" (a geometric
+ * grotesk, weights 400/600/700 in the source) for every headline, button
+ * and label, and "Fira Sans Extra Condensed" (weights 400/500/600) for
+ * paragraph copy. The source itself loads both from Google's own CDN
+ * rather than self-hosting — vendored locally here instead, the same
+ * reasoning tavola, forno, aurelia and brasa gave for their own fonts: a
+ * page that silently falls back because a font host was unreachable is
+ * worse than one that never asked. Only the static latin-subset weights
+ * this template actually uses are kept, not the source's full
+ * Devanagari + Cyrillic + Vietnamese range.
+ */
+@font-face {
+  font-family: 'Akshar';
+  src: url('/t/natsu/fonts/akshar-400.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 700;
+}
+@font-face {
+  font-family: 'Fira Sans Extra Condensed';
+  src: url('/t/natsu/fonts/fira-sans-extra-condensed-400.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Fira Sans Extra Condensed';
+  src: url('/t/natsu/fonts/fira-sans-extra-condensed-500.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+@font-face {
+  font-family: 'Fira Sans Extra Condensed';
+  src: url('/t/natsu/fonts/fira-sans-extra-condensed-600.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   NATSU — design tokens, measured from the source Framer HTML/CSS.
+
+   Every colour below is one of the source's own five real CSS custom
+   properties (`body{--token-...}` in its compiled stylesheet), not a
+   guess: a warm cream page background (`rgb(243,239,234)` / `#f3efea`,
+   the source's most-used background, 11 occurrences), a soft tan surface
+   for cards and borders (`rgb(231,223,211)` / `#e7dfd3`, 3 occurrences), a
+   dark roast-brown ink for text (`rgb(126,65,36)` / `#7e4124`, the
+   source's most-used colour by far at 20 occurrences), a caramel accent
+   behind every real button (`rgb(172,109,54)` / `#ac6d36`, 6
+   occurrences), and a golden highlight (`rgb(221,159,87)` / `#dd9f57`, 2
+   occurrences). The source has no separate dark section anywhere on any
+   of its eleven routes — every band, including its own footer, sits on
+   the same cream — so the one dark band this port adds for rhythm reuses
+   the source's own ink-brown rather than inventing an unmeasured near-black.
+   Genuinely distinct from every sibling cafe/restaurant template's
+   palette: a warm cream-and-roast-brown duo with a single caramel accent,
+   not tavola's gold-on-near-black, forno's red/orange/yellow-on-white,
+   aurelia's plum-and-gold-on-blush, or brasa's marigold-and-chili-on-cream.
+   ========================================================================== */
+
+@theme inline {
+  --color-natsu-bg: #f3efea;
+  --color-natsu-surface: #ffffff;
+  --color-natsu-tan: #e7dfd3;
+  --color-natsu-ink: #7e4124;
+  --color-natsu-caramel: #ac6d36;
+  --color-natsu-gold: #dd9f57;
+  --color-natsu-muted: #8a6a52;
+
+  /*
+   * Namespaced, not the generic `--font-display` / `--font-body` every
+   * sibling template (and the host shell itself) also declares — see
+   * forno's own note on why a shared name loses a collision silently.
+   */
+  --font-natsu-display: 'Akshar', sans-serif;
+  --font-natsu-body: 'Fira Sans Extra Condensed', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.natsu-root {
+  background: var(--color-natsu-bg);
+  color: var(--color-natsu-muted);
+  font-family: var(--font-natsu-body);
+}
+
+.natsu-root h1,
+.natsu-root h2,
+.natsu-root h3,
+.natsu-root .font-natsu-display {
+  font-family: var(--font-natsu-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/*
+ * The source's real corner language: every button, badge and input in its
+ * compiled CSS carries a literal 100px (occasionally 84/150px on small
+ * icon wells) radius — always enough to read as a true pill at that
+ * control's own height. Kept as one soft-pill token for buttons and
+ * badges, and a smaller, plain rounded-corner token for the larger photo
+ * cards a 100px radius would turn into an unintended stadium shape.
+ */
+.natsu-pill {
+  border-radius: 100px;
+}
+.natsu-soft {
+  border-radius: 20px;
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS, no motion library.
+
+   A deliberately different animation language from every sibling: tavola
+   fades a plain translateY/opacity in, forno bounces in with scale + rotate
+   overshoot, aurelia softens into focus with a blur, brasa wipes up from the
+   bottom with a clip-path inset, yokai lifts and settles. Natsu blooms open
+   instead — a circular `clip-path` iris that opens from the element's own
+   centre, like a coffee ring spreading outward — paired with only a small
+   lift and no bounce, blur or wipe.
+   -------------------------------------------------------------------------- */
+
+.natsu-reveal {
+  opacity: 0;
+  clip-path: circle(0% at 50% 50%);
+  transform: translateY(10px);
+  transition:
+    opacity 0.5s ease,
+    clip-path 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.natsu-reveal-in {
+  opacity: 1;
+  clip-path: circle(150% at 50% 50%);
+  transform: none;
+}
+
+/*
+ * A continuous, independent third motion: a slow linear spin, matching the
+ * source's own real "ARC Text Wrapper" badge on its home page — a literal
+ * `<textPath>` reading "DISCOVER MORE • DISCOVER MORE • ..." curved around
+ * a circle next to an arrow icon, recovered from the source's own compiled
+ * markup rather than hand-guessed. Distinct from brasa's spin only in the
+ * text it carries, since both templates' sources happen to share the same
+ * real spinning-arc-badge motif.
+ */
+@keyframes natsu-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.natsu-spin {
+  animation: natsu-spin 18s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .natsu-reveal {
+    opacity: 1;
+    clip-path: none;
+    transform: none;
+    transition: none;
+  }
+  .natsu-spin {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * `clip` rather than `hidden`: it stops the overflow without making this a
+ * scroll container, so `position: sticky` inside still works.
+ */
+.natsu-root {
+  overflow-x: clip;
+}

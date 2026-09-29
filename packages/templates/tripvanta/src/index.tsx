@@ -22,6 +22,29 @@ export const manifest: TemplateManifest = {
   source: 'Templates-Pruthviraj/tripvanta-clone',
   supports: SUPPORTS,
   preview: '/previews/tripvanta.png',
+  /**
+   * Derived from the source's own hero primary CTA in `page.tsx` — the
+   * "Explore now"-style link: `rounded-full bg-[var(--fg)] ... text-white`,
+   * the same treatment repeated on every primary CTA site-wide (see also
+   * `CtaArrowBadge.tsx`'s own `onDark`/`bg-[var(--fg)]` split, written for
+   * exactly this button). `accent`/`onAccent` are that literal
+   * `--fg`/white, `#291c05` (`theme.css`) under `#ffffff` — a warm near-black,
+   * not the neutral `--muted` grey. `radius` is the button's own
+   * `rounded-full`. `font`: the button carries no `font-display` class, and
+   * `.tripvanta-root` sets no `font-family` of its own outside that class —
+   * `--font-body` is declared in the `@theme inline` block but never once
+   * applied to anything — so its real, rendered face is the browser/host's
+   * own default sans stack. `transition` mirrors the button's own real
+   * `transition-transform hover:scale-105` (Tailwind's default 150ms
+   * transform easing).
+   */
+  widgetTheme: {
+    accent: '#291c05',
+    onAccent: '#ffffff',
+    radius: '9999px',
+    font: 'ui-sans-serif, system-ui, sans-serif',
+    transition: 'transform 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+  },
 };
 
 /**

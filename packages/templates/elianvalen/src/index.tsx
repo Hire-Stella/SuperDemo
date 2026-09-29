@@ -22,6 +22,29 @@ export const manifest: TemplateManifest = {
   source: 'Templates-Vedant/template-vedant-elianvalen-clone',
   supports: SUPPORTS,
   preview: '/previews/elianvalen.png',
+  /**
+   * This template has no filled "button" chrome anywhere in its editorial
+   * hero or CTA copy — every in-page CTA (`TextLink` in
+   * `components/sections.tsx`) is an underlined text link, not a button.
+   * The only real filled buttons in the source are commerce actions:
+   * `ProductDetail.tsx`'s "Add to cart" (`bg-ink ... text-white`, no
+   * `rounded-*` class) and `CartDrawer.tsx`'s checkout button, both the
+   * same literal treatment. `accent`/`onAccent` are that button's own
+   * `bg-ink`/`text-white`, i.e. `var(--ev-ink)` (`#0e0e0e`) under `#ffffff`.
+   * `radius` is `0px` because neither button carries any `rounded-*`
+   * class — square corners, matching the template's restrained editorial
+   * aesthetic. `font` is the root's own body face, Inter (`.elianvalen-root`
+   * sets `font-family: var(--font-inter)...`; the button inherits it rather
+   * than opting into the eyebrow's Poppins). `transition` mirrors the
+   * button's own real `transition-opacity` hover (`hover:opacity-85`).
+   */
+  widgetTheme: {
+    accent: '#0e0e0e',
+    onAccent: '#ffffff',
+    radius: '0px',
+    font: '"Inter", ui-sans-serif, system-ui, sans-serif',
+    transition: 'opacity 0.15s ease',
+  },
 };
 
 /**

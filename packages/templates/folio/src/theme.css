@@ -1,0 +1,194 @@
+/*
+ * folio, scoped to its own root.
+ *
+ * Nine-plus templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one imported
+ * wins for every other template and the surrounding dashboard inherits
+ * whichever that was. The template root div carries this class, so every
+ * custom property still resolves.
+ */
+
+/*
+ * Typography, self-hosted. One real family backs the source site — "League
+ * Spartan", confirmed as the only face named anywhere in the source's own
+ * compiled CSS (every text node's `--framer-font-family` traces back to it,
+ * body text falls back to the browser's own generic `sans-serif`). Only the
+ * two weights the source's own markup actually uses — 700 (menu rows, hours
+ * table, small eyebrows) and 800 (every giant auto-fit headline) — are
+ * vendored here, from Google Fonts' own static files rather than Framer's
+ * CDN, into this repo's own /t/folio/fonts/ rather than linked from a font
+ * host: a page that silently falls back because a font host was
+ * unreachable is worse than one that never asked. A single-family
+ * typographic system, deliberately different from natsu's Akshar/Fira Sans
+ * pairing and kiln's Clash Grotesk/Switzer/Geist Mono trio — one poster
+ * face doing every job on the page, not a display/body split.
+ */
+@font-face {
+  font-family: 'League Spartan';
+  src: url('/t/folio/fonts/league-spartan-700.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+@font-face {
+  font-family: 'League Spartan';
+  src: url('/t/folio/fonts/league-spartan-800.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   FOLIO — design tokens, measured from the source Framer HTML/CSS.
+
+   The source's `body{--token-...}` block declares four custom properties,
+   but only three are ever actually applied anywhere on the rendered page
+   (confirmed by tracing every `var(--token-...)` reference in its compiled
+   CSS): a warm cream page background (`#efede8`), pure white for the fixed
+   nav bar, the hero's overlaid headline and the hours panel (`#fff`), and
+   one loud cobalt-blue ink (`#2334d9`) carrying every eyebrow, giant
+   headline, menu row, price digit and the page's one filled button — plus
+   that same blue reused as a solid inverted footer band with cream text.
+   The fourth declared token, a dark navy (`#282d5a`), is dead CSS: it is
+   set once in the source's own `body` rule and never referenced by any
+   selector on the page, so it is not carried into this port as a used
+   colour. Genuinely distinct from every sibling cafe template's palette: a
+   cream-and-cobalt two-tone poster, one ink doing every job, with zero warm
+   brown/orange anywhere — not natsu's cream-and-roast-brown-and-caramel or
+   kiln's strict monochrome black-on-white.
+   ========================================================================== */
+
+@theme inline {
+  --color-folio-cream: #efede8;
+  --color-folio-white: #ffffff;
+  --color-folio-ink: #2334d9;
+  --color-folio-accent: #2334d9;
+  --color-folio-muted: color-mix(in srgb, #2334d9 55%, transparent);
+
+  /*
+   * Namespaced, not the generic `--font-display` / `--font-body` every
+   * sibling template (and the host shell itself) also declares — see
+   * forno's own note on why a shared name loses a collision silently.
+   */
+  --font-folio-display: 'League Spartan', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.folio-root {
+  background: var(--color-folio-cream);
+  color: var(--color-folio-ink);
+  font-family: var(--font-folio-display);
+  font-weight: 700;
+}
+
+.folio-root h1,
+.folio-root h2,
+.folio-root h3,
+.folio-root .font-folio-display {
+  font-family: var(--font-folio-display);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+/*
+ * The source's real corner language: the only non-zero, non-inherited
+ * `border-radius` anywhere in its compiled CSS is a literal `100px` on its
+ * one filled button (`.framer-3sr6vi`, the "Get Directions" node) — a true
+ * pill at the control's own height. Every other surface on the page (the
+ * menu's ruled rows, the hours table, the hero photo) carries a hard,
+ * square corner, which is why this template has one radius token and not a
+ * card token: nothing else on the page is a card.
+ */
+.folio-pill {
+  border-radius: 100px;
+}
+
+/*
+ * The source's own literal row rule: every menu and hours row carries
+ * `data-border="true"` in its markup, rendered as a single hairline under
+ * the row — kept here as one reusable border token rather than a card.
+ */
+.folio-rule {
+  border-bottom: 1px solid color-mix(in srgb, var(--color-folio-ink) 18%, transparent);
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS, no motion library.
+
+   A deliberately different animation language from every sibling: aurelia
+   softens into focus with a blur, tavola fades a plain translateY/opacity
+   in, forno bounces with scale + rotate overshoot, brasa wipes up with a
+   clip-path inset, yokai lifts and settles, kiln snaps up fast with no
+   blur, and natsu blooms open with a circular iris. Folio reads as a rubber
+   stamp pressing a poster onto paper instead: each block starts very
+   slightly enlarged and tilted off-axis, then settles flat and true — the
+   source's own real scroll effect is a JS-only Framer "appear" animation
+   built from runtime spring physics with no fixed value anywhere in its
+   static HTML/CSS (confirmed against the compiled bundle's own
+   easing-curve generator), hand-matched here as this plain CSS transition
+   rather than ported literally, since no static curve exists to port.
+   -------------------------------------------------------------------------- */
+
+.folio-reveal {
+  opacity: 0;
+  transform: scale(1.035) rotate(-1.1deg);
+  transition:
+    opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.folio-reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+/*
+ * A continuous, independent third motion: a small "open now" status dot
+ * that softly pulses next to the hours table — an original addition (the
+ * source's own hours table is static), not a port, and distinct from
+ * natsu's/brasa's shared spinning arc-text badge.
+ */
+@keyframes folio-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+
+.folio-pulse {
+  animation: folio-pulse 1.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .folio-reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+  .folio-pulse {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * `clip` rather than `hidden`: it stops the overflow without making this a
+ * scroll container, so `position: sticky` inside still works.
+ */
+.folio-root {
+  overflow-x: clip;
+}

@@ -22,6 +22,30 @@ export const manifest: TemplateManifest = {
   source: 'Templates-Vedant/template-vedant-stackgrid-clone',
   supports: SUPPORTS,
   preview: '/previews/stackgrid.png',
+  /**
+   * Derived from the source's own hero primary CTA — `components/Button.tsx`,
+   * used unmodified (`<Button href={hero.primaryCta.href}>`) in `page.tsx`.
+   * That component's own comment says it plainly: "a solid black pill-less
+   * rectangle for the primary action" — `bg-[var(--sg-black)]
+   * text-[var(--sg-white)]`, no `rounded-*` class anywhere in `base` or its
+   * `primary` variant. `accent`/`onAccent` are that literal
+   * `--sg-black`/`--sg-white` (`#000000`/`#ffffff`, `theme.css`). `radius`
+   * is `0px` for the same reason the button is "pill-less": a true square
+   * corner, not a library-wide pill assumed onto a developer-toned site
+   * that has none. `font` is the root's own body face — the button carries
+   * no `sg-display` class, so it inherits `.stackgrid-root`'s
+   * `var(--font-google-sans-flex), var(--font-inter)` rather than the
+   * Instrument Serif display face. `transition` mirrors the button's own
+   * `transition-colors duration-200` (Tailwind's default 200ms color
+   * easing).
+   */
+  widgetTheme: {
+    accent: '#000000',
+    onAccent: '#ffffff',
+    radius: '0px',
+    font: '"Google Sans Flex", "Inter", sans-serif',
+    transition: 'background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+  },
 };
 
 /**

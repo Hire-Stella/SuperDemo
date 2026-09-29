@@ -22,6 +22,26 @@ export const manifest: TemplateManifest = {
   source: 'Templates-Pruthviraj/momentum-fit-clone',
   supports: SUPPORTS,
   preview: '/previews/momentum.png',
+  /**
+   * Derived from the source's own hero CTA (`components/sections/Hero.tsx`,
+   * the "Book a session"-style link): `rounded-full bg-accent ... text-white`.
+   * `accent`/`onAccent` are that button's own `bg-accent`/`text-white`, i.e.
+   * `--color-accent` from `theme.css` (`#ff5c1a`, this template's one
+   * signature orange) under literal white. `radius` is that same button's
+   * `rounded-full`, a true pill. `font` is the body face, DM Sans
+   * (`--font-body`/`--font-dm-sans` in `theme.css`) — the button's own text
+   * carries no `font-display` class, so it never opts into the Cormorant
+   * serif used for headings. `transition` mirrors the button's own real
+   * `transition-transform hover:scale-105` (Tailwind's default 150ms
+   * transform easing).
+   */
+  widgetTheme: {
+    accent: '#ff5c1a',
+    onAccent: '#ffffff',
+    radius: '9999px',
+    font: '"DM Sans", "DM Sans Placeholder", sans-serif',
+    transition: 'transform 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+  },
 };
 
 /**
