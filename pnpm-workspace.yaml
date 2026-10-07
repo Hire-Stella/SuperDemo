@@ -11,6 +11,9 @@ allowBuilds:
   "@embedded-postgres/darwin-x64": true
   "@embedded-postgres/linux-x64": true
   "@embedded-postgres/linux-arm64": true
+  # Nobody runs the local cluster on Windows. Left unlisted, pnpm 11 treats the
+  # skipped script as an error and a clean install (Vercel's) fails outright.
+  "@embedded-postgres/windows-x64": false
   "@prisma/client": true
   "@prisma/engines": true
   prisma: true
