@@ -549,6 +549,14 @@ export class EnrichmentService implements OnModuleInit {
       facts,
       agentName: DOGRAH_AGENT_NAME,
     });
+    /*
+     * Booking last, and best-effort: an agent that cannot book is still an
+     * agent worth having, so a failure here is logged rather than turning a
+     * ready centre into a failed one.
+     */
+    const booking = await this.dograh.enableBooking(orgId);
+    if (!booking.ok) this.log.warn(`enrich: ${orgId} agents built without booking — ${booking.detail}`);
+
     return demo.ok
       ? demo
       : { ok: false, detail: `the inbound agent was built, but demo calls are ${demo.detail}` };

@@ -37,6 +37,10 @@ import { ENV } from '../../config/config.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { decryptSecret, encryptSecret, fingerprint } from '../../shared/secret-box';
 import { DograhClient } from './dograh.client';
+import { CalendarService } from '../../calendar/calendar.service';
+
+/** Heading the booking how-to is appended under; also what makes it idempotent. */
+const BOOKING_MARKER = '## BOOKING APPOINTMENTS';
 
 /** Nothing stored yet — the shape the editor and the page both start from. */
 const EMPTY: DograhPublic = {
@@ -67,6 +71,7 @@ export class DograhService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(ENV) private readonly env: ApiEnv,
+    private readonly calendar: CalendarService,
   ) {}
 
   private parsePublic(raw: Prisma.JsonValue | null): DograhPublic {
@@ -766,6 +771,142 @@ export class DograhService {
         `outbound=${dialers.outbound.workflowId} info=${dialers.info.workflowId}`,
     );
     return failed.length ? { ok: false, detail: `not set up: ${failed.join('; ')}` } : { ok: true };
+  }
+
+  /**
+   * Let this centre's agents book appointments in its calendar, mid-call.
+   *
+   * Two Dograh HTTP tools — check availability, book — whose URLs carry the
+   * centre's calendar token, attached to every agent that talks to a customer:
+   * the landing page's (and its chat twin), and the inbound and outbound demo
+   * slots. Not the info slot: that call is one-way by design, with nothing
+   * to book.
+   *
+   * Both endpoints answer in sentences the agent can read out, including when
+   * a time is taken — so the prompt below only has to say *when* to use them,
+   * not how to phrase what comes back.
+   *
+   * Needs PUBLIC_BASE_URL: Dograh calls these from its own servers, so the
+   * address has to be one the internet can reach, which localhost is not.
+   */
+  async enableBooking(
+    orgId: string,
+  ): Promise<{ ok: boolean; detail: string; workflows: number[] }> {
+    const base = this.env.PUBLIC_BASE_URL?.trim().replace(/\/+$/, '');
+    if (!base) {
+      return {
+        ok: false,
+        detail:
+          'PUBLIC_BASE_URL is not set, so the voice host has no address to reach the calendar on',
+        workflows: [],
+      };
+    }
+    let client: DograhClient;
+    let pub: DograhPublic;
+    try {
+      ({ client, pub } = await this.clientFor(orgId));
+    } catch (e) {
+      return { ok: false, detail: e instanceof Error ? e.message : 'no Dograh configured', workflows: [] };
+    }
+
+    const row = await this.row(orgId);
+    const dialers = this.parseDialers(row?.dograhDialers ?? null);
+    const workflows = [
+      ...new Set(
+        [pub.workflowId, pub.chatWorkflowId, dialers.inbound.workflowId, dialers.outbound.workflowId]
+          .filter((id): id is number => typeof id === 'number'),
+      ),
+    ];
+    if (workflows.length === 0) {
+      return { ok: false, detail: 'This centre has no voice agent yet to give booking to', workflows };
+    }
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { name: true },
+    });
+    const label = org?.name ?? 'Centre';
+    const token = await this.calendar.ensureToken(orgId);
+    const root = `${base}/api/public/calendar/${token}`;
+
+    try {
+      const [availability, book] = await Promise.all([
+        client.ensureHttpTool({
+          name: `${label} — check availability`.slice(0, 80),
+          description:
+            'Find free appointment times. Call this before offering or confirming any time. ' +
+            'The response includes a `speech` sentence listing free times — read it out.',
+          method: 'GET',
+          url: `${root}/availability`,
+          parameters: [
+            {
+              name: 'date',
+              type: 'string',
+              description:
+                'The day the caller wants, as YYYY-MM-DD. Leave empty for the next day with openings.',
+              required: false,
+            },
+          ],
+        }),
+        client.ensureHttpTool({
+          name: `${label} — book appointment`.slice(0, 80),
+          description:
+            'Book an appointment once the caller has chosen a free time and given their name and ' +
+            'phone number. The response includes a `speech` sentence — read it out; if it says ' +
+            'the time is taken, offer the alternatives it lists.',
+          method: 'POST',
+          url: `${root}/book`,
+          parameters: [
+            { name: 'name', type: 'string', description: "The caller's full name.", required: true },
+            {
+              name: 'phone',
+              type: 'string',
+              description: "The caller's phone number, with country code if they give one.",
+              required: true,
+            },
+            {
+              name: 'start',
+              type: 'string',
+              description:
+                'The chosen time exactly as the availability tool returned it, e.g. 2026-10-14 09:30.',
+              required: true,
+            },
+            {
+              name: 'notes',
+              type: 'string',
+              description: 'What the appointment is for, in a few words.',
+              required: false,
+            },
+          ],
+        }),
+      ]);
+
+      const text = [
+        'You can book appointments in the calendar.',
+        '- When someone wants an appointment, ask which day suits them, then call the check',
+        '  availability tool and offer two or three of the times it returns.',
+        '- Never offer or confirm a time the tool did not return.',
+        '- Once they choose, collect their full name and phone number, read the time back,',
+        '  then call the book appointment tool and read out its confirmation.',
+        '- If booking fails, say so plainly and offer the alternatives it gives.',
+      ].join('\n');
+
+      for (const id of workflows) {
+        await client.attachTools(id, [availability, book], { marker: BOOKING_MARKER, text });
+      }
+      this.log.log(`dograh: booking tools on workflows ${workflows.join(', ')} for org=${orgId}`);
+      return {
+        ok: true,
+        detail: `Booking is on for ${workflows.length} agent${workflows.length === 1 ? '' : 's'}`,
+        workflows,
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        detail: e instanceof Error ? e.message : 'Dograh refused the booking tools',
+        workflows,
+      };
+    }
   }
 
   /**

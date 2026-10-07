@@ -54,6 +54,10 @@ export const TENANT_MODELS = new Set<string>([
   // enters the tenant's context by slug before writing, so the extension is
   // what stops a mistyped siteId depositing one centre's lead in another's.
   'SiteLead',
+  // Also written anonymously — by a landing page or a voice agent's tool call —
+  // and scoped for the same reason: both paths resolve the org first and then
+  // write inside its context.
+  'CalendarBooking',
 ]);
 
 /**

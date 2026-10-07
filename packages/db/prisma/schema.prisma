@@ -335,6 +335,40 @@ model SiteLead {
   @@index([orgId, createdAt])
 }
 
+/// An appointment in a centre's calendar.
+///
+/// Its own table rather than a Conversation or a SiteLead with a time on it:
+/// a booking is made from three places (the dashboard, the landing page, a
+/// voice agent mid-call) and all three need the same "is this slot free"
+/// answer, which is a query over exactly these rows and nothing else.
+///
+/// Written by the mock calendar provider today. When a real calendar (Cal.com)
+/// is connected this stays the local record of what we booked, so the week
+/// view and the agent's "what have I got free" do not depend on somebody
+/// else's API being up — see apps/api/src/calendar/calendar.provider.ts.
+model CalendarBooking {
+  id        String   @id @default(uuid())
+  orgId     String   @default("")
+  /// The contact this booking was made for, upserted by phone the same way a
+  /// landing-page lead is. Not a relation, for the same reason SiteLead's is
+  /// not: a contact deleted from the CRM side must not take its history with it.
+  contactId String?
+  name      String
+  phoneE164 String
+  email     String?
+  startsAt  DateTime
+  endsAt    DateTime
+  /// BOOKED | CANCELLED. A cancelled booking is kept, not deleted — the week
+  /// view shows it struck through and the slot becomes bookable again.
+  status    String   @default("BOOKED")
+  /// dashboard | website | voice — who made it.
+  source    String   @default("dashboard")
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([orgId, startsAt])
+}
+
 enum EvalReviewer {
   /// Scored by a model against the transcript, unattended.
   AUTO
@@ -1063,6 +1097,16 @@ model Setting {
   /// public HTML; these are internal testing targets and never leave the
   /// dashboard. Null means none configured, which is the normal state.
   dograhDialers         Json?
+
+  /// CalendarConfig: provider, slot length, working days and hours — see
+  /// packages/contracts/src/calendar.ts. Null means the defaults (mock
+  /// provider, Mon–Sat 09:00–18:00, 30-minute slots) in the org's timezone.
+  calendarConfig        Json?
+  /// Bearer for the voice agent's calendar tools: the agent's HTTP tool calls
+  /// /public/calendar/:token/… with no session, so this *is* the credential.
+  /// Random and unguessable, minted on first use by CalendarService.ensureToken,
+  /// and unique so the public route can find the centre from it alone.
+  calendarToken         String?  @unique
 
   /// Website-to-centre enrichment: scrape the client's site, then generate the
   /// landing-page copy and the Dograh agent brief from what it says.

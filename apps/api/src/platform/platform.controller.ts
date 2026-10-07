@@ -583,6 +583,7 @@ export class PlatformController {
         await del('calls', () => tx.call.deleteMany({ where: { orgId: id } }));
         await del('conversations', () => tx.conversation.deleteMany({ where: { orgId: id } }));
         await del('siteLeads', () => tx.siteLead.deleteMany({ where: { orgId: id } }));
+        await del('calendarBookings', () => tx.calendarBooking.deleteMany({ where: { orgId: id } }));
         await del('campaignTargets', () => tx.campaignTarget.deleteMany({ where: { orgId: id } }));
         await del('campaigns', () => tx.campaign.deleteMany({ where: { orgId: id } }));
         await del('knowledgeChunks', () => tx.knowledgeChunk.deleteMany({ where: { orgId: id } }));

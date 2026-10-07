@@ -192,6 +192,9 @@ export default async function TenantSitePage({ params, searchParams }: Params) {
           slug={site.slug}
           // An API older than the panel sends no list; offer nothing.
           callTypes={site.dograh.callTypes ?? []}
+          // The calendar runs on the platform's own provider, so every live
+          // page can take a booking.
+          booking
           centreNumber={site.phoneE164}
         />
       )}
