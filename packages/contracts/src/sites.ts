@@ -1114,8 +1114,13 @@ export const SiteLeadInput = z.object({
   country: z.string().length(2).default('AE'),
   email: z.string().email('That email does not look right').max(120).optional().or(z.literal('')),
   message: z.string().max(600).optional().or(z.literal('')),
-  /** Which part of the page produced it — hero form or contact form. */
-  source: z.enum(['hero', 'contact']).default('contact'),
+  /** Which part of the page produced it — hero form, contact form or call panel. */
+  source: z.enum(['hero', 'contact', 'call-panel']).default('contact'),
+  /**
+   * Which agent rings them back: the outbound slot's (a callback) or the info
+   * slot's (a one-way information call). Omitted means a callback.
+   */
+  callType: z.enum(['outbound', 'info']).optional(),
   /**
    * Honeypot. A real visitor never sees this field, so anything in it is a bot
    * and the request is accepted-and-discarded rather than rejected — a 400 tells
