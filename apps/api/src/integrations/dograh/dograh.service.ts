@@ -811,20 +811,26 @@ export class DograhService {
 
     const row = await this.row(orgId);
     const dialers = this.parseDialers(row?.dograhDialers ?? null);
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { name: true, dograhWorkflowIds: true },
+    });
     const workflows = [
       ...new Set(
-        [pub.workflowId, pub.chatWorkflowId, dialers.inbound.workflowId, dialers.outbound.workflowId]
-          .filter((id): id is number => typeof id === 'number'),
+        [
+          pub.workflowId,
+          pub.chatWorkflowId,
+          dialers.inbound.workflowId,
+          dialers.outbound.workflowId,
+          // The centre's own answering workflows, whose calls the sync imports.
+          ...(org?.dograhWorkflowIds ?? []),
+        ].filter((id): id is number => typeof id === 'number'),
       ),
     ];
     if (workflows.length === 0) {
       return { ok: false, detail: 'This centre has no voice agent yet to give booking to', workflows };
     }
 
-    const org = await this.prisma.organization.findUnique({
-      where: { id: orgId },
-      select: { name: true },
-    });
     const label = org?.name ?? 'Centre';
     const token = await this.calendar.ensureToken(orgId);
     const root = `${base}/api/public/calendar/${token}`;

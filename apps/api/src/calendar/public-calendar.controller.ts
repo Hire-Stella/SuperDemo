@@ -18,6 +18,7 @@ import {
   type VoiceBookOutput,
 } from '@superdemo/contracts';
 import { CalendarService } from './calendar.service';
+import { CalcomService } from './calcom/calcom.service';
 import { Public } from '../auth/guards';
 import { ZodBody } from '../shared/zod.pipe';
 
@@ -105,5 +106,25 @@ export class VoiceCalendarController {
       token,
       parsed.success ? parsed.data : { name: '', phone: '', start: '' },
     );
+  }
+}
+
+/**
+ * Cal.com's webhook. The token in the URL is the centre's calendar token and
+ * the whole authentication: the body is not trusted or even read, it only
+ * prompts a reconcile against Cal.com's API, so a forged call can do no more
+ * than make us sync early.
+ */
+@Public()
+@Controller('public/calcom')
+export class CalcomWebhookController {
+  constructor(private readonly calcom: CalcomService) {}
+
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Post(':token')
+  @HttpCode(200)
+  async hook(@Param('token') token: string): Promise<{ ok: true }> {
+    await this.calcom.onWebhook(token);
+    return { ok: true };
   }
 }
