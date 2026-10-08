@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -32,6 +33,7 @@ const SLOTS_TTL_MS = 20_000;
  */
 @Injectable()
 export class CalcomCalendarProvider implements CalendarProvider {
+  private readonly log = new Logger(CalcomCalendarProvider.name);
   private readonly slotCache = new Map<string, { at: number; value: AvailabilityOutput }>();
 
   constructor(
@@ -93,19 +95,43 @@ export class CalcomCalendarProvider implements CalendarProvider {
     let booking;
     try {
       booking = await conn.client.createBooking(args).catch((err: unknown) => {
-        // A phone number is enough for Cal.com unless the event type insists on
-        // an email; then the placeholder stands in rather than losing the booking.
-        if (!args.email && err instanceof CalcomError && err.status === 400 && /email/i.test(err.message)) {
-          return conn.client.createBooking({ ...args, email: placeholderEmail(input.phoneE164) });
+        if (!(err instanceof CalcomError) || err.status !== 400) throw err;
+        /*
+         * Two refusals that are about the guest's details, not the slot, and
+         * must not cost the booking: a number Cal.com's validator rejects (a
+         * misheard digit on a call is enough), and an event type that insists
+         * on an email. Either way book with the placeholder email instead —
+         * the number is still on our copy of the booking.
+         */
+        if (/phone|invalid_number/i.test(err.message) || (!args.email && /email/i.test(err.message))) {
+          this.log.warn(`Cal.com refused the guest details (${err.message}); retrying without the phone`);
+          return conn.client.createBooking({
+            ...args,
+            phoneE164: null,
+            email: args.email ?? placeholderEmail(input.phoneE164),
+            notes: [args.notes, `Phone: ${input.phoneE164}`].filter(Boolean).join('\n'),
+          });
         }
         throw err;
       });
     } catch (err) {
       if (err instanceof CalcomError && err.status >= 400 && err.status < 500) {
-        // Cal.com's own wording ("User either already has booking at this time
-        // or is not available") is not something to read out to a caller.
-        throw new ConflictException(
-          `${zonedParts(input.startsAt, timezone).time.replace(/^0/, '')} is no longer available. Please pick another time.`,
+        this.log.warn(`Cal.com refused a booking for ${input.startsAt.toISOString()}: ${err.message}`);
+        const time = zonedParts(input.startsAt, timezone).time.replace(/^0/, '');
+        // Cal.com's own wording is not something to read out to a caller, but
+        // which kind of refusal it was decides what they are told.
+        // The event type requires a phone and Cal.com rejected this one even
+        // after the retry: the caller has to say it again, so say so.
+        if (/phone|invalid_number/i.test(err.message)) {
+          throw new BadRequestException(
+            'Sorry, that phone number does not seem right. Could you say it again, including the country code?',
+          );
+        }
+        if (/already has booking|not available|can't be booked|no more seats|in the past/i.test(err.message)) {
+          throw new ConflictException(`${time} is no longer available. Please pick another time.`);
+        }
+        throw new BadRequestException(
+          `I couldn't complete the booking for ${time}. Let me take your details and have the team confirm it with you.`,
         );
       }
       unavailable(err);
