@@ -337,15 +337,17 @@ export class CalcomService {
   }
 
   /** Register a webhook if Cal.com can reach us; null means poll only. */
-  private async registerWebhook(orgId: string, client: CalcomClient): Promise<number | null> {
+  private async registerWebhook(orgId: string, client: CalcomClient): Promise<string | null> {
     const base = this.env.PUBLIC_BASE_URL?.replace(/\/+$/, '');
     if (!base || /localhost|127\.0\.0\.1/.test(base)) return null;
-    const token = await this.calendarToken(orgId);
+    const url = `${base}/api/public/calcom/${await this.calendarToken(orgId)}`;
     try {
-      return await client.createWebhook(
-        `${base}/api/public/calcom/${token}`,
-        randomBytes(24).toString('base64url'),
-      );
+      // One webhook per centre: drop any this URL already has, so reconnecting
+      // (or a connect whose id we failed to keep) never doubles the deliveries.
+      for (const id of await client.webhooksFor(url).catch(() => [] as string[])) {
+        await client.deleteWebhook(id).catch(() => undefined);
+      }
+      return await client.createWebhook(url, randomBytes(24).toString('base64url'));
     } catch (err) {
       this.log.warn(`could not register a Cal.com webhook for org ${orgId}: ${(err as Error).message}`);
       return null;

@@ -100,7 +100,8 @@ export const CalcomPublic = z.object({
   /** Fingerprint of the stored key, so the page can say which key is in use. */
   keyHint: z.string(),
   /** Set when a webhook was registered (needs PUBLIC_BASE_URL); else polling only. */
-  webhookId: z.number().int().nullable().default(null),
+  /** Cal.com webhook ids are UUIDs; numbers accepted from older rows. */
+  webhookId: z.union([z.string(), z.number()]).transform(String).nullable().default(null),
   lastSyncedAt: z.string().nullable().default(null),
   lastError: z.string().nullable().default(null),
 });

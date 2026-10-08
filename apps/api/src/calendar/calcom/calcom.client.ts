@@ -161,7 +161,16 @@ export class CalcomClient {
     return out;
   }
 
-  async createWebhook(subscriberUrl: string, secret: string): Promise<number> {
+  /** Webhook ids pointing at exactly this URL — left over from an earlier connect. */
+  async webhooksFor(subscriberUrl: string): Promise<string[]> {
+    const data = await this.request<unknown>('GET', '/webhooks');
+    return asArray(data)
+      .map(asRecord)
+      .filter((w) => w.subscriberUrl === subscriberUrl)
+      .map((w) => String(w.id));
+  }
+
+  async createWebhook(subscriberUrl: string, secret: string): Promise<string> {
     const data = await this.request<Record<string, unknown>>('POST', '/webhooks', {
       body: {
         subscriberUrl,
@@ -170,10 +179,10 @@ export class CalcomClient {
         triggers: ['BOOKING_CREATED', 'BOOKING_RESCHEDULED', 'BOOKING_CANCELLED'],
       },
     });
-    return Number(data.id);
+    return String(data.id);
   }
 
-  async deleteWebhook(id: number): Promise<void> {
+  async deleteWebhook(id: string): Promise<void> {
     await this.request('DELETE', `/webhooks/${id}`);
   }
 
