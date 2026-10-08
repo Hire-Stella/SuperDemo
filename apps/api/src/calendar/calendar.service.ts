@@ -23,6 +23,7 @@ import {
   composeE164,
   countryByCode,
   isPlausibleNumber,
+  spokenClock,
   zonedParts,
   zonedTimeToUtc,
 } from '@superdemo/contracts';
@@ -246,7 +247,7 @@ export class CalendarService {
 
       const slots = found.slots.map((s) => ({
         start: `${found.date} ${s.label}`,
-        label: s.label,
+        label: spokenClock(s.label),
       }));
       const offered = spread(found.slots, SPOKEN_SLOTS).map((s) => spokenTime(new Date(s.startsAt), timezone));
       const dayName = spokenDay(new Date(found.slots[0]!.startsAt), timezone);
@@ -504,9 +505,9 @@ function spokenDay(d: Date, timeZone: string): string {
     .replace(',', '');
 }
 
-/** "9:00", "14:30" — 24-hour, no leading zero, which a TTS voice reads cleanly. */
+/** "9 AM", "2:30 PM" — the 12-hour clock callers use. */
 function spokenTime(d: Date, timeZone: string): string {
-  return zonedParts(d, timeZone).time.replace(/^0/, '');
+  return spokenClock(zonedParts(d, timeZone).time);
 }
 
 /** "a, b and c". */

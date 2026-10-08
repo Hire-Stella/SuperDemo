@@ -10,6 +10,7 @@ import {
   type AvailabilityOutput,
   type BookingRow,
   addDaysIso,
+  spokenClock,
   zonedParts,
   zonedTimeToUtc,
 } from '@superdemo/contracts';
@@ -117,7 +118,7 @@ export class CalcomCalendarProvider implements CalendarProvider {
     } catch (err) {
       if (err instanceof CalcomError && err.status >= 400 && err.status < 500) {
         this.log.warn(`Cal.com refused a booking for ${input.startsAt.toISOString()}: ${err.message}`);
-        const time = zonedParts(input.startsAt, timezone).time.replace(/^0/, '');
+        const time = spokenClock(zonedParts(input.startsAt, timezone).time);
         // Cal.com's own wording is not something to read out to a caller, but
         // which kind of refusal it was decides what they are told.
         // The event type requires a phone and Cal.com rejected this one even

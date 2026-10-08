@@ -320,3 +320,15 @@ export function weekdayOfIso(date: string): number {
 }
 
 export const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A wall-clock "HH:MM" as people say it: "9:30 AM", "2 PM", "12 PM" for noon.
+ * Used for everything the voice agent reads out and the landing page shows,
+ * because "fourteen thirty" is not how a Dubai caller says the time.
+ */
+export function spokenClock(hhmm: string): string {
+  const [h, m] = hhmm.split(':').map(Number) as [number, number];
+  const suffix = h < 12 ? 'AM' : 'PM';
+  const hour = h % 12 === 0 ? 12 : h % 12;
+  return m === 0 ? `${hour} ${suffix}` : `${hour}:${String(m).padStart(2, '0')} ${suffix}`;
+}
