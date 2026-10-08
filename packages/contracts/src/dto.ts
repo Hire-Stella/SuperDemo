@@ -108,6 +108,8 @@ export const SessionUser = z.object({
   orgSimulatorEnabled: z.boolean().nullable(),
   /** Same shape and same reasoning as orgWebsiteEnabled. Null for SUPERADMIN. */
   orgDemoCallsEnabled: z.boolean().nullable(),
+  /** Sidebar hrefs this user may open; empty means every section their role allows. */
+  navAllowlist: z.array(z.string()),
   location: Location,
   timezone: z.string(),
   skills: z.array(Skill),
@@ -262,6 +264,10 @@ export const UpdateOrgInput = z.object({
   websiteEnabled: z.boolean().optional(),
   simulatorEnabled: z.boolean().optional(),
   demoCallsEnabled: z.boolean().optional(),
+  /** Dograh organisation to import calls from. Null stops the import. */
+  dograhOrgId: z.number().int().positive().nullable().optional(),
+  /** Restrict the import to these workflows. Empty means all of them. */
+  dograhWorkflowIds: z.array(z.number().int().positive()).optional(),
 });
 export type UpdateOrgInput = z.infer<typeof UpdateOrgInput>;
 
@@ -306,6 +312,7 @@ export const AgentSummary = SessionUser.omit({
   orgWebsiteEnabled: true,
   orgSimulatorEnabled: true,
   orgDemoCallsEnabled: true,
+  navAllowlist: true,
 }).extend({
   extension: z.string().nullable(),
   status: AgentStatus,
@@ -898,6 +905,58 @@ export const AnalyticsOverview = z.object({
 });
 export type AnalyticsOverview = z.infer<typeof AnalyticsOverview>;
 
+/** One value of a categorical field, with how many calls gave it. */
+const InsightValue = z.object({ value: z.string(), label: z.string(), count: z.number().int() });
+
+/**
+ * What voice-agent workflows gathered on each call (`AiSession.gathered`),
+ * aggregated. Generic over the workflow: fields are discovered from the data,
+ * so a real-estate intake and a shipping enquiry both get sensible breakdowns.
+ * `calls` is 0 when nothing in range carries gathered data.
+ */
+export const CallInsights = z.object({
+  /** Calls in range that carry gathered data — the denominator for every rate. */
+  calls: z.number().int(),
+  avgDurationSeconds: z.number().int(),
+  /** Did the caller leave a name / phone / email? Only kinds some workflow asks for. */
+  capture: z.array(
+    z.object({
+      kind: z.enum(['name', 'phone', 'email']),
+      label: z.string(),
+      count: z.number().int(),
+      pct: z.number(),
+    }),
+  ),
+  /** How calls ended, from the workflow's disposition field. */
+  outcomes: z.object({ field: z.string().nullable(), label: z.string(), values: z.array(InsightValue) }),
+  /** Calls reaching each workflow node, in first-seen order. */
+  journey: z.array(z.object({ node: z.string(), count: z.number().int(), pct: z.number() })),
+  /** Per-field breakdowns, most-answered first. Free-text fields are left out. */
+  fields: z.array(
+    z.discriminatedUnion('kind', [
+      z.object({
+        kind: z.literal('category'),
+        key: z.string(),
+        label: z.string(),
+        /** Calls that gave a usable value. */
+        answered: z.number().int(),
+        values: z.array(InsightValue),
+        /** Answers outside the top values. */
+        other: z.number().int(),
+      }),
+      z.object({
+        kind: z.literal('boolean'),
+        key: z.string(),
+        label: z.string(),
+        answered: z.number().int(),
+        trueCount: z.number().int(),
+        truePct: z.number(),
+      }),
+    ]),
+  ),
+});
+export type CallInsights = z.infer<typeof CallInsights>;
+
 
 /** The evals rollup on the analytics page. */
 export const EvalSummary = z.object({
@@ -1218,3 +1277,47 @@ export const TestCrmConnectionOutput = z.object({
   scopes: z.array(z.string()).optional(),
 });
 export type TestCrmConnectionOutput = z.infer<typeof TestCrmConnectionOutput>;
+
+/* ============================ AI live operations ========================== */
+
+/**
+ * Live ops for a centre whose calls are answered by its voice workflow
+ * (`Organization.dograhOrgId` set). `enabled: false` means "show the standard
+ * board" — the centre has human queues instead.
+ */
+export const AiLiveCall = z.object({
+  runId: z.number(),
+  startedAt: z.coerce.date(),
+  channel: z.enum(['phone', 'web']),
+  caller: z.string().nullable(),
+  workflow: z.string(),
+  /** The workflow step it is on, when the voice platform has reported one. */
+  step: z.string().nullable(),
+});
+export type AiLiveCall = z.infer<typeof AiLiveCall>;
+
+export const AiRecentCall = z.object({
+  conversationId: z.string(),
+  startedAt: z.coerce.date(),
+  durationMs: z.number(),
+  callerName: z.string().nullable(),
+  callerPhone: z.string().nullable(),
+  outcome: z.string().nullable(),
+  intent: z.string().nullable(),
+  summary: z.string().nullable(),
+});
+export type AiRecentCall = z.infer<typeof AiRecentCall>;
+
+export const AiLiveOps = z.object({
+  enabled: z.boolean(),
+  live: z.array(AiLiveCall),
+  today: z.object({
+    calls: z.number(),
+    avgDurationSeconds: z.number(),
+    /** Calls where the caller left a name, phone or email. */
+    leadsCaptured: z.number(),
+    topIntent: z.object({ value: z.string(), count: z.number() }).nullable(),
+  }),
+  recent: z.array(AiRecentCall),
+});
+export type AiLiveOps = z.infer<typeof AiLiveOps>;

@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
   ArrowLeft,
+  CalendarPlus,
   CheckCircle2,
   ExternalLink,
   Pause,
@@ -20,11 +21,14 @@ import {
   DISPOSITION_LABELS,
   EVAL_DIMENSIONS,
   evalBand,
+  type CalendarConfigView,
   type ConversationDetail,
   type Disposition,
+  zonedParts,
 } from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { useSession, useUser } from '@/components/providers';
+import { NewBookingDialog } from '@/components/new-booking-dialog';
 import {
   CHANNEL_LABEL,
   dateTime,
@@ -78,6 +82,18 @@ export default function ConversationDetailPage({
 
   const c = query.data;
 
+  /* ------------------------------- booking ------------------------------- */
+
+  // Booking is an admin's or supervisor's action, the same as on the Calendar
+  // page — the API refuses anyone else.
+  const canBook = user.role === 'ADMIN' || user.role === 'SUPERVISOR';
+  const [booking, setBooking] = useState(false);
+  const calendar = useQuery({
+    queryKey: ['calendar', 'config'],
+    queryFn: () => api.get<CalendarConfigView>('/calendar/config'),
+    enabled: canBook,
+  });
+
   /* ----------------------------- audio player ---------------------------- */
 
   const audio = useRef<HTMLAudioElement | null>(null);
@@ -96,6 +112,32 @@ export default function ConversationDetailPage({
       el.removeEventListener('ended', onEnd);
     };
   }, [c?.recording?.url]);
+
+  /*
+   * The timeline: click or drag anywhere on it to move the playhead. Unlike a
+   * transcript line, this leaves play/pause as it was — scrubbing while paused
+   * should not start the audio.
+   */
+  const track = useRef<HTMLDivElement | null>(null);
+  const [hoverMs, setHoverMs] = useState<number | null>(null);
+  const totalMs = () => {
+    const el = audio.current;
+    if (el && Number.isFinite(el.duration) && el.duration > 0) return el.duration * 1000;
+    return c?.recording?.durationMs ?? 0;
+  };
+  const msAt = (clientX: number) => {
+    const rect = track.current?.getBoundingClientRect();
+    if (!rect || rect.width === 0) return 0;
+    const fraction = Math.min(1, Math.max(0, (clientX - rect.left) / rect.width));
+    return fraction * totalMs();
+  };
+  const scrubTo = (ms: number) => {
+    const el = audio.current;
+    if (!el) return;
+    const clamped = Math.min(totalMs(), Math.max(0, ms));
+    el.currentTime = clamped / 1000;
+    setPositionMs(clamped);
+  };
 
   const seekTo = (ms: number) => {
     const el = audio.current;
@@ -211,6 +253,19 @@ export default function ConversationDetailPage({
           </div>
         </div>
         <div className="text-right text-xs text-muted-foreground">
+          {canBook && calendar.data && (
+            // Disabled for now at the client's request; the dialog behind it is
+            // wired up, so re-enabling is just removing `disabled`.
+            <Button
+              size="sm"
+              className="mb-2"
+              disabled
+              title="Booking from a call is not enabled yet"
+              onClick={() => setBooking(true)}
+            >
+              <CalendarPlus className="size-3.5" aria-hidden /> Book appointment
+            </Button>
+          )}
           <p>{dateTime(c.startedAt)}</p>
           <p className="tnum mt-0.5">Duration {duration(c.durationMs)}</p>
           {c.contact?.bitrixUrl && (
@@ -225,6 +280,22 @@ export default function ConversationDetailPage({
           )}
         </div>
       </div>
+
+      {canBook && calendar.data && (
+        <NewBookingDialog
+          open={booking}
+          onOpenChange={setBooking}
+          tz={calendar.data.timezone}
+          today={zonedParts(new Date(), calendar.data.timezone).date}
+          config={calendar.data.config}
+          prefill={{
+            name: c.contact?.name,
+            phoneE164: c.contact?.phoneE164,
+            email: c.contact?.email,
+            notes: c.aiSession?.summary,
+          }}
+        />
+      )}
 
       <div className="grid gap-4 lg:grid-cols-3">
         {/* transcript + recording */}
@@ -258,7 +329,7 @@ export default function ConversationDetailPage({
           )}
 
           {c.recording && (
-            <Card title="Recording" subtitle="Click any transcript line to jump to that moment">
+            <Card title="Recording" subtitle="Click the timeline or any transcript line to jump to that moment">
               <div className="flex items-center gap-3 p-4">
                 <Button
                   variant="default"
@@ -281,9 +352,39 @@ export default function ConversationDetailPage({
                 <div className="min-w-0 flex-1">
                   {/* Progress against the transcript, with the escalation moment
                       marked — a supervisor usually wants exactly that point. */}
-                  <div className="relative h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    ref={track}
+                    role="slider"
+                    tabIndex={0}
+                    aria-label="Recording position"
+                    aria-valuemin={0}
+                    aria-valuemax={Math.round(c.recording.durationMs / 1000)}
+                    aria-valuenow={Math.round(positionMs / 1000)}
+                    aria-valuetext={`${duration(positionMs)} of ${duration(c.recording.durationMs)}`}
+                    className="group relative cursor-pointer touch-none py-2 outline-none"
+                    onPointerDown={(e) => {
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      scrubTo(msAt(e.clientX));
+                    }}
+                    onPointerMove={(e) => {
+                      setHoverMs(msAt(e.clientX));
+                      if (e.currentTarget.hasPointerCapture(e.pointerId)) scrubTo(msAt(e.clientX));
+                    }}
+                    onPointerLeave={() => setHoverMs(null)}
+                    onKeyDown={(e) => {
+                      const step = e.key === 'ArrowRight' ? 5000 : e.key === 'ArrowLeft' ? -5000 : 0;
+                      if (step) {
+                        e.preventDefault();
+                        scrubTo(positionMs + step);
+                      } else if (e.key === 'Home' || e.key === 'End') {
+                        e.preventDefault();
+                        scrubTo(e.key === 'Home' ? 0 : totalMs());
+                      }
+                    }}
+                  >
+                  <div className="relative h-2 overflow-hidden rounded-full bg-muted transition-[height] group-hover:h-2.5 group-focus-visible:ring-2 group-focus-visible:ring-ring">
                     <div
-                      className="absolute inset-y-0 left-0 bg-primary transition-[width] duration-200"
+                      className="absolute inset-y-0 left-0 bg-primary"
                       style={{
                         width: `${Math.min(100, (positionMs / Math.max(1, c.recording.durationMs)) * 100)}%`,
                       }}
@@ -304,7 +405,23 @@ export default function ConversationDetailPage({
                       />
                     )}
                   </div>
-                  <p className="tnum mt-1 text-xs text-muted-foreground">
+                  {/* Playhead handle, outside the clipped bar so it can overhang. */}
+                  <span
+                    className="pointer-events-none absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-primary shadow"
+                    style={{
+                      left: `${Math.min(100, (positionMs / Math.max(1, c.recording.durationMs)) * 100)}%`,
+                    }}
+                  />
+                  {hoverMs !== null && (
+                    <span
+                      className="tnum pointer-events-none absolute -top-5 -translate-x-1/2 rounded bg-foreground px-1.5 py-0.5 text-[10px] text-background"
+                      style={{ left: `${(hoverMs / Math.max(1, totalMs())) * 100}%` }}
+                    >
+                      {duration(hoverMs)}
+                    </span>
+                  )}
+                  </div>
+                  <p className="tnum text-xs text-muted-foreground">
                     {duration(positionMs)} / {duration(c.recording.durationMs)}
                     {c.call?.escalatedAt && (
                       <span className="ml-2 text-warn">▏handoff</span>
@@ -503,14 +620,6 @@ export default function ConversationDetailPage({
                       {c.aiSession.avgLatencyMs ? `${c.aiSession.avgLatencyMs}ms` : '—'}
                     </dd>
                   </div>
-                </div>
-                <div className="border-t border-border pt-2.5">
-                  <dt className="text-xs font-medium text-muted-foreground">Drivers used</dt>
-                  <dd className="mt-1 flex flex-wrap gap-1">
-                    <Badge>stt: {c.aiSession.driverStt}</Badge>
-                    <Badge>llm: {c.aiSession.driverLlm}</Badge>
-                    <Badge>tts: {c.aiSession.driverTts}</Badge>
-                  </dd>
                 </div>
               </dl>
             </Card>

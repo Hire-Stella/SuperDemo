@@ -78,6 +78,12 @@ export const ApiEnv = z
      */
     DOGRAH_BASE_URL: optionalStr,
     DOGRAH_API_KEY: optionalStr,
+    /**
+     * Dograh superuser key, for importing calls across Dograh organisations
+     * (`/superuser/workflow-runs`) into the centre each one is mapped to.
+     * Unset means no import runs — see DograhSyncService.
+     */
+    DOGRAH_SUPERUSER_KEY: optionalStr,
 
     /**
      * Which model writes the landing-page copy during website enrichment.

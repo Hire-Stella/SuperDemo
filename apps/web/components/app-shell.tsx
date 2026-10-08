@@ -93,6 +93,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (needsOrg) router.replace('/superadmin');
   }, [needsOrg, router]);
 
+  /*
+   * A user restricted to some sections should not reach the rest by typing the
+   * URL or following an in-page link, so landing on one sends them home. Live
+   * ops is never blocked here so the redirect cannot loop.
+   */
+  const allowlist = user?.navAllowlist ?? [];
+  const blockedPath =
+    allowlist.length > 0 &&
+    pathname !== '/' &&
+    NAV.some((n) => n.href !== '/' && pathname.startsWith(n.href) && !allowlist.includes(n.href));
+  useEffect(() => {
+    if (blockedPath) router.replace('/');
+  }, [blockedPath, router]);
+
   /**
    * Leaving a centre is an explicit act, not a side effect of being on the
    * platform page.
@@ -142,6 +156,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   if (loading || !user) return <Spinner label="Loading…" />;
   if (needsOrg) return <Spinner label="Choose a contact centre…" />;
+  if (blockedPath) return <Spinner label="Loading…" />;
 
   const me = roster.data?.find((a) => a.id === user.id);
   const myStatus: AgentStatus = me?.status ?? 'OFFLINE';
@@ -178,6 +193,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (isOperator && n.href !== '/superadmin') return insideCentre;
     return true;
   });
+  /** Shown but greyed out: this user has these sections switched off. */
+  const isDisabled = (href: string) => allowlist.length > 0 && !allowlist.includes(href);
 
   return (
     // h-dvh + overflow-hidden, not min-h-dvh: the shell is exactly the viewport
@@ -228,6 +245,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-2">
           {nav.map(({ href, label, icon: Icon }) => {
             const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+            if (isDisabled(href)) {
+              return (
+                <span
+                  key={href}
+                  aria-disabled="true"
+                  title="Not enabled for your account"
+                  className="flex cursor-not-allowed select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-muted-foreground/40"
+                >
+                  <Icon className="size-4 shrink-0" aria-hidden />
+                  {label}
+                </span>
+              );
+            }
             return (
               <Link
                 key={href}
@@ -316,7 +346,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* mobile nav */}
       <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-border bg-card py-1.5 md:hidden">
-        {nav.slice(0, 5).map(({ href, label, icon: Icon }) => {
+        {nav.filter((n) => !isDisabled(n.href)).slice(0, 5).map(({ href, label, icon: Icon }) => {
           const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
           return (
             <Link

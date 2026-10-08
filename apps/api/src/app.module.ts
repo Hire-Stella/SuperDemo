@@ -21,6 +21,7 @@ import { StorageModule } from './integrations/storage/storage.module';
 import { TelephonyModule } from './integrations/telephony/telephony.module';
 import { CrmModule } from './integrations/crm/crm.module';
 import { DograhModule } from './integrations/dograh/dograh.module';
+import { DograhSyncModule } from './integrations/dograh/dograh-sync.module';
 import { EnrichmentModule } from './integrations/enrichment/enrichment.module';
 import { ElevenLabsModule } from './integrations/elevenlabs/elevenlabs.module';
 import { ElevenLabsController } from './integrations/elevenlabs/elevenlabs.controller';
@@ -62,6 +63,7 @@ import { HealthController } from './health.controller';
     TelephonyModule,
     CrmModule,
     DograhModule,
+    DograhSyncModule,
     EnrichmentModule,
 
     // Domain

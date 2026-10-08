@@ -22,12 +22,14 @@ import {
   interestLabel,
   evalBand,
   type AnalyticsOverview,
+  type CallInsights,
   type EvalSummary,
 } from '@superdemo/contracts';
 import { api, qs } from '@/lib/api';
 import { useUser } from '@/components/providers';
 import { dateRange, ESCALATION_LABEL, money, pct, seconds } from '@/lib/format';
 import { Badge, Button, Card, Metric, Select, Spinner, Table, Td, Th } from '@/components/composites';
+import { CallInsightsSection } from '@/components/call-insights';
 
 /*
  * Chart palette — read from the theme, not hardcoded.
@@ -60,6 +62,12 @@ export default function AnalyticsPage() {
   const evals = useQuery({
     queryKey: ['analytics-evals', days],
     queryFn: () => api.get<EvalSummary>(`/analytics/evals${qs(range)}`),
+  });
+
+  // Only centres whose calls come from a voice workflow have any.
+  const insights = useQuery({
+    queryKey: ['analytics-insights', days],
+    queryFn: () => api.get<CallInsights>(`/analytics/insights${qs(range)}`),
   });
 
   const query = useQuery({
@@ -149,18 +157,13 @@ export default function AnalyticsPage() {
         }
         subtitle="Contained calls consumed no agent time, valued at the average handle time of calls that did reach an agent"
       >
-        <div className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-4">
+        <div className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-3">
           <Metric label="Calls contained" value={d.savings.containedCalls.toLocaleString()} tone="ai" />
           <Metric label="Agent hours saved" value={d.savings.agentHoursSaved.toLocaleString()} />
           <Metric
             label="Estimated saving"
             value={money(d.savings.estimatedCostSavedUsd)}
             tone="live"
-          />
-          <Metric
-            label="Assumed agent cost"
-            value={`${money(d.savings.assumedAgentHourlyUsd)}/hr`}
-            hint="editable in Settings — replace with your real figure before quoting"
           />
         </div>
       </Card>
@@ -325,6 +328,10 @@ export default function AnalyticsPage() {
           </p>
         </div>
       </Card>
+
+      {insights.data && insights.data.calls > 0 && (
+        <CallInsightsSection className="mt-4" data={insights.data} />
+      )}
 
       {/* ── assistant quality ─────────────────────────────────────────────── */}
       {evals.data && evals.data.scored > 0 && (

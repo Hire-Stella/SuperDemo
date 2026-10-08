@@ -455,6 +455,8 @@ export class PlatformController {
           websiteEnabled: body.websiteEnabled,
           simulatorEnabled: body.simulatorEnabled,
           demoCallsEnabled: body.demoCallsEnabled,
+          dograhOrgId: body.dograhOrgId,
+          dograhWorkflowIds: body.dograhWorkflowIds,
           // undefined leaves it alone; null clears a pasted export so the
           // preset takes over again.
           themeTokens:
