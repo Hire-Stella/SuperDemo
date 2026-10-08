@@ -9,6 +9,7 @@ import {
   BarChart3,
   BookOpen,
   Building2,
+  CalendarDays,
   Eye,
   FlaskConical,
   Globe,
@@ -49,6 +50,10 @@ const NAV = [
   { href: '/ai-agent', label: 'AI assistant', icon: Sparkles, roles: ['ADMIN', 'SUPERVISOR'] },
   { href: '/knowledge', label: 'Knowledge', icon: BookOpen, roles: ['ADMIN', 'SUPERVISOR'] },
   { href: '/campaigns', label: 'Outbound', icon: PhoneOutgoing, roles: ['ADMIN', 'SUPERVISOR'] },
+  // Everyone on the floor reads it — an agent taking a call needs to know who
+  // is coming in as much as anyone. Booking and the hours are guarded on the
+  // page and by the API, not by hiding the section.
+  { href: '/calendar', label: 'Calendar', icon: CalendarDays, roles: ['ADMIN', 'SUPERVISOR', 'AGENT', 'SUPERADMIN'] },
   // Agents get this one: a telecaller is an agent, and manual dialling is the
   // only outbound action that is theirs rather than an admin's.
   { href: '/telecaller', label: 'Manual dial', icon: PhoneCall, roles: ['ADMIN', 'SUPERVISOR', 'AGENT'] },

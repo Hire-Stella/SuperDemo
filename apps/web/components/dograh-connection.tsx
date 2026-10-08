@@ -53,7 +53,7 @@ export function DograhConnection({ orgId }: { orgId: string }) {
   /** Only fetched once a credential exists — it is an authenticated round-trip
    *  to the client's own host, so it should not run on an empty form. */
   const workflows = useQuery({
-    queryKey: ['dograh-workflows'],
+    queryKey: ['dograh-workflows', orgId],
     queryFn: () => api.get<DograhWorkflowRow[]>(`${base}/workflows`),
     enabled: Boolean(conn.data?.hasApiKey && conn.data?.baseUrl),
     retry: false,
@@ -68,9 +68,19 @@ export function DograhConnection({ orgId }: { orgId: string }) {
       chatEnabled?: boolean;
     }) => api.put<DograhConnectionView>(`${base}/connection`, body),
     onSuccess: async (fresh) => {
-      queryClient.setQueryData(['dograh'], fresh);
+      /*
+       * Keyed by centre, the same as the query above. This used to write to
+       * ['dograh'] — the tenant Website page's key — so the panel never saw its
+       * own save: the agent picker stayed hidden until a reload, and the
+       * tenant's cache was handed a view of whichever centre was edited here.
+       */
+      queryClient.setQueryData(['dograh', orgId], fresh);
       setApiKey('');
-      await queryClient.invalidateQueries({ queryKey: ['dograh-workflows'] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['dograh-workflows', orgId] }),
+        // The demo-call slots below unlock on the same connection.
+        queryClient.invalidateQueries({ queryKey: ['platform-voice', orgId] }),
+      ]);
       toast.success('Dograh connection saved');
     },
     onError: (e) => toast.error((e as Error).message),
@@ -80,7 +90,7 @@ export function DograhConnection({ orgId }: { orgId: string }) {
     mutationFn: () => api.post<TestDograhConnectionOutput>(`${base}/test`),
     onSuccess: (r) => {
       setTest(r);
-      if (r.ok) void queryClient.invalidateQueries({ queryKey: ['dograh-workflows'] });
+      if (r.ok) void queryClient.invalidateQueries({ queryKey: ['dograh-workflows', orgId] });
     },
     onError: (e) => toast.error((e as Error).message),
   });

@@ -8,7 +8,8 @@ import {
   type DemoDialerKind,
 } from '@superdemo/contracts';
 import { api } from '@/lib/api';
-import { Badge, Card, Select, Spinner } from '@/components/composites';
+import { CalendarCheck } from 'lucide-react';
+import { Badge, Button, Card, Select, Spinner } from '@/components/composites';
 
 /**
  * The three demo-call slots, wired by the platform operator.
@@ -34,6 +35,13 @@ export function PlatformDialers({ orgId }: { orgId: string }) {
     mutationFn: (body: { kind: DemoDialerKind; enabled?: boolean; workflowId?: number | null }) =>
       api.put<DemoCallsView>(`${base}/dialers`, body),
     onSuccess: (r) => queryClient.setQueryData(['platform-voice', orgId], r),
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  const booking = useMutation({
+    mutationFn: () =>
+      api.post<{ ok: boolean; detail: string; workflows: number[] }>(`${base}/booking`),
+    onSuccess: (r) => (r.ok ? toast.success(r.detail) : toast.error(r.detail)),
     onError: (e) => toast.error((e as Error).message),
   });
 
@@ -106,6 +114,27 @@ export function PlatformDialers({ orgId }: { orgId: string }) {
                 </Select>
               </div>
             ))}
+          </div>
+
+          {/*
+            Booking rides on whichever agents are wired above, so it is a
+            separate press after choosing them rather than a side effect of
+            each pick. Safe to press again: tools and prompt are not duplicated.
+          */}
+          <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-3">
+            <Button
+              variant="outline"
+              onClick={() => booking.mutate()}
+              disabled={booking.isPending}
+            >
+              <CalendarCheck className="size-4" aria-hidden />
+              {booking.isPending ? 'Enabling…' : 'Enable calendar booking'}
+            </Button>
+            <p className="max-w-prose text-[11px] leading-relaxed text-muted-foreground">
+              Gives the landing-page, inbound and outbound agents tools to check free times and
+              book into this centre&apos;s Calendar during a call. Press again after changing
+              agents.
+            </p>
           </div>
         </>
       )}

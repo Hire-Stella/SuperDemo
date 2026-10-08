@@ -118,6 +118,17 @@ export class PlatformVoiceController {
     return this.tenants.runAs(id, actor.id, () => this.dograh.connectSite(id));
   }
 
+  /** Give this centre's agents the calendar's check-availability and book tools. */
+  @Post('booking')
+  @HttpCode(200)
+  async enableBooking(
+    @Param('id') id: string,
+    @CurrentUser() actor: SessionUser,
+  ): Promise<{ ok: boolean; detail: string; workflows: number[] }> {
+    await this.assertOrg(id);
+    return this.tenants.runAs(id, actor.id, () => this.dograh.enableBooking(id));
+  }
+
   /** Point one demo-call slot at a workflow, or switch it on and off. */
   @Put('dialers')
   async saveDialer(

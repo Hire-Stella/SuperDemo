@@ -1,12 +1,27 @@
 'use client';
 
-import { Fragment, useState } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { ExternalLink, Eye, Mic, Plus, ShieldCheck, Trash2, UserPlus } from 'lucide-react';
+import {
+  ChevronDown,
+  ExternalLink,
+  Eye,
+  Globe,
+  Info,
+  Mic,
+  Plus,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  UserPlus,
+} from 'lucide-react';
 import {
   DEFAULT_PRESET_FOR_INDUSTRY,
+  DEMO_DIALER_KINDS,
+  DEMO_DIALER_LABELS,
+  type DemoDialerKind,
   INDUSTRY_LABELS,
   INDUSTRY_TEMPLATES,
   Industry as IndustryEnum,
@@ -28,6 +43,13 @@ import { useSession } from '@/components/providers';
 import { TenantLogo } from '@/components/tenant-logo';
 import { DograhConnection } from '@/components/dograh-connection';
 import { PlatformDialers } from '@/components/platform-dialers';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Badge,
   Button,
@@ -102,14 +124,18 @@ export default function SuperadminPage() {
   const [simulatorEnabled, setSimulatorEnabled] = useState(true);
   /*
    * Whether this centre gets the Demo calls page. On by default, same as the
-   * other two. This only decides whether the page and its endpoints exist —
-   * picking which agent answers inbound, outbound and info happens after
-   * creation, in the voice panel below, because that picker lists every
-   * workflow on the voice host and there is no centre yet for this form to
-   * scope that list to.
+   * other two. This only decides whether the page and its endpoints exist.
+   * With a website URL, all three agents are built from it in the background;
+   * without one, they are picked after creation in the voice panel, because
+   * that picker lists every workflow on the voice host and there is no centre
+   * yet for this form to scope that list to.
    */
   const [demoCallsEnabled, setDemoCallsEnabled] = useState(true);
+  /* Which of the three slots: built from the URL, and offered on the page. */
+  const [demoCallKinds, setDemoCallKinds] = useState<DemoDialerKind[]>([...DEMO_DIALER_KINDS]);
   const [admin, setAdmin] = useState(BLANK_ADMIN);
+  /* Handle, theme, logo, design, timezone — all defaulted, so folded away. */
+  const [showMore, setShowMore] = useState(false);
   const [addingAdminTo, setAddingAdminTo] = useState<string | null>(null);
   /*
    * Voice setup, per centre, opened from the row.
@@ -140,20 +166,29 @@ export default function SuperadminPage() {
     setSiteTemplate(null);
     setSimulatorEnabled(true);
     setDemoCallsEnabled(true);
+    setDemoCallKinds([...DEMO_DIALER_KINDS]);
     setAdmin(BLANK_ADMIN);
+    setShowMore(false);
     setCreating(false);
   };
 
   const createOrg = useMutation({
     mutationFn: (body: CreateOrgInput) => api.post<{ id: string }>('/platform/orgs', body),
     onSuccess: (res, body) => {
-      toast.success(`${body.name} created — ${body.admin.email} can sign in now`);
       void queryClient.invalidateQueries({ queryKey: ['platform-orgs'] });
-      // Land straight on the voice panel rather than making them find the row
-      // and click into it themselves — this is the picker for inbound,
-      // outbound and info, and "test in browser" only means something once an
-      // agent is actually wired to a slot.
-      if (body.demoCallsEnabled) setVoiceFor(res.id);
+      if (body.websiteUrl) {
+        // The three agents are being built from the site; the slots fill
+        // themselves, so there is nothing to pick yet.
+        toast.success(
+          `${body.name} created — ${body.admin.email} can sign in now. Building the landing page and voice agents from ${body.websiteUrl}…`,
+        );
+      } else {
+        toast.success(`${body.name} created — ${body.admin.email} can sign in now`);
+        // No site to build agents from, so land straight on the voice panel:
+        // it is where inbound, outbound and info get pointed at agents, and
+        // "test in browser" only means something once one is wired.
+        if (body.demoCallsEnabled) setVoiceFor(res.id);
+      }
       reset();
     },
     onError: (e: Error) => toast.error(e.message),
@@ -245,11 +280,11 @@ export default function SuperadminPage() {
       {creating && (
         <Card
           title="New contact centre"
-          subtitle="Creating a centre also creates its first admin — an org nobody can sign into is of no use."
+          subtitle="Four things and you're done — everything else has a sensible default."
           contentClassName="p-4"
         >
           <form
-            className="grid gap-3 md:grid-cols-2"
+            className="space-y-4"
             onSubmit={(e) => {
               e.preventDefault();
               createOrg.mutate({
@@ -266,350 +301,355 @@ export default function SuperadminPage() {
                 ...(websiteEnabled && siteTemplate ? { siteTemplate } : {}),
                 simulatorEnabled,
                 demoCallsEnabled,
+                demoCallKinds,
                 timezone,
                 admin: { ...admin, email: admin.email.trim().toLowerCase() },
               });
             }}
           >
-            <label className="space-y-1 text-sm">
-              <span className="text-muted-foreground">Centre name</span>
-              <Input
-                required
-                minLength={2}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Northside Dental Clinic"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-muted-foreground">Handle</span>
-              <Input
-                value={slug}
-                onChange={(e) => setSlug(slugify(e.target.value))}
-                placeholder={name ? slugify(name) : 'northside-dental-clinic'}
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-muted-foreground">Type of business</span>
-              <Select
-                value={industry}
-                onChange={(e) => setIndustry(e.target.value as Industry)}
-              >
-                {IndustryEnum.options.map((i) => (
-                  <option key={i} value={i}>
-                    {INDUSTRY_LABELS[i]}
-                  </option>
-                ))}
-              </Select>
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-muted-foreground">Theme</span>
-              <div className="flex items-center gap-2">
-                <span
+            {/*
+              The URL first, because it is the field that does the most: given
+              one, the landing page and all three voice agents are generated
+              from the client's own site. Everything below it is optional
+              except the name and the admin's sign-in.
+            */}
+            <Field
+              label="Their website"
+              optional
+              info={
+                websiteEnabled ? (
+                  <>
+                    The centre is created immediately, then this site is read in the background to
+                    write the landing page in their own words and build a Dograh voice agent for
+                    each demo call ticked below, already wired into the Demo calls page and the
+                    landing page&apos;s call panel. Progress
+                    shows on their Website page. Leave empty and the centre uses the{' '}
+                    {industry === 'GENERIC' ? 'generic' : INDUSTRY_LABELS[industry].toLowerCase()}{' '}
+                    template instead.
+                  </>
+                ) : (
+                  <>
+                    Ignored while the landing page is off — the site is only read to generate the
+                    page and its agents. Turn the landing page back on below to use it.
+                  </>
+                )
+              }
+            >
+              <div className="relative">
+                <Globe
+                  className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground"
                   aria-hidden
-                  className="size-8 shrink-0 rounded-md border border-border"
-                  style={{ background: THEME_PRESETS[effectivePreset].swatch }}
                 />
-                <Select
-                  value={themePreset ?? ''}
-                  onChange={(e) =>
-                    setThemePreset((e.target.value || null) as ThemePreset | null)
-                  }
-                >
-                  <option value="">
-                    Suits the vertical ({THEME_PRESETS[DEFAULT_PRESET_FOR_INDUSTRY[industry] ?? 'default'].label})
-                  </option>
-                  {ThemePresetEnum.options.map((t) => (
-                    <option key={t} value={t}>
-                      {THEME_PRESETS[t].label}
+                <Input
+                  type="url"
+                  className="pl-8"
+                  value={websiteUrl}
+                  disabled={!websiteEnabled}
+                  onChange={(e) => setWebsiteUrl(e.target.value)}
+                  placeholder="https://theirbusiness.com"
+                />
+              </div>
+              {websiteEnabled && websiteUrl.trim() && (
+                <p className="flex items-center gap-1.5 text-[11px] text-primary">
+                  <Sparkles className="size-3" aria-hidden />
+                  Landing page + voice agents will be generated from this site
+                </p>
+              )}
+            </Field>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <Field label="Centre name">
+                <Input
+                  required
+                  minLength={2}
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Northside Dental Clinic"
+                />
+              </Field>
+              <Field
+                label="Type of business"
+                info={
+                  <>
+                    <span className="block font-medium text-foreground">
+                      {INDUSTRY_TEMPLATES[industry].summary}
+                    </span>
+                    Provisions {INDUSTRY_TEMPLATES[industry].queues.map((q) => q.name).join(', ')}{' '}
+                    queues, a “{INDUSTRY_TEMPLATES[industry].aiAgent.name}” AI agent,{' '}
+                    {INDUSTRY_TEMPLATES[industry].knowledge.length} starter knowledge{' '}
+                    {INDUSTRY_TEMPLATES[industry].knowledge.length === 1 ? 'document' : 'documents'}{' '}
+                    and one phone number. The admin is enrolled in every queue so calls route on
+                    day one.
+                  </>
+                }
+              >
+                <Select value={industry} onChange={(e) => setIndustry(e.target.value as Industry)}>
+                  {IndustryEnum.options.map((i) => (
+                    <option key={i} value={i}>
+                      {INDUSTRY_LABELS[i]}
                     </option>
                   ))}
                 </Select>
-              </div>
-              <span className="block text-[11px] text-muted-foreground">
-                {THEME_PRESETS[effectivePreset].note}
-              </span>
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-muted-foreground">Timezone</span>
-              <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
-                <option value="Asia/Dubai">Asia/Dubai</option>
-                <option value="Asia/Kolkata">Asia/Kolkata</option>
-                <option value="Africa/Cairo">Africa/Cairo</option>
-                <option value="Europe/London">Europe/London</option>
-              </Select>
-            </label>
+              </Field>
+            </div>
 
-            {/*
-              Identity, and both optional.
-
-              This is the block that makes a demo take a minute rather than an
-              afternoon: with no logo the platform draws a monogram from the
-              name, so the preview beside the field is what the centre will
-              actually look like everywhere — sidebar, landing page, browser tab.
-            */}
-            <label className="space-y-1 text-sm">
-              <span className="text-muted-foreground">Logo URL — optional</span>
-              <div className="flex items-center gap-2">
-                <TenantLogo name={name || 'New centre'} logoUrl={logoUrl} size={32} />
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                First admin — signs in with these
+              </p>
+              <div className="grid gap-3 md:grid-cols-3">
                 <Input
-                  value={logoUrl}
-                  onChange={(e) => setLogoUrl(e.target.value)}
-                  placeholder="Leave empty for a monogram"
+                  required
+                  minLength={2}
+                  aria-label="Admin name"
+                  value={admin.name}
+                  onChange={(e) => setAdmin({ ...admin, name: e.target.value })}
+                  placeholder="Name"
+                />
+                <Input
+                  required
+                  type="email"
+                  aria-label="Admin email"
+                  value={admin.email}
+                  onChange={(e) => setAdmin({ ...admin, email: e.target.value })}
+                  placeholder="Email"
+                />
+                <Input
+                  required
+                  type="password"
+                  minLength={8}
+                  aria-label="Admin password"
+                  value={admin.password}
+                  onChange={(e) => setAdmin({ ...admin, password: e.target.value })}
+                  placeholder="Password (8+ characters)"
                 />
               </div>
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-muted-foreground">Tagline — optional</span>
-              <Input
-                value={tagline}
-                onChange={(e) => setTagline(e.target.value)}
-                placeholder="Family dentistry in Deira"
-              />
-            </label>
+            </div>
 
-            <div className="space-y-2 rounded-md border border-border p-3 md:col-span-2">
-              <label className="flex cursor-pointer items-start gap-2.5 text-sm">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
+            {/* What the centre comes with. All on by default; ⓘ explains each. */}
+            <div>
+              <p className="mb-1.5 text-xs font-medium text-muted-foreground">Includes</p>
+              <div className="grid items-start gap-2 sm:grid-cols-3">
+                <FeatureToggle
+                  label="Landing page"
                   checked={websiteEnabled}
-                  onChange={(e) => setWebsiteEnabled(e.target.checked)}
-                />
-                <span>
-                  <span className="font-medium">Give this centre a landing page</span>
-                  <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
-                    {websiteEnabled ? (
+                  onChange={setWebsiteEnabled}
+                  info={
+                    websiteEnabled ? (
                       <>
-                        A published page at <code className="font-mono">/{slug || slugify(name) || 'handle'}</code>{' '}
-                        whose call button dials this centre&apos;s number and whose callback form writes
-                        into its contacts. Turn off for a client who already has a website — the
-                        queues, assistant, knowledge and number are created either way, and the
-                        Website section is hidden from their sidebar.
+                        A published page at{' '}
+                        <code className="font-mono">/{slug || slugify(name) || 'handle'}</code> whose
+                        call button dials this centre&apos;s number and whose callback form writes
+                        into its contacts. Turn off for a client who already has a website.
                       </>
                     ) : (
                       <>
                         No page, and nothing served at{' '}
                         <code className="font-mono">/{slug || slugify(name) || 'handle'}</code>. The
-                        Website section stays hidden until someone turns this back on, in their
-                        Settings or here. Everything else about the centre is unchanged.
+                        Website section stays hidden until someone turns this back on.
                       </>
-                    )}
-                  </span>
-                </span>
-              </label>
-
-              {websiteEnabled && (
-                <label className="block space-y-1 text-sm">
-                  <span className="text-muted-foreground">Their website — optional</span>
-                  <Input
-                    type="url"
-                    value={websiteUrl}
-                    onChange={(e) => setWebsiteUrl(e.target.value)}
-                    placeholder="https://theirbusiness.com"
-                  />
-                  <span className="block text-[11px] leading-relaxed text-muted-foreground">
-                    {websiteUrl.trim() ? (
+                    )
+                  }
+                />
+                <FeatureToggle
+                  label="Demo calls"
+                  checked={demoCallsEnabled}
+                  onChange={setDemoCallsEnabled}
+                  info={
+                    demoCallsEnabled ? (
                       <>
-                        The centre is created immediately from the{' '}
-                        {INDUSTRY_LABELS[industry].toLowerCase()} template, then this site is read in
-                        the background to rewrite the landing page in their own words and build a
-                        voice agent briefed on what they actually do. Progress shows on their Website
-                        page.
+                        Each kind you tick gets a dialer on the centre&apos;s Demo calls page and an
+                        option in the landing page&apos;s call panel. <strong>Inbound</strong>: the
+                        visitor talks to the agent. <strong>Outbound</strong>: the agent rings them
+                        back. <strong>Info</strong>: a short one-way call. With a website above, the
+                        agents are built for you; without one, pick them in the Voice panel that
+                        opens after creating.
+                      </>
+                    ) : (
+                      <>No Demo calls section, and its endpoints refuse. Can be switched on later.</>
+                    )
+                  }
+                >
+                  <div className="flex flex-wrap gap-x-3 gap-y-1">
+                    {DEMO_DIALER_KINDS.map((k) => (
+                      <label key={k} className="flex cursor-pointer items-center gap-1.5 text-xs">
+                        <input
+                          type="checkbox"
+                          className="size-3.5 accent-[var(--primary)]"
+                          checked={demoCallKinds.includes(k)}
+                          onChange={(e) =>
+                            setDemoCallKinds((cur) =>
+                              e.target.checked
+                                ? DEMO_DIALER_KINDS.filter((x) => x === k || cur.includes(x))
+                                : cur.filter((x) => x !== k),
+                            )
+                          }
+                        />
+                        {DEMO_DIALER_LABELS[k].label}
+                      </label>
+                    ))}
+                  </div>
+                  {demoCallKinds.length === 0 && (
+                    <p className="mt-1 text-[11px] text-destructive">Tick at least one.</p>
+                  )}
+                </FeatureToggle>
+                <FeatureToggle
+                  label="Call simulator"
+                  checked={simulatorEnabled}
+                  onChange={setSimulatorEnabled}
+                  info={
+                    simulatorEnabled ? (
+                      <>
+                        A scripted caller driven through the real routing, AI handoff and queueing —
+                        no carrier involved. Turn off for a client already taking real calls.
                       </>
                     ) : (
                       <>
-                        Leave empty and the centre is built from the vertical template — real copy,
-                        but generic. Give a URL and the page and the voice agent are generated from
-                        it.
+                        No Simulator section and no &ldquo;Simulate a call&rdquo; shortcuts. Real
+                        calls are untouched.
                       </>
-                    )}
-                  </span>
-                </label>
-              )}
-
-              {websiteEnabled && (
-                <label className="space-y-1 text-sm md:col-span-2">
-                  <span className="text-muted-foreground">Landing design</span>
-                  <Select
-                    className="mt-1.5"
-                    value={siteTemplate ?? ''}
-                    onChange={(e) =>
-                      setSiteTemplate((e.target.value || null) as SiteTemplate | null)
-                    }
-                  >
-                    <option value="">
-                      Suits the vertical ({SITE_TEMPLATES[defaultTemplateForIndustry(industry)].label})
-                    </option>
-                    {SiteTemplateEnum.options
-                      .filter((t) => {
-                        const tagged = SITE_TEMPLATES[t].industries;
-                        return !tagged || tagged.includes(industry);
-                      })
-                      .map((t) => (
-                        <option key={t} value={t}>
-                          {SITE_TEMPLATES[t].label} — {SITE_TEMPLATES[t].bestFor}
-                        </option>
-                      ))}
-                  </Select>
-                  <span className="block text-[11px] leading-relaxed text-muted-foreground">
-                    {siteTemplate
-                      ? SITE_TEMPLATES[siteTemplate].note
-                      : 'Each design is a finished page that fills itself from this centre\u2019s own copy. The choice is reversible \u2014 switching later keeps every word, because content is stored separately from layout.'}
-                  </span>
-                </label>
-              )}
-            </div>
-
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border p-3 text-sm md:col-span-2">
-              <input
-                type="checkbox"
-                className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
-                checked={simulatorEnabled}
-                onChange={(e) => setSimulatorEnabled(e.target.checked)}
-              />
-              <span>
-                <span className="font-medium">Give this centre the call simulator</span>
-                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
-                  {simulatorEnabled ? (
-                    <>
-                      A scripted caller driven through the real routing, AI handoff and queueing —
-                      no carrier involved. The fastest way to prove a centre works on its first day.
-                      Turn off for a client already taking real calls, where a button that invents
-                      one is a support ticket waiting to happen.
-                    </>
-                  ) : (
-                    <>
-                      No Simulator section and no &ldquo;Simulate a call&rdquo; shortcuts on Live
-                      ops. Real calls, the softphone and every other surface are untouched, and this
-                      can be switched back on at any time.
-                    </>
-                  )}
-                </span>
-              </span>
-            </label>
-
-            <label className="flex cursor-pointer items-start gap-2.5 rounded-md border border-border p-3 text-sm md:col-span-2">
-              <input
-                type="checkbox"
-                className="mt-0.5 size-4 shrink-0 accent-[var(--primary)]"
-                checked={demoCallsEnabled}
-                onChange={(e) => setDemoCallsEnabled(e.target.checked)}
-              />
-              <span>
-                <span className="font-medium">Give this centre demo calls</span>
-                <span className="mt-0.5 block text-[11px] leading-relaxed text-muted-foreground">
-                  {demoCallsEnabled ? (
-                    <>
-                      Three dialer slots — inbound, outbound, info — each pointed at a Dograh agent
-                      of your choosing right after this centre is created, then dialable or talkable
-                      in the browser from its own Demo calls page. Turn off for a client with no
-                      Dograh agent to show.
-                    </>
-                  ) : (
-                    <>
-                      No Demo calls section, and its endpoints refuse. Everything else about the
-                      centre is unchanged, and this can be switched back on at any time.
-                    </>
-                  )}
-                </span>
-              </span>
-            </label>
-
-            {/* Says what the button will actually do, so the operator is not
-                guessing what a "clinic" gets. */}
-            <div className="md:col-span-2 rounded-lg border border-border bg-muted/40 px-3 py-2.5 text-xs">
-              <p className="font-medium">{INDUSTRY_TEMPLATES[industry].summary}</p>
-              <p className="mt-1.5 text-muted-foreground">
-                Provisions{' '}
-                <strong className="font-medium text-foreground">
-                  {INDUSTRY_TEMPLATES[industry].queues.map((q) => q.name).join(', ')}
-                </strong>{' '}
-                queues, a “{INDUSTRY_TEMPLATES[industry].aiAgent.name}” AI agent,{' '}
-                {INDUSTRY_TEMPLATES[industry].knowledge.length} placeholder knowledge{' '}
-                {INDUSTRY_TEMPLATES[industry].knowledge.length === 1 ? 'document' : 'documents'} and
-                one phone number. The admin is enrolled in every queue so calls route on day one.
-              </p>
-              <p className="mt-1.5 text-muted-foreground">
-                {websiteEnabled ? (
-                  <>
-                    Also a published landing page at{' '}
-                    <strong className="font-medium text-foreground">
-                      /{slug || slugify(name) || 'handle'}
-                    </strong>
-                    , whose call button dials that number and whose callback form creates a contact
-                    in this centre.
-                  </>
-                ) : (
-                  <>
-                    No landing page:{' '}
-                    <strong className="font-medium text-foreground">
-                      /{slug || slugify(name) || 'handle'}
-                    </strong>{' '}
-                    will not resolve, and the Website section is hidden for this centre until
-                    somebody turns it on.
-                  </>
-                )}
-              </p>
-            </div>
-
-            <div className="md:col-span-2 mt-1 border-t border-border pt-3">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                First admin
-              </p>
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="space-y-1 text-sm">
-                  <span className="text-muted-foreground">Name</span>
-                  <Input
-                    required
-                    minLength={2}
-                    value={admin.name}
-                    onChange={(e) => setAdmin({ ...admin, name: e.target.value })}
-                    placeholder="Layla Haddad"
-                  />
-                </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-muted-foreground">Email</span>
-                  <Input
-                    required
-                    type="email"
-                    value={admin.email}
-                    onChange={(e) => setAdmin({ ...admin, email: e.target.value })}
-                    placeholder="admin@northside.com"
-                  />
-                </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-muted-foreground">Password</span>
-                  <Input
-                    required
-                    type="password"
-                    minLength={8}
-                    value={admin.password}
-                    onChange={(e) => setAdmin({ ...admin, password: e.target.value })}
-                    placeholder="At least 8 characters"
-                  />
-                </label>
-                <label className="space-y-1 text-sm">
-                  <span className="text-muted-foreground">Based in</span>
-                  <Select
-                    value={admin.location}
-                    onChange={(e) =>
-                      setAdmin({ ...admin, location: e.target.value as Location })
-                    }
-                  >
-                    <option value="DUBAI">Dubai</option>
-                    <option value="INDIA">India</option>
-                    <option value="EGYPT">Egypt</option>
-                  </Select>
-                </label>
+                    )
+                  }
+                />
               </div>
             </div>
 
-            <div className="md:col-span-2 flex justify-end gap-2">
+            {/* Everything with a good default lives behind one click. */}
+            <div className="rounded-md border border-border">
+              <button
+                type="button"
+                className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium"
+                aria-expanded={showMore}
+                onClick={() => setShowMore((v) => !v)}
+              >
+                <span>
+                  More options
+                  <span className="ml-2 text-xs font-normal text-muted-foreground">
+                    handle, theme, logo, design, timezone
+                  </span>
+                </span>
+                <ChevronDown
+                  className={`size-4 text-muted-foreground transition-transform ${showMore ? 'rotate-180' : ''}`}
+                  aria-hidden
+                />
+              </button>
+              {showMore && (
+                <div className="grid gap-3 border-t border-border p-3 md:grid-cols-2">
+                  <Field label="Handle" info="The centre's address — its landing page lives at /handle.">
+                    <Input
+                      value={slug}
+                      onChange={(e) => setSlug(slugify(e.target.value))}
+                      placeholder={name ? slugify(name) : 'northside-dental-clinic'}
+                    />
+                  </Field>
+                  <Field label="Theme" info={THEME_PRESETS[effectivePreset].note}>
+                    <div className="flex items-center gap-2">
+                      <span
+                        aria-hidden
+                        className="size-8 shrink-0 rounded-md border border-border"
+                        style={{ background: THEME_PRESETS[effectivePreset].swatch }}
+                      />
+                      <Select
+                        value={themePreset ?? ''}
+                        onChange={(e) =>
+                          setThemePreset((e.target.value || null) as ThemePreset | null)
+                        }
+                      >
+                        <option value="">
+                          Suits the vertical (
+                          {THEME_PRESETS[DEFAULT_PRESET_FOR_INDUSTRY[industry] ?? 'default'].label})
+                        </option>
+                        {ThemePresetEnum.options.map((t) => (
+                          <option key={t} value={t}>
+                            {THEME_PRESETS[t].label}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  </Field>
+                  <Field
+                    label="Logo URL"
+                    optional
+                    info="Leave empty and a monogram is drawn from the name — the preview is what the sidebar, landing page and browser tab will show."
+                  >
+                    <div className="flex items-center gap-2">
+                      <TenantLogo name={name || 'New centre'} logoUrl={logoUrl} size={32} />
+                      <Input
+                        value={logoUrl}
+                        onChange={(e) => setLogoUrl(e.target.value)}
+                        placeholder="Leave empty for a monogram"
+                      />
+                    </div>
+                  </Field>
+                  <Field label="Tagline" optional>
+                    <Input
+                      value={tagline}
+                      onChange={(e) => setTagline(e.target.value)}
+                      placeholder="Family dentistry in Deira"
+                    />
+                  </Field>
+                  {websiteEnabled && (
+                    <Field
+                      label="Landing design"
+                      info={
+                        siteTemplate
+                          ? SITE_TEMPLATES[siteTemplate].note
+                          : 'Each design is a finished page that fills itself from this centre’s own copy. Switching later keeps every word, because content is stored separately from layout.'
+                      }
+                    >
+                      <Select
+                        value={siteTemplate ?? ''}
+                        onChange={(e) =>
+                          setSiteTemplate((e.target.value || null) as SiteTemplate | null)
+                        }
+                      >
+                        <option value="">
+                          Suits the vertical ({SITE_TEMPLATES[defaultTemplateForIndustry(industry)].label})
+                        </option>
+                        {SiteTemplateEnum.options
+                          // Untagged designs suit anyone; tagged ones only their verticals.
+                          .filter((t) => {
+                            const tagged = SITE_TEMPLATES[t].industries;
+                            return !tagged || tagged.includes(industry);
+                          })
+                          .map((t) => (
+                            <option key={t} value={t}>
+                              {SITE_TEMPLATES[t].label} — {SITE_TEMPLATES[t].bestFor}
+                            </option>
+                          ))}
+                      </Select>
+                    </Field>
+                  )}
+                  <Field label="Timezone">
+                    <Select value={timezone} onChange={(e) => setTimezone(e.target.value)}>
+                      <option value="Asia/Dubai">Asia/Dubai</option>
+                      <option value="Asia/Kolkata">Asia/Kolkata</option>
+                      <option value="Africa/Cairo">Africa/Cairo</option>
+                      <option value="Europe/London">Europe/London</option>
+                    </Select>
+                  </Field>
+                  <Field label="Admin based in">
+                    <Select
+                      value={admin.location}
+                      onChange={(e) => setAdmin({ ...admin, location: e.target.value as Location })}
+                    >
+                      <option value="DUBAI">Dubai</option>
+                      <option value="INDIA">India</option>
+                      <option value="EGYPT">Egypt</option>
+                    </Select>
+                  </Field>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2">
               <Button type="button" variant="ghost" onClick={reset}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={createOrg.isPending}>
+              <Button
+                type="submit"
+                disabled={createOrg.isPending || (demoCallsEnabled && demoCallKinds.length === 0)}
+              >
                 {createOrg.isPending ? 'Creating…' : 'Create centre'}
               </Button>
             </div>
@@ -894,21 +934,31 @@ export default function SuperadminPage() {
       </Card>
 
       {/*
-        Below the table, not inside it.
-        The rows live in a horizontally scrolling table, and a full-width panel
-        in a colSpan cell inherits that scroll — half of it ends up off-screen
-        with no way to reach it.
+        A dialog, not a row or a card.
+        Inside the table a full-width panel inherits the table's horizontal
+        scroll and half of it ends up off-screen; below the table, it opened
+        out of sight and the Voice button looked like it did nothing.
       */}
-      {voiceFor && (
-        <Card
-          title={`Voice — ${rows.find((o) => o.id === voiceFor)?.name ?? ''}`}
-          subtitle="The agent list spans the whole voice host, which is why this lives here and not in the centre's own settings"
-          contentClassName="p-4"
-        >
-          <DograhConnection orgId={voiceFor} />
-          <PlatformDialers orgId={voiceFor} />
-        </Card>
-      )}
+      <Dialog open={voiceFor !== null} onOpenChange={(open) => !open && setVoiceFor(null)}>
+        <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mic className="size-4" aria-hidden />
+              Voice — {rows.find((o) => o.id === voiceFor)?.name ?? ''}
+            </DialogTitle>
+            <DialogDescription>
+              Connect the voice host, then choose which agent answers the landing page and each
+              demo-call slot. Centres created from a website get all three agents built for them.
+            </DialogDescription>
+          </DialogHeader>
+          {voiceFor && (
+            <>
+              <DograhConnection orgId={voiceFor} />
+              <PlatformDialers orgId={voiceFor} />
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <p className="text-xs text-muted-foreground">
         A platform operator can read a centre but never write to it — the API refuses any change
@@ -917,5 +967,105 @@ export default function SuperadminPage() {
         client’s configuration, sign in as one of their admins.
       </p>
     </div>
+  );
+}
+
+/**
+ * A labelled field whose explanation is one click away.
+ *
+ * The form used to print every explanation under every field, which is why it
+ * read as a wall of text. The ⓘ keeps the same words available without making
+ * someone who already knows them scroll past them.
+ */
+function Field({
+  label,
+  optional,
+  info,
+  children,
+}: {
+  label: string;
+  optional?: boolean;
+  info?: ReactNode;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="space-y-1 text-sm">
+      <div className="flex items-center gap-1">
+        <span className="text-muted-foreground">
+          {label}
+          {optional && <span className="text-[11px]"> · optional</span>}
+        </span>
+        {info && <InfoButton label={label} open={open} onClick={() => setOpen((v) => !v)} />}
+      </div>
+      {children}
+      {info && open && <InfoText>{info}</InfoText>}
+    </div>
+  );
+}
+
+/** One of the "Includes" switches, with its explanation behind an ⓘ. */
+function FeatureToggle({
+  label,
+  checked,
+  onChange,
+  info,
+  children,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  info: ReactNode;
+  /** Sub-options, shown only while the feature is on. */
+  children?: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div
+      className={`rounded-md border p-2.5 transition-colors ${
+        checked ? 'border-primary/40 bg-primary/5' : 'border-border'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            className="size-4 shrink-0 accent-[var(--primary)]"
+            checked={checked}
+            onChange={(e) => onChange(e.target.checked)}
+          />
+          {label}
+        </label>
+        <InfoButton label={label} open={open} onClick={() => setOpen((v) => !v)} />
+      </div>
+      {checked && children && <div className="mt-2 pl-6">{children}</div>}
+      {open && <InfoText className="mt-2">{info}</InfoText>}
+    </div>
+  );
+}
+
+function InfoButton({ label, open, onClick }: { label: string; open: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={`About ${label}`}
+      aria-expanded={open}
+      onClick={onClick}
+      className={`rounded-full p-0.5 transition-colors hover:text-foreground ${
+        open ? 'text-primary' : 'text-muted-foreground'
+      }`}
+    >
+      <Info className="size-3.5" aria-hidden />
+    </button>
+  );
+}
+
+function InfoText({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return (
+    <p
+      className={`rounded-md bg-muted/60 px-2.5 py-2 text-[11px] leading-relaxed text-muted-foreground ${className}`}
+    >
+      {children}
+    </p>
   );
 }

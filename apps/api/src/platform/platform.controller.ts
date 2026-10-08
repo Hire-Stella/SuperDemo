@@ -12,7 +12,9 @@ import {
   Put,
 } from '@nestjs/common';
 import {
+  BLANK_DIALERS,
   CreateOrgInput,
+  DEMO_DIALER_KINDS,
   DeleteOrgInput,
   DEFAULT_PRESET_FOR_INDUSTRY,
   INDUSTRY_TEMPLATES,
@@ -163,6 +165,8 @@ export class PlatformController {
       if (emailTaken) throw new ConflictException(`${body.admin.email} already has an account`);
 
       const passwordHash = await this.auth.hashPassword(body.admin.password);
+      // Demo calls off means no slot is switched on and no extra agent is built.
+      const demoCallKinds = body.demoCallsEnabled ? body.demoCallKinds : [];
 
       const org = await this.prisma.$transaction(async (tx) => {
         const created = await tx.organization.create({
@@ -297,6 +301,14 @@ export class PlatformController {
             orgId: created.id,
             instituteName: body.name,
             instituteTimezone: body.timezone,
+            // The chosen slots start switched on with no agent yet: enrichment
+            // fills them from the website, or an operator picks in Voice.
+            dograhDialers: Object.fromEntries(
+              DEMO_DIALER_KINDS.map((kind) => [
+                kind,
+                { ...BLANK_DIALERS[kind], enabled: demoCallKinds.includes(kind) },
+              ]),
+            ) as Prisma.InputJsonValue,
           },
         });
 
@@ -343,7 +355,7 @@ export class PlatformController {
            * false meant a brand-new tenant kept "Call us and speak to someone
            * who can help" while the generated page it asked for was discarded.
            */
-          await this.enrichment.enqueue(tx, created.id, body.websiteUrl, true);
+          await this.enrichment.enqueue(tx, created.id, body.websiteUrl, true, demoCallKinds);
         }
 
         await tx.auditLog.create({
@@ -571,6 +583,7 @@ export class PlatformController {
         await del('calls', () => tx.call.deleteMany({ where: { orgId: id } }));
         await del('conversations', () => tx.conversation.deleteMany({ where: { orgId: id } }));
         await del('siteLeads', () => tx.siteLead.deleteMany({ where: { orgId: id } }));
+        await del('calendarBookings', () => tx.calendarBooking.deleteMany({ where: { orgId: id } }));
         await del('campaignTargets', () => tx.campaignTarget.deleteMany({ where: { orgId: id } }));
         await del('campaigns', () => tx.campaign.deleteMany({ where: { orgId: id } }));
         await del('knowledgeChunks', () => tx.knowledgeChunk.deleteMany({ where: { orgId: id } }));

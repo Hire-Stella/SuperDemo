@@ -23,6 +23,8 @@ import {
 } from '../src/data/index';
 import { chunk, embed, keywordsOf } from '../src/embedding';
 import { withOrg } from '../src/tenant';
+import { CalendarConfig } from '@superdemo/contracts';
+import { seedBookingsFor } from './calendar-seed';
 
 /** Unscoped: resets, the Organization row itself, and the superadmin. */
 const rawPrisma = new PrismaClient();
@@ -198,6 +200,7 @@ async function main() {
     rawPrisma.agentState.deleteMany(),
     rawPrisma.refreshToken.deleteMany(),
     rawPrisma.auditLog.deleteMany(),
+    rawPrisma.calendarBooking.deleteMany(),
     rawPrisma.contact.deleteMany(),
     rawPrisma.user.deleteMany(),
     rawPrisma.callMetricsDaily.deleteMany(),
@@ -251,6 +254,9 @@ async function main() {
       instituteName: INSTITUTE.name,
       instituteTimezone: INSTITUTE.timezone,
       agentHourlyCostUsd: '12.00',
+      // Written out rather than left null so the Hours card opens on what the
+      // centre actually uses, not on a fallback it never chose.
+      calendarConfig: CalendarConfig.parse({}),
     },
   });
 
@@ -986,6 +992,13 @@ async function main() {
       },
     });
   }
+
+  /* ------------------------------- calendar ------------------------------- */
+  // A this-week-and-next of appointments, so the Calendar page has something
+  // on it from the first login — see calendar-seed.ts.
+  console.log('▸ calendar bookings');
+  const bookings = await seedBookingsFor(prisma, org, CalendarConfig.parse({}));
+  console.log(`  ${bookings} bookings`);
 
   console.log(
     `\n✓ seeded\n` +

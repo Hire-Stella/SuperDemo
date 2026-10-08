@@ -236,6 +236,15 @@ export const DograhWidgetDto = z.object({
   chatContainerId: z.string(),
   /** Whether the callback form should ask Dograh to dial, rather than only capture. */
   callbackViaDograh: z.boolean(),
+  /**
+   * Which demo calls the page's call panel offers a visitor.
+   *
+   * `inbound` is talking to the agent in the browser; `outbound` and `info`
+   * are Dograh ringing the number the visitor leaves, answered by that slot's
+   * agent. Each is listed only when it would actually work, so the panel never
+   * shows a button that fails.
+   */
+  callTypes: z.array(z.enum(['inbound', 'outbound', 'info'])).default([]),
 });
 export type DograhWidgetDto = z.infer<typeof DograhWidgetDto>;
 
@@ -247,6 +256,7 @@ export const DOGRAH_WIDGET_DISABLED: DograhWidgetDto = {
   chatScriptSrc: null,
   chatContainerId: DOGRAH_CHAT_CONTAINER_ID,
   callbackViaDograh: false,
+  callTypes: [],
 };
 
 /**

@@ -1,5 +1,7 @@
 import { BadRequestException, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
+  DEMO_DIALER_KINDS,
+  DemoDialerKind,
   DOGRAH_AGENT_NAME,
   DograhPublic,
   SiteContent,
@@ -120,8 +122,10 @@ export class EnrichmentService implements OnModuleInit {
       const orgId = String(payload.orgId ?? '');
       const websiteUrl = String(payload.websiteUrl ?? '');
       const overwrite = payload.overwriteContent === true;
+      // Events queued before slots were choosable carry no list: all three.
+      const kinds = DemoDialerKind.array().safeParse(payload.demoCallKinds);
       if (!orgId || !websiteUrl) return;
-      await this.run(orgId, websiteUrl, overwrite);
+      await this.run(orgId, websiteUrl, overwrite, kinds.success ? kinds.data : [...DEMO_DIALER_KINDS]);
     });
   }
 
@@ -131,6 +135,7 @@ export class EnrichmentService implements OnModuleInit {
     orgId: string,
     websiteUrl: string,
     overwriteContent = false,
+    demoCallKinds: DemoDialerKind[] = [...DEMO_DIALER_KINDS],
   ): Promise<void> {
     await tx.outboxEvent.create({
       data: {
@@ -138,7 +143,7 @@ export class EnrichmentService implements OnModuleInit {
         aggregate: 'organization',
         aggregateId: orgId,
         type: ENRICH_EVENT,
-        payload: { orgId, websiteUrl, overwriteContent },
+        payload: { orgId, websiteUrl, overwriteContent, demoCallKinds },
       },
     });
     await tx.setting.update({
@@ -171,7 +176,12 @@ export class EnrichmentService implements OnModuleInit {
    * readable text) will simply fail the same way eight times; that is accepted
    * rather than special-cased, since the status carries the reason either way.
    */
-  private async run(orgId: string, websiteUrl: string, overwrite: boolean): Promise<void> {
+  private async run(
+    orgId: string,
+    websiteUrl: string,
+    overwrite: boolean,
+    kinds: DemoDialerKind[],
+  ): Promise<void> {
     await this.setStatus(orgId, 'running', { error: null });
     try {
       const org = await this.prisma.organization.findUnique({
@@ -194,7 +204,7 @@ export class EnrichmentService implements OnModuleInit {
       });
 
       // The agent last: see the class comment. A failure here leaves the page.
-      const agent = await this.provisionAgent(orgId, generated, site, org.name).catch((e: unknown) => {
+      const agent = await this.provisionAgent(orgId, generated, site, org.name, kinds).catch((e: unknown) => {
         const why = e instanceof Error ? e.message : 'unknown error';
         this.log.warn(`enrich: page written for ${org.slug} but the agent failed — ${why}`);
         return { ok: false as const, detail: why };
@@ -202,12 +212,12 @@ export class EnrichmentService implements OnModuleInit {
 
       if (agent.ok) {
         await this.setStatus(orgId, 'ready', { error: null, enrichedAt: new Date() });
-        this.log.log(`enrich: ${org.slug} ready — page and agent generated from ${site.finalUrl}`);
+        this.log.log(`enrich: ${org.slug} ready — page and three agents generated from ${site.finalUrl}`);
       } else {
         // Ready-with-a-caveat is recorded as failed *with the page intact*: the
         // operator asked for a page and an agent, and got one of the two.
         await this.setStatus(orgId, 'failed', {
-          error: `The landing page was generated. The voice agent was not: ${agent.detail}`,
+          error: `The landing page was generated. The voice agents were not all built: ${agent.detail}`,
           enrichedAt: new Date(),
         });
       }
@@ -428,7 +438,8 @@ export class EnrichmentService implements OnModuleInit {
   /* ----------------------------- the voice agent --------------------------- */
 
   /**
-   * Build the Dograh agent and point the landing page at it.
+   * Build the Dograh agents: inbound for the landing page, plus outbound and
+   * info, and point all three demo-call slots at them.
    *
    * `inbound` because every one of the three call paths is the agent *receiving*
    * a conversation: a visitor pressing the widget, a caller on the DID, and the
@@ -439,6 +450,7 @@ export class EnrichmentService implements OnModuleInit {
     g: GeneratedCentre,
     site: Awaited<ReturnType<ScraperService['scrape']>>,
     orgName: string,
+    kinds: DemoDialerKind[],
   ): Promise<{ ok: true } | { ok: false; detail: string }> {
     /*
      * The agent is built from the scrape, not from the model's paraphrase.
@@ -466,7 +478,17 @@ export class EnrichmentService implements OnModuleInit {
       .filter(Boolean)
       .join('\n');
 
-    return this.dograh.buildAgentFor(orgId, {
+    const facts = [
+      site.phone ? `The published phone number is ${site.phone}.` : '',
+      `Their website is ${site.finalUrl}.`,
+      '',
+      "### The business's own website text",
+      site.text.slice(0, 7000),
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    const inbound = await this.dograh.buildAgentFor(orgId, {
       /*
        * The label Dograh names the workflow after, so it has to read well in
        * the operator's agent list. A page's <title> is often just the brand
@@ -511,16 +533,33 @@ export class EnrichmentService implements OnModuleInit {
        * The phone number and the URL are pinned above it because they are the
        * two things most asked on a call and the most expensive to get wrong.
        */
-      facts: [
-        site.phone ? `The published phone number is ${site.phone}.` : '',
-        `Their website is ${site.finalUrl}.`,
-        '',
-        "### The business's own website text",
-        site.text.slice(0, 7000),
-      ]
-        .filter(Boolean)
-        .join('\n'),
+      facts,
     });
+    if (!inbound.ok || kinds.length === 0) return inbound;
+
+    /*
+     * Then the other two demo slots — outbound and info — built from the same
+     * scrape, with the inbound agent above wired into the first slot. Without
+     * this a centre made from a URL had a voice agent on its landing page and
+     * an empty Demo calls page until an operator picked three agents by hand.
+     */
+    const demo = await this.dograh.buildDemoAgentsFor(orgId, kinds, {
+      businessName: orgName,
+      scraped,
+      facts,
+      agentName: DOGRAH_AGENT_NAME,
+    });
+    /*
+     * Booking last, and best-effort: an agent that cannot book is still an
+     * agent worth having, so a failure here is logged rather than turning a
+     * ready centre into a failed one.
+     */
+    const booking = await this.dograh.enableBooking(orgId);
+    if (!booking.ok) this.log.warn(`enrich: ${orgId} agents built without booking — ${booking.detail}`);
+
+    return demo.ok
+      ? demo
+      : { ok: false, detail: `the inbound agent was built, but demo calls are ${demo.detail}` };
   }
 
   /* --------------------------------- reads -------------------------------- */

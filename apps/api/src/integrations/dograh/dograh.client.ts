@@ -666,6 +666,109 @@ export class DograhClient {
   }
 
   /**
+   * Create an HTTP tool an agent can call mid-conversation, or reuse one.
+   *
+   * Reused when a tool with the same name already points at the same URL, so
+   * re-running enrichment or pressing "enable booking" twice does not leave a
+   * pile of identical tools in the operator's Dograh. The URL carries the
+   * centre's calendar token, so "same URL" also means "same centre".
+   */
+  async ensureHttpTool(tool: {
+    name: string;
+    description: string;
+    method: 'GET' | 'POST';
+    url: string;
+    parameters: { name: string; type: 'string' | 'number'; description: string; required: boolean }[];
+    timeoutMs?: number;
+  }): Promise<string> {
+    const existing = await this.call<unknown>('/tools/').catch(() => []);
+    for (const t of Array.isArray(existing) ? existing : []) {
+      const o = t as { tool_uuid?: string; name?: string; definition?: { config?: { url?: string } } };
+      if (o.tool_uuid && o.name === tool.name && o.definition?.config?.url === tool.url) {
+        return o.tool_uuid;
+      }
+    }
+    const created = await this.call<{ tool_uuid: string }>('/tools/', {
+      method: 'POST',
+      body: {
+        name: tool.name,
+        description: tool.description,
+        category: 'http_api',
+        icon: 'calendar',
+        definition: {
+          schema_version: 1,
+          type: 'http_api',
+          config: {
+            method: tool.method,
+            url: tool.url,
+            parameters: tool.parameters,
+            timeout_ms: tool.timeoutMs ?? 8000,
+          },
+        },
+      },
+    });
+    return created.tool_uuid;
+  }
+
+  /**
+   * Give every conversational node of a workflow some tools, and say how to
+   * use them on the global node, then publish.
+   *
+   * Every `agentNode` and the `startCall` get the tools, not one "booking"
+   * stage: callers ask to book from wherever they are in the call, and a tool
+   * the current node does not hold is a tool the agent cannot see. The how-to
+   * goes on the global node because every other node inherits it.
+   *
+   * Idempotent: a uuid already present is not added twice, and a prompt
+   * already carrying the marker heading is not appended to again.
+   */
+  async attachTools(
+    workflowId: number,
+    toolUuids: string[],
+    globalInstructions: { marker: string; text: string },
+  ): Promise<{ nodesTouched: number }> {
+    const wf = await this.call<{ workflow_definition?: { nodes?: unknown[] } & Record<string, unknown> }>(
+      `/workflow/fetch/${workflowId}`,
+    );
+    const definition = wf.workflow_definition;
+    const nodes = Array.isArray(definition?.nodes) ? definition!.nodes : [];
+    let nodesTouched = 0;
+    for (const node of nodes) {
+      if (!node || typeof node !== 'object') continue;
+      const n = node as { type?: string; data?: Record<string, unknown> };
+      if (!n.data) continue;
+      if (n.type === 'agentNode' || n.type === 'startCall') {
+        const had = Array.isArray(n.data.tool_uuids) ? (n.data.tool_uuids as string[]) : [];
+        const next = [...new Set([...had, ...toolUuids])];
+        if (next.length !== had.length) {
+          n.data.tool_uuids = next;
+          nodesTouched++;
+        }
+      }
+      if (
+        n.type === 'globalNode' &&
+        typeof n.data.prompt === 'string' &&
+        !n.data.prompt.includes(globalInstructions.marker)
+      ) {
+        n.data.prompt = `${n.data.prompt}\n\n${globalInstructions.marker}\n\n${globalInstructions.text}`;
+        nodesTouched++;
+      }
+    }
+    if (nodesTouched === 0) return { nodesTouched };
+
+    await this.call(`/workflow/${workflowId}`, {
+      method: 'PUT',
+      body: { workflow_definition: definition },
+      timeoutMs: 60_000,
+    });
+    const pub = await this.publishWorkflow(workflowId);
+    if (!pub.published) {
+      this.log.warn(`workflow ${workflowId} tools attached but NOT published (${pub.detail})`);
+    }
+    return { nodesTouched };
+  }
+
+  /**
    * Publish the current draft, so the live agent is the one we just wrote.
    *
    * This is the step whose absence made every generated agent introduce itself

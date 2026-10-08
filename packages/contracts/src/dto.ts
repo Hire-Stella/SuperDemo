@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ThemePreset, ThemeTokens } from './themes';
 import { isSafeLogoUrl } from './brand';
 import { SiteTemplate } from './sites';
+import { DemoDialerKind } from './demo-calls';
 import { CrmDriver, EvalReviewer } from './enums';
 import { CampaignStatus, TargetStatus } from './enums';
 import {
@@ -193,11 +194,23 @@ export const CreateOrgInput = z.object({
   /**
    * Whether this centre gets the Demo calls page.
    *
-   * On by default, same as the other two. Which agent answers inbound,
-   * outbound and info is chosen afterward in the voice panel — there is no
-   * org yet for this request to point a workflow at.
+   * On by default, same as the other two. Given a websiteUrl, enrichment
+   * builds an inbound, an outbound and an info agent from the site and points
+   * the three slots at them; otherwise they are chosen afterward in the voice
+   * panel — there is no org yet for this request to point a workflow at.
    */
   demoCallsEnabled: z.boolean().default(true),
+  /**
+   * Which of the three demo-call slots this centre starts with switched on.
+   *
+   * With a websiteUrl, only these agents are built from the site; without one,
+   * these slots are switched on and wait for an operator to pick their agents.
+   * The landing page's call panel offers the same ones to visitors.
+   */
+  demoCallKinds: z
+    .array(DemoDialerKind)
+    .min(1, 'Choose at least one kind of demo call')
+    .default(['inbound', 'outbound', 'info']),
   /**
    * The client's real website.
    *

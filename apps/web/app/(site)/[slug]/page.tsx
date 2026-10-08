@@ -19,6 +19,7 @@ import { TEMPLATES as LIBRARY } from '@stella/template-runtime';
 import { TalkToStellaWidget as OscarTalkToStellaWidget } from '@stella/template-oscar';
 import { SiteRender } from '@/components/site/templates';
 import { DograhWidget } from '@/components/site/dograh-widget';
+import { CallPanel } from '@/components/site/call-panel';
 
 /**
  * A tenant's public landing page.
@@ -230,6 +231,18 @@ export default async function TenantSitePage({ params, searchParams }: Params) {
           src={previewing || !site.dograh.enabled ? null : site.dograh.scriptSrc}
           chatSrc={previewing || !site.dograh.enabled ? null : site.dograh.chatScriptSrc}
           chatContainerId={site.dograh.chatContainerId}
+        />
+      )}
+      {/* The centre's demo calls — talk now, call me back, info call. */}
+      {!previewing && (
+        <CallPanel
+          slug={site.slug}
+          // An API older than the panel sends no list; offer nothing.
+          callTypes={site.dograh.callTypes ?? []}
+          // The calendar runs on the platform's own provider, so every live
+          // page can take a booking.
+          booking
+          centreNumber={site.phoneE164}
         />
       )}
     </>

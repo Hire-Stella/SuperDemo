@@ -35,6 +35,7 @@ import { AdminModule } from './admin/admin.module';
 import { SitesModule } from './sites/sites.module';
 import { MediaModule } from './media/media.module';
 import { ReportsModule } from './reports/reports.module';
+import { CalendarModule } from './calendar/calendar.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -74,6 +75,7 @@ import { HealthController } from './health.controller';
     SitesModule,
     MediaModule,
     ReportsModule,
+    CalendarModule,
 
     // Platform administration — organisations themselves, superadmin only.
     PlatformModule,

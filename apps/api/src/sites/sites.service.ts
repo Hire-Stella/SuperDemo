@@ -310,7 +310,7 @@ export class SitesService {
        * doNotCall contact, so connecting Dograh cannot quietly undo a
        * suppression the internal dialler respects.
        */
-      const ringing = suppressed ? false : await this.dograh.ringVisitor(org.id, phoneE164);
+      const ringing = suppressed ? false : await this.dograh.ringVisitor(org.id, phoneE164, input.callType);
 
       let targetId: string | null = null;
       // Queued only when the centre nominated a campaign *and* it is running —

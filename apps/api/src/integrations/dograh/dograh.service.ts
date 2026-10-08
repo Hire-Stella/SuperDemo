@@ -37,6 +37,10 @@ import { ENV } from '../../config/config.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { decryptSecret, encryptSecret, fingerprint } from '../../shared/secret-box';
 import { DograhClient } from './dograh.client';
+import { CalendarService } from '../../calendar/calendar.service';
+
+/** Heading the booking how-to is appended under; also what makes it idempotent. */
+const BOOKING_MARKER = '## BOOKING APPOINTMENTS';
 
 /** Nothing stored yet — the shape the editor and the page both start from. */
 const EMPTY: DograhPublic = {
@@ -67,6 +71,7 @@ export class DograhService {
   constructor(
     private readonly prisma: PrismaService,
     @Inject(ENV) private readonly env: ApiEnv,
+    private readonly calendar: CalendarService,
   ) {}
 
   private parsePublic(raw: Prisma.JsonValue | null): DograhPublic {
@@ -372,6 +377,7 @@ export class DograhService {
     const baseUrl = this.resolveBaseUrl(row?.dograhBaseUrl);
     const usable = Boolean(baseUrl && pub.embedToken && pub.workflowId);
     if (!usable || !baseUrl) return DOGRAH_WIDGET_DISABLED;
+    const dialers = this.parseDialers(row?.dograhDialers ?? null);
 
     const scriptSrc = dograhWidgetSrc(baseUrl, pub.embedToken);
     const chatScriptSrc =
@@ -386,7 +392,31 @@ export class DograhService {
       chatScriptSrc: dograhOffersWidget(pub.callMode) ? chatScriptSrc : null,
       chatContainerId: DOGRAH_CHAT_CONTAINER_ID,
       callbackViaDograh: dograhOffersCallback(pub.callMode),
+      callTypes: this.siteCallTypes(pub, dialers),
     };
+  }
+
+  /**
+   * The demo calls a landing page's call panel can offer.
+   *
+   * Talking in the page is the landing page's own (inbound) agent, so it
+   * follows the page's call mode and an inbound slot that is switched on.
+   * The two that ring the visitor need the page's mode to allow ringing and
+   * their slot to have an agent — except a callback, which falls back to the
+   * page's agent exactly as the callback form always has.
+   */
+  private siteCallTypes(
+    pub: DograhPublic,
+    dialers: DograhDialers,
+  ): DograhWidgetDto['callTypes'] {
+    const out: DograhWidgetDto['callTypes'] = [];
+    const ready = (k: DemoDialerKind) => dialers[k].enabled && Boolean(dialers[k].workflowId);
+    if (dograhOffersWidget(pub.callMode) && dialers.inbound.enabled) out.push('inbound');
+    if (dograhOffersCallback(pub.callMode)) {
+      if (dialers.outbound.enabled) out.push('outbound');
+      if (ready('info')) out.push('info');
+    }
+    return out;
   }
 
   /**
@@ -605,6 +635,276 @@ export class DograhService {
       return {
         ok: false,
         detail: e instanceof Error ? e.message : 'Dograh could not build the agent',
+      };
+    }
+  }
+
+  /**
+   * Build the outbound and info agents, and point all three demo slots.
+   *
+   * Runs after buildAgentFor, whose workflow becomes the inbound slot — it is
+   * already the agent that answers the published number and the landing page,
+   * so a second inbound agent would only be a copy that can drift from it.
+   *
+   * The two new ones are built from the same scrape with `callType: 'outbound'`,
+   * because both of them speak first: one rings a lead back, the other delivers
+   * something and hangs up. They get the facts block but not the routed stage
+   * graph — that graph is a switchboard for a caller who rang with a question,
+   * and neither of these calls starts with one.
+   *
+   * Only the kinds the operator ticked are built or switched on; the rest are
+   * left exactly as they were.
+   *
+   * Built in parallel, since each is a model generating a call flow and two in
+   * a row would double the wait. Each one fails on its own: a slot whose agent
+   * could not be built is left as it was and named in the result, rather than
+   * costing the other its agent.
+   */
+  async buildDemoAgentsFor(
+    orgId: string,
+    kinds: readonly DemoDialerKind[],
+    brief: { businessName: string; scraped: string; facts: string; agentName?: string },
+  ): Promise<{ ok: true } | { ok: false; detail: string }> {
+    let client: DograhClient;
+    let pub: DograhPublic;
+    try {
+      ({ client, pub } = await this.clientFor(orgId));
+    } catch (e) {
+      return { ok: false, detail: e instanceof Error ? e.message : 'no Dograh configured' };
+    }
+    const agentName = brief.agentName ?? DOGRAH_AGENT_NAME;
+    const name = brief.businessName;
+
+    const specs: Record<'outbound' | 'info', { useCase: string; job: string }> = {
+      outbound: {
+        useCase: `${name} — outbound callback`.slice(0, 80),
+        job:
+          'Build an outbound phone agent that calls back a person who left their number on this ' +
+          "business's website or enquired earlier. It introduces itself and the business, says why " +
+          'it is calling, finds out what the person needs, answers from the facts, qualifies their ' +
+          'interest and agrees a next step with a human colleague.',
+      },
+      info: {
+        useCase: `${name} — information call`.slice(0, 80),
+        job:
+          'Build an outbound information call for this business: a short, one-way call that ' +
+          'delivers a reminder, a confirmation or a status update about the business, checks the ' +
+          'person heard it, answers at most a brief question from the facts, and ends politely. ' +
+          'It does not sell, qualify or book anything.',
+      },
+    };
+
+    const build = async (kind: 'outbound' | 'info'): Promise<DemoDialerConfig> => {
+      const created = await client.createWorkflowFromTemplate({
+        callType: 'outbound',
+        useCase: specs[kind].useCase,
+        activityDescription:
+          `${specs[kind].job} Everything below is the text of their own website.\n\n` +
+          brief.scraped.slice(0, 12_000),
+      });
+      const definition = created.workflow_definition;
+      if (definition && typeof definition === 'object') {
+        // Best-effort, as in buildAgentFor: an agent without the facts block
+        // still places the call.
+        await client
+          .injectFacts(created.id, definition, { businessName: name, agentName, facts: brief.facts })
+          .catch((e: unknown) =>
+            this.log.warn(
+              `dograh: ${kind} workflow ${created.id} built but facts not written — ` +
+                `${e instanceof Error ? e.message : e}`,
+            ),
+          );
+      }
+      const uuid = await client.workflowUuid(created.id).catch(() => null);
+      if (!uuid) throw new Error(`Dograh returned no uuid for the ${kind} agent, so it cannot be dialled`);
+      return {
+        enabled: true,
+        workflowId: created.id,
+        workflowUuid: uuid,
+        workflowName: created.name,
+        embedToken: '',
+      };
+    };
+
+    const [outbound, info] = await Promise.allSettled([
+      kinds.includes('outbound') ? build('outbound') : null,
+      kinds.includes('info') ? build('info') : null,
+    ]);
+
+    // Re-read rather than reuse: an operator may have touched a slot while the
+    // two agents were being generated, and their change should survive this.
+    const row = await this.row(orgId);
+    const dialers = this.parseDialers(row?.dograhDialers ?? null);
+    const failed: string[] = [];
+
+    if (!kinds.includes('inbound')) {
+      // Not chosen: the landing page still has its agent, the slot stays as is.
+    } else if (pub.workflowId && pub.workflowUuid) {
+      dialers.inbound = {
+        enabled: true,
+        workflowId: pub.workflowId,
+        workflowUuid: pub.workflowUuid,
+        workflowName: pub.workflowName,
+        // Shared with the landing page — see webCallScript on why a token is
+        // never minted twice for one workflow.
+        embedToken: pub.embedToken,
+      };
+    } else {
+      failed.push('inbound (the landing-page agent has no uuid)');
+    }
+    for (const [kind, r] of [['outbound', outbound], ['info', info]] as const) {
+      if (r.status === 'fulfilled') {
+        if (r.value) dialers[kind] = r.value;
+      } else {
+        const why = r.reason instanceof Error ? r.reason.message : String(r.reason);
+        failed.push(`${kind} (${why})`);
+        this.log.warn(`dograh: ${kind} demo agent not built for org=${orgId} — ${why}`);
+      }
+    }
+
+    await this.prisma.setting.update({
+      where: { orgId },
+      data: { dograhDialers: dialers as unknown as Prisma.InputJsonValue },
+    });
+    this.log.log(
+      `dograh: demo slots for org=${orgId} — inbound=${dialers.inbound.workflowId} ` +
+        `outbound=${dialers.outbound.workflowId} info=${dialers.info.workflowId}`,
+    );
+    return failed.length ? { ok: false, detail: `not set up: ${failed.join('; ')}` } : { ok: true };
+  }
+
+  /**
+   * Let this centre's agents book appointments in its calendar, mid-call.
+   *
+   * Two Dograh HTTP tools — check availability, book — whose URLs carry the
+   * centre's calendar token, attached to every agent that talks to a customer:
+   * the landing page's (and its chat twin), and the inbound and outbound demo
+   * slots. Not the info slot: that call is one-way by design, with nothing
+   * to book.
+   *
+   * Both endpoints answer in sentences the agent can read out, including when
+   * a time is taken — so the prompt below only has to say *when* to use them,
+   * not how to phrase what comes back.
+   *
+   * Needs PUBLIC_BASE_URL: Dograh calls these from its own servers, so the
+   * address has to be one the internet can reach, which localhost is not.
+   */
+  async enableBooking(
+    orgId: string,
+  ): Promise<{ ok: boolean; detail: string; workflows: number[] }> {
+    const base = this.env.PUBLIC_BASE_URL?.trim().replace(/\/+$/, '');
+    if (!base) {
+      return {
+        ok: false,
+        detail:
+          'PUBLIC_BASE_URL is not set, so the voice host has no address to reach the calendar on',
+        workflows: [],
+      };
+    }
+    let client: DograhClient;
+    let pub: DograhPublic;
+    try {
+      ({ client, pub } = await this.clientFor(orgId));
+    } catch (e) {
+      return { ok: false, detail: e instanceof Error ? e.message : 'no Dograh configured', workflows: [] };
+    }
+
+    const row = await this.row(orgId);
+    const dialers = this.parseDialers(row?.dograhDialers ?? null);
+    const workflows = [
+      ...new Set(
+        [pub.workflowId, pub.chatWorkflowId, dialers.inbound.workflowId, dialers.outbound.workflowId]
+          .filter((id): id is number => typeof id === 'number'),
+      ),
+    ];
+    if (workflows.length === 0) {
+      return { ok: false, detail: 'This centre has no voice agent yet to give booking to', workflows };
+    }
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { name: true },
+    });
+    const label = org?.name ?? 'Centre';
+    const token = await this.calendar.ensureToken(orgId);
+    const root = `${base}/api/public/calendar/${token}`;
+
+    try {
+      const [availability, book] = await Promise.all([
+        client.ensureHttpTool({
+          name: `${label} — check availability`.slice(0, 80),
+          description:
+            'Find free appointment times. Call this before offering or confirming any time. ' +
+            'The response includes a `speech` sentence listing free times — read it out.',
+          method: 'GET',
+          url: `${root}/availability`,
+          parameters: [
+            {
+              name: 'date',
+              type: 'string',
+              description:
+                'The day the caller wants, as YYYY-MM-DD. Leave empty for the next day with openings.',
+              required: false,
+            },
+          ],
+        }),
+        client.ensureHttpTool({
+          name: `${label} — book appointment`.slice(0, 80),
+          description:
+            'Book an appointment once the caller has chosen a free time and given their name and ' +
+            'phone number. The response includes a `speech` sentence — read it out; if it says ' +
+            'the time is taken, offer the alternatives it lists.',
+          method: 'POST',
+          url: `${root}/book`,
+          parameters: [
+            { name: 'name', type: 'string', description: "The caller's full name.", required: true },
+            {
+              name: 'phone',
+              type: 'string',
+              description: "The caller's phone number, with country code if they give one.",
+              required: true,
+            },
+            {
+              name: 'start',
+              type: 'string',
+              description:
+                'The chosen time exactly as the availability tool returned it, e.g. 2026-10-14 09:30.',
+              required: true,
+            },
+            {
+              name: 'notes',
+              type: 'string',
+              description: 'What the appointment is for, in a few words.',
+              required: false,
+            },
+          ],
+        }),
+      ]);
+
+      const text = [
+        'You can book appointments in the calendar.',
+        '- When someone wants an appointment, ask which day suits them, then call the check',
+        '  availability tool and offer two or three of the times it returns.',
+        '- Never offer or confirm a time the tool did not return.',
+        '- Once they choose, collect their full name and phone number, read the time back,',
+        '  then call the book appointment tool and read out its confirmation.',
+        '- If booking fails, say so plainly and offer the alternatives it gives.',
+      ].join('\n');
+
+      for (const id of workflows) {
+        await client.attachTools(id, [availability, book], { marker: BOOKING_MARKER, text });
+      }
+      this.log.log(`dograh: booking tools on workflows ${workflows.join(', ')} for org=${orgId}`);
+      return {
+        ok: true,
+        detail: `Booking is on for ${workflows.length} agent${workflows.length === 1 ? '' : 's'}`,
+        workflows,
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        detail: e instanceof Error ? e.message : 'Dograh refused the booking tools',
+        workflows,
       };
     }
   }
@@ -953,12 +1253,30 @@ export class DograhService {
    * person can call them back. The failure is logged, not surfaced as a form
    * error the visitor can do nothing about.
    */
-  async ringVisitor(orgId: string, phoneE164: string): Promise<boolean> {
+  async ringVisitor(
+    orgId: string,
+    phoneE164: string,
+    kind: 'outbound' | 'info' = 'outbound',
+  ): Promise<boolean> {
     try {
       const { client, pub } = await this.clientFor(orgId);
-      if (!pub.workflowId || !dograhOffersCallback(pub.callMode)) return false;
-      await client.initiateCall(pub.workflowId, phoneE164);
-      this.log.log(`dograh: callback queued org=${orgId} workflow=${pub.workflowId}`);
+      if (!dograhOffersCallback(pub.callMode)) return false;
+      /*
+       * The slot's agent when it has one. A callback with no outbound agent
+       * falls back to the page's own, which is what it always did; an info
+       * call has no such fallback — the page's agent would answer a question
+       * nobody asked rather than deliver anything.
+       */
+      const slot = this.parseDialers((await this.row(orgId))?.dograhDialers ?? null)[kind];
+      const workflowId =
+        slot.enabled && slot.workflowId
+          ? slot.workflowId
+          : kind === 'outbound'
+            ? pub.workflowId
+            : null;
+      if (!workflowId) return false;
+      await client.initiateCall(workflowId, phoneE164);
+      this.log.log(`dograh: ${kind} call queued org=${orgId} workflow=${workflowId}`);
       return true;
     } catch (e) {
       this.log.warn(
