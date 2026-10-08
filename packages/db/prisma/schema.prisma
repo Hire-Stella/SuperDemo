@@ -401,6 +401,11 @@ model User {
   /// are untouched. Anything not listed shows greyed out and cannot be
   /// navigated to. A UI restriction only: the API does not consult it.
   navAllowlist String[] @default([])
+  /// A pared-down dashboard for a client demo: hides or disables controls
+  /// that don't belong in front of that client (Simulate a call, booking from
+  /// a call, the drivers behind a call, the assumed agent cost). Off for
+  /// everyone else, who see the app unchanged. UI-only, like navAllowlist.
+  simplifiedUi Boolean  @default(false)
   /// The handset a telecaller's own calls are bridged to, E.164.
   ///
   /// Null is the normal state: an agent who works in the browser softphone

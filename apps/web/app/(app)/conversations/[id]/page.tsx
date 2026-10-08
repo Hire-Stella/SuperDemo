@@ -254,13 +254,12 @@ export default function ConversationDetailPage({
         </div>
         <div className="text-right text-xs text-muted-foreground">
           {canBook && calendar.data && (
-            // Disabled for now at the client's request; the dialog behind it is
-            // wired up, so re-enabling is just removing `disabled`.
+            // Shown but switched off for a simplified (client demo) account.
             <Button
               size="sm"
               className="mb-2"
-              disabled
-              title="Booking from a call is not enabled yet"
+              disabled={user.simplifiedUi}
+              title={user.simplifiedUi ? 'Booking from a call is not enabled yet' : undefined}
               onClick={() => setBooking(true)}
             >
               <CalendarPlus className="size-3.5" aria-hidden /> Book appointment
@@ -621,6 +620,17 @@ export default function ConversationDetailPage({
                     </dd>
                   </div>
                 </div>
+                {/* Plumbing, not something to show a client in a demo. */}
+                {!user.simplifiedUi && (
+                  <div className="border-t border-border pt-2.5">
+                    <dt className="text-xs font-medium text-muted-foreground">Drivers used</dt>
+                    <dd className="mt-1 flex flex-wrap gap-1">
+                      <Badge>stt: {c.aiSession.driverStt}</Badge>
+                      <Badge>llm: {c.aiSession.driverLlm}</Badge>
+                      <Badge>tts: {c.aiSession.driverTts}</Badge>
+                    </dd>
+                  </div>
+                )}
               </dl>
             </Card>
           )}

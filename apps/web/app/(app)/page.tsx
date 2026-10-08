@@ -147,11 +147,18 @@ export default function LiveOpsPage() {
             that leads to a section this centre has turned off is a dead end. */}
         {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') &&
           user.orgSimulatorEnabled !== false && (
-            // Disabled for now at the client's request; re-enable by restoring
-            // the <Link href="/simulator"> around an enabled button.
-            <Button variant="default" disabled title="Call simulation is not enabled">
-              <PhoneCall className="size-4" aria-hidden /> Simulate a call
-            </Button>
+            // A simplified (client demo) account sees it switched off.
+            user.simplifiedUi ? (
+              <Button variant="default" disabled title="Call simulation is not enabled">
+                <PhoneCall className="size-4" aria-hidden /> Simulate a call
+              </Button>
+            ) : (
+              <Link href="/simulator">
+                <Button variant="default">
+                  <PhoneCall className="size-4" aria-hidden /> Simulate a call
+                </Button>
+              </Link>
+            )
           )}
       </header>
 
