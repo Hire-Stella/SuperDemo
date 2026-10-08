@@ -110,6 +110,8 @@ export const SessionUser = z.object({
   orgDemoCallsEnabled: z.boolean().nullable(),
   /** Sidebar hrefs this user may open; empty means every section their role allows. */
   navAllowlist: z.array(z.string()),
+  /** Hide the controls a client demo shouldn't show — see User.simplifiedUi. */
+  simplifiedUi: z.boolean(),
   location: Location,
   timezone: z.string(),
   skills: z.array(Skill),
@@ -313,6 +315,7 @@ export const AgentSummary = SessionUser.omit({
   orgSimulatorEnabled: true,
   orgDemoCallsEnabled: true,
   navAllowlist: true,
+  simplifiedUi: true,
 }).extend({
   extension: z.string().nullable(),
   status: AgentStatus,

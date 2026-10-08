@@ -28,7 +28,7 @@ import {
 import { api, qs } from '@/lib/api';
 import { useUser } from '@/components/providers';
 import { dateRange, ESCALATION_LABEL, money, pct, seconds } from '@/lib/format';
-import { Badge, Button, Card, Metric, Select, Spinner, Table, Td, Th } from '@/components/composites';
+import { Badge, Button, Card, Metric, Select, Spinner, Table, Td, Th, cn } from '@/components/composites';
 import { CallInsightsSection } from '@/components/call-insights';
 
 /*
@@ -157,7 +157,7 @@ export default function AnalyticsPage() {
         }
         subtitle="Contained calls consumed no agent time, valued at the average handle time of calls that did reach an agent"
       >
-        <div className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-3">
+        <div className={cn('grid grid-cols-2 gap-3 p-4', user.simplifiedUi ? 'lg:grid-cols-3' : 'lg:grid-cols-4')}>
           <Metric label="Calls contained" value={d.savings.containedCalls.toLocaleString()} tone="ai" />
           <Metric label="Agent hours saved" value={d.savings.agentHoursSaved.toLocaleString()} />
           <Metric
@@ -165,6 +165,14 @@ export default function AnalyticsPage() {
             value={money(d.savings.estimatedCostSavedUsd)}
             tone="live"
           />
+          {/* An internal assumption, hidden from a simplified (client demo) account. */}
+          {!user.simplifiedUi && (
+            <Metric
+              label="Assumed agent cost"
+              value={`${money(d.savings.assumedAgentHourlyUsd)}/hr`}
+              hint="editable in Settings — replace with your real figure before quoting"
+            />
+          )}
         </div>
       </Card>
 
