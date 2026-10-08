@@ -16,11 +16,13 @@ import {
 import type {
   ActiveCallRow,
   AgentSummary,
+  AiLiveOps,
   LiveOpsSnapshot,
   QueueDto,
 } from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { useSession, useUser } from '@/components/providers';
+import { AiLiveBoard } from '@/components/ai-live-board';
 import {
   AGENT_STATUS_STYLE,
   CALL_STATE_STYLE,
@@ -58,8 +60,22 @@ export default function LiveOpsPage() {
   const user = useUser();
   const queryClient = useQueryClient();
 
+  /*
+   * A centre answered by its voice workflow gets its own board. Asked first so
+   * the standard board's queries — queues, agents, SLA — don't run for a
+   * centre where every one of them would read zero.
+   */
+  const ai = useQuery({
+    queryKey: ['ai-live'],
+    queryFn: () => api.get<AiLiveOps>('/ai-live'),
+    refetchInterval: 5_000,
+  });
+  const aiMode = ai.data?.enabled === true;
+  const standard = ai.isFetched && !aiMode;
+
   const snapshot = useQuery({
     queryKey: ['liveops'],
+    enabled: standard,
     queryFn: () => api.get<LiveOpsSnapshot>('/analytics/live'),
     // Socket events drive most updates; this is the safety net if one is missed.
     refetchInterval: 20_000,
@@ -67,18 +83,21 @@ export default function LiveOpsPage() {
 
   const active = useQuery({
     queryKey: ['active-calls'],
+    enabled: standard,
     queryFn: () => api.get<ActiveCallRow[]>('/analytics/active-calls'),
     refetchInterval: 10_000,
   });
 
   const queues = useQuery({
     queryKey: ['queues'],
+    enabled: standard,
     queryFn: () => api.get<QueueDto[]>('/queues'),
     refetchInterval: 20_000,
   });
 
   const roster = useQuery({
     queryKey: ['presence-roster'],
+    enabled: standard,
     queryFn: () => api.get<AgentSummary[]>('/presence/roster'),
     refetchInterval: 30_000,
   });
@@ -128,14 +147,18 @@ export default function LiveOpsPage() {
             that leads to a section this centre has turned off is a dead end. */}
         {(user.role === 'ADMIN' || user.role === 'SUPERVISOR') &&
           user.orgSimulatorEnabled !== false && (
-            <Link href="/simulator">
-              <Button variant="default">
-                <PhoneCall className="size-4" aria-hidden /> Simulate a call
-              </Button>
-            </Link>
+            // Disabled for now at the client's request; re-enable by restoring
+            // the <Link href="/simulator"> around an enabled button.
+            <Button variant="default" disabled title="Call simulation is not enabled">
+              <PhoneCall className="size-4" aria-hidden /> Simulate a call
+            </Button>
           )}
       </header>
 
+      {!ai.isFetched ? null : aiMode ? (
+        <AiLiveBoard data={ai.data!} />
+      ) : (
+      <>
       {/* live tiles */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-6">
         <Metric
@@ -387,6 +410,8 @@ export default function LiveOpsPage() {
           </div>
         )}
       </Card>
+      </>
+      )}
     </div>
   );
 }

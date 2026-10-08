@@ -256,6 +256,12 @@ model Organization {
   /// true for the same reason as the other two: every centre seeded before
   /// this flag existed should not go dark on migration.
   demoCallsEnabled Boolean @default(true)
+  /// The Dograh organisation whose calls are imported into this centre, read
+  /// with DOGRAH_SUPERUSER_KEY. Null means no import.
+  dograhOrgId       Int?
+  /// Which of that organisation's workflows count as this centre's calls.
+  /// Empty means all of them.
+  dograhWorkflowIds Int[]   @default([])
   /// URL-safe handle, unique across the platform. Stable once issued — the
   /// superadmin can rename an org's display name without breaking anything.
   slug      String   @unique
@@ -390,6 +396,11 @@ model User {
   timezone     String
   skills       Skill[]
   extension    String?
+  /// Sidebar sections this user may open, by href ("/", "/analytics"). Empty
+  /// means every section their role allows — the default, so existing users
+  /// are untouched. Anything not listed shows greyed out and cannot be
+  /// navigated to. A UI restriction only: the API does not consult it.
+  navAllowlist String[] @default([])
   /// The handset a telecaller's own calls are bridged to, E.164.
   ///
   /// Null is the normal state: an agent who works in the browser softphone
@@ -732,6 +743,10 @@ model AiSession {
   courseOfInterest String?
   sentiment        Float?
   summary          String?
+  /// Structured fields an external voice workflow (Dograh) extracted on the
+  /// call — its `gathered_context` minus bookkeeping keys. Shape varies by
+  /// workflow; read by /analytics/insights.
+  gathered         Json?
   avgLatencyMs     Int?
   costUsd          Decimal?          @db.Decimal(10, 6)
   inputTokens      Int               @default(0)

@@ -4,6 +4,7 @@ import {
   type AgentScorecard,
   type AnalyticsOverview,
   AnalyticsRangeQuery,
+  type CallInsights,
   type EvalSummary,
   type LiveOpsSnapshot,
 } from '@superdemo/contracts';
@@ -30,6 +31,13 @@ export class AnalyticsController {
   @Get('overview')
   overview(@ZodQuery(AnalyticsRangeQuery) query: AnalyticsRangeQuery): Promise<AnalyticsOverview> {
     return this.analytics.overview(query);
+  }
+
+  /** What voice workflows gathered on each call, aggregated per field. */
+  @Roles('ADMIN', 'SUPERVISOR')
+  @Get('insights')
+  insights(@ZodQuery(AnalyticsRangeQuery) query: AnalyticsRangeQuery): Promise<CallInsights> {
+    return this.analytics.insights(query);
   }
 
   /** Assistant quality and what it cost. Supervisors and up. */

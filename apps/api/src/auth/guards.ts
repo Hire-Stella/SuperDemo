@@ -150,6 +150,7 @@ export class JwtAuthGuard implements CanActivate {
       orgWebsiteEnabled: user.org?.websiteEnabled ?? null,
       orgSimulatorEnabled: user.org?.simulatorEnabled ?? null,
       orgDemoCallsEnabled: user.org?.demoCallsEnabled ?? null,
+      navAllowlist: user.navAllowlist,
       location: user.location,
       timezone: user.timezone,
       skills: user.skills,
