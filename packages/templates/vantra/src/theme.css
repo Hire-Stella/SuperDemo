@@ -1,0 +1,186 @@
+/*
+ * vantra, scoped to its own root.
+ *
+ * Nine-plus templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one imported
+ * wins for every other template and the surrounding dashboard inherits
+ * whichever that was. The template root div carries this class, so every
+ * custom property still resolves.
+ */
+
+/*
+ * Typography, self-hosted. Two real families back the source site —
+ * "Bricolage Grotesque" (a Google Fonts display grotesque, weights 600/700,
+ * used here for every headline and the big stat/price digits) and
+ * "Inter Display" (Google Fonts' large-optical-size Inter cut, weights
+ * 500/600/700, used for nav, buttons, eyebrows and body copy) — vendored
+ * locally into this repo's own /t/vantra/fonts/ rather than linked from a
+ * font CDN, the same reasoning kiln, aurelia, tavola and forno give: a page
+ * that silently falls back because a font host was unreachable is worse
+ * than one that never asked. The source itself loads "Bricolage Grotesque"
+ * from Google's own CDN rather than self-hosting it (confirmed against its
+ * compiled CSS); its "Inter Display" weights are self-hosted in the
+ * source's own asset bucket, and both are re-hosted here identically.
+ *
+ * A deliberately different pairing from every sibling: a wide, high-contrast
+ * grotesque display face over a neutral UI sans, with no serif (aurelia), no
+ * monochrome-only palette (kiln) and no rounded/playful face (forno) — reading
+ * as dashboard-software type rather than hospitality or retail type.
+ */
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('/t/vantra/fonts/bricolage-grotesque-600.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('/t/vantra/fonts/bricolage-grotesque-700.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+@font-face {
+  font-family: 'Inter Display';
+  src: url('/t/vantra/fonts/inter-display-500.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+@font-face {
+  font-family: 'Inter Display';
+  src: url('/t/vantra/fonts/inter-display-600.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+@font-face {
+  font-family: 'Inter Display';
+  src: url('/t/vantra/fonts/inter-display-700.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/t/vantra/fonts/inter-400.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+/* ==========================================================================
+   VANTRA — design tokens, measured from the source Framer HTML/CSS and, where
+   a value only exists as a rendered pixel (see index.tsx's `accent` note),
+   from the rendered page itself.
+
+   A cool, near-white base (`#ffffff`) with a pale blue-grey card surface
+   (`rgb(237,241,244)`, the source's own literal light-card fill) against a
+   near-black ink (`rgb(29,29,29)`, the source's own literal heading colour)
+   and a slate body tone (`rgb(77,88,95)`, the source's own literal subhead
+   colour) — plus a near-black card/button fill for the source's own "dark"
+   card variant and a mid-blue accent for its "primary" stat card and every
+   filled CTA. Distinct from every sibling: kiln's monochrome-only palette,
+   aurelia's plum-and-gold, tavola's single gold-on-near-black, forno's
+   red/orange/yellow-on-white — this is the only sibling pairing a blue
+   product accent with a light dashboard-software base.
+   ========================================================================== */
+
+@theme inline {
+  --color-vantra-bg: #ffffff;
+  --color-vantra-surface: #edf1f4;
+  --color-vantra-ink: #1d1d1d;
+  --color-vantra-muted: #4d585f;
+  --color-vantra-dark: #101112;
+  --color-vantra-dark-surface: #17181a;
+  --color-vantra-accent: #3d63f5;
+  --color-vantra-accent-light: #6690ff;
+  --color-vantra-border: #e3e7eb;
+
+  /*
+   * Namespaced, not the generic `--font-display` / `--font-body` every
+   * sibling template (and the host shell itself) also declares — see
+   * forno's own note on why a shared name loses a collision silently.
+   */
+  --font-vantra-display: 'Bricolage Grotesque', sans-serif;
+  --font-vantra-body: 'Inter Display', 'Inter Display Placeholder', 'Inter', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.vantra-root {
+  background: var(--color-vantra-bg);
+  color: var(--color-vantra-muted);
+  font-family: var(--font-vantra-body);
+}
+
+.vantra-root h1,
+.vantra-root h2,
+.vantra-root h3,
+.vantra-root .font-vantra-display {
+  font-family: var(--font-vantra-display);
+  font-weight: 700;
+}
+
+/*
+ * The source's real corner language, kept apart on purpose.
+ *
+ * `--radius-vantra-card`, `28px`, is the source's own literal card corner
+ * (confirmed on its stat and pricing cards); `--radius-vantra-pill`,
+ * `100px`, is its own literal button/nav-bar corner. Not a tight near-square
+ * (kiln's `4px`) and not a single soft curve (tavola/forno's `16–24px`) —
+ * a big soft card radius paired with a fully-pilled button, the same
+ * two-radius system aurelia uses but with a much larger card curve.
+ */
+.vantra-card {
+  border-radius: 28px;
+}
+.vantra-pill {
+  border-radius: 100px;
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS, no motion library.
+
+   A soft rise-and-fade, see Reveal.tsx's own doc comment for why this
+   differs from the source's own JS-driven "appear" effect and from every
+   sibling template's animation language.
+   -------------------------------------------------------------------------- */
+
+.vantra-reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition:
+    opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.vantra-reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vantra-reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * `clip` rather than `hidden`: it stops the overflow without making this a
+ * scroll container, so `position: sticky` inside still works.
+ */
+.vantra-root {
+  overflow-x: clip;
+}

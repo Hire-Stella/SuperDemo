@@ -269,6 +269,30 @@ export function visibleSections(
 }
 
 /**
+ * The floating Dograh chat launcher's per-template skin.
+ *
+ * The launcher renders as a sibling of the template's own root div, not a
+ * descendant, so it cannot read a template's `.{id}-root`-scoped CSS
+ * variables — those only inherit to elements inside that div. The host page
+ * instead injects these values as `:root`-scoped variables (see
+ * `apps/web/app/(site)/[slug]/page.tsx`), which the launcher already falls
+ * back away from cleanly when a template declares none. All values are CSS
+ * literals, never tenant input.
+ */
+export interface WidgetTheme {
+  /** Launcher button background. Falls back to `--primary`. */
+  accent?: string;
+  /** Launcher button icon colour. Falls back to `--primary-foreground`. */
+  onAccent?: string;
+  /** e.g. `'999px'` for a pill, `'0.5rem'` for a soft square. */
+  radius?: string;
+  /** A CSS `font-family` value; inherited by whatever Dograh renders inside. */
+  font?: string;
+  /** Full `transition` shorthand for the hover state. */
+  transition?: string;
+}
+
+/**
  * A template, as the registry sees it.
  *
  * `supports` is what makes a mixed library usable: the product can offer only
@@ -285,4 +309,6 @@ export interface TemplateManifest {
   supports: readonly SectionKey[];
   /** A still of the template with sample content, for the picker. */
   preview: string;
+  /** Omitted entirely, the launcher keeps its own generic default look. */
+  widgetTheme?: WidgetTheme;
 }

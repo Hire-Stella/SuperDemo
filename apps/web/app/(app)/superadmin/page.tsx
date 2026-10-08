@@ -606,11 +606,17 @@ export default function SuperadminPage() {
                         <option value="">
                           Suits the vertical ({SITE_TEMPLATES[defaultTemplateForIndustry(industry)].label})
                         </option>
-                        {SiteTemplateEnum.options.map((t) => (
-                          <option key={t} value={t}>
-                            {SITE_TEMPLATES[t].label} — {SITE_TEMPLATES[t].bestFor}
-                          </option>
-                        ))}
+                        {SiteTemplateEnum.options
+                          // Untagged designs suit anyone; tagged ones only their verticals.
+                          .filter((t) => {
+                            const tagged = SITE_TEMPLATES[t].industries;
+                            return !tagged || tagged.includes(industry);
+                          })
+                          .map((t) => (
+                            <option key={t} value={t}>
+                              {SITE_TEMPLATES[t].label} — {SITE_TEMPLATES[t].bestFor}
+                            </option>
+                          ))}
                       </Select>
                     </Field>
                   )}

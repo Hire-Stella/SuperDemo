@@ -1,0 +1,212 @@
+/*
+ * brasa, scoped to its own root.
+ *
+ * Nine-plus templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+/*
+ * Typography, self-hosted. Two real families back the source site —
+ * "Germania One" (a Google-hosted heavy display sans, weight 400 only) for
+ * every headline and the wordmark, and "Plus Jakarta Sans" (a Google
+ * variable sans, weights 400–800 in one file) for body copy and buttons —
+ * both vendored locally into this repo's own /t/brasa/fonts/ rather than
+ * linked from a font CDN, the same reasoning tavola, forno and aurelia gave:
+ * a page that silently falls back because a font host was unreachable is
+ * worse than one that never asked.
+ *
+ * A fourth, genuinely different pairing: a blunt, rounded slab display face
+ * (not Forum's serif, not Cherry Bomb One's bubble cursive, not Gilda
+ * Display's transitional serif) on a variable grotesk body (not Satoshi's
+ * five static cuts, not Gabarito, not Inter).
+ */
+@font-face {
+  font-family: 'Germania One';
+  src: url('/t/brasa/fonts/germania-one-400.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  src: url('/t/brasa/fonts/plus-jakarta-sans-variable.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 800;
+}
+
+/* ==========================================================================
+   BRASA — design tokens, measured from the source Framer HTML/CSS.
+
+   A bright, high-saturation street-food palette: a warm cream page
+   background, marigold and chili-red as the two literal accents (both read
+   directly off the source's own inline styles — `rgb(248,191,5)` /
+   `#f8bf05` behind every real button and `rgb(212,0,0)` / `#d40000` behind
+   every real badge and card frame, its two most-used colours by a wide
+   margin), a near-black ink for copy, and a very dark cactus-green
+   (`rgb(15,28,2)` / `#0f1c02`, the source's own literal dark-band colour)
+   for the one section that needs a dark ground. Genuinely distinct from
+   tavola's single gold-on-near-black, forno's red/orange/yellow-on-white
+   and aurelia's plum-and-gold-on-blush: two fully saturated primary-ish
+   hues (marigold + chili) doing double duty as both accent *and* structural
+   framing colour, on a warm cream rather than a cool white or a dark ground.
+
+   The source's own literal secondary-text grey (`rgb(153,153,153)`, used
+   for paragraph copy) reads at roughly 2.9:1 against the cream/white
+   backgrounds here — well under the 4.5:1 AA minimum for body text.
+   `--color-brasa-muted` below is deliberately darkened (and warmed toward
+   the source's own literal muted olive `rgb(133,125,96)`, to stay in the
+   family) from that literal value — the same kind of legibility fix
+   tavola's, forno's and aurelia's own hard-lesson notes describe.
+   ========================================================================== */
+
+@theme inline {
+  --color-brasa-bg: #f7efd4;
+  --color-brasa-surface: #ffffff;
+  --color-brasa-ink: #232323;
+  --color-brasa-dark: #0f1c02;
+  --color-brasa-marigold: #f8bf05;
+  --color-brasa-chili: #d40000;
+  --color-brasa-muted: #55503f;
+  --color-brasa-border: #e6d8ab;
+
+  /*
+   * Namespaced, not the generic `--font-display` / `--font-body` every
+   * sibling template (and the host shell itself) also declares — see
+   * forno's own note on why a shared name loses a collision silently.
+   */
+  --font-brasa-display: 'Germania One', sans-serif;
+  --font-brasa-body: 'Plus Jakarta Sans', 'Plus Jakarta Sans Placeholder', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.brasa-root {
+  background: var(--color-brasa-bg);
+  color: var(--color-brasa-muted);
+  font-family: var(--font-brasa-body);
+}
+
+.brasa-root h1,
+.brasa-root h2,
+.brasa-root h3,
+.brasa-root .font-brasa-display {
+  font-family: var(--font-brasa-display);
+  font-weight: 400;
+  letter-spacing: 0.01em;
+}
+
+/*
+ * The source's real corner language, kept apart on purpose.
+ *
+ * Every real button, badge and photo frame in the source carries no
+ * `border-radius` rule at all — confirmed by reading its compiled
+ * `<style>` block rather than assuming a rounded corner the way every
+ * sibling template in this library happens to use. Its only true circles
+ * are icon-only controls (the gallery slideshow's 40×40px prev/next
+ * buttons). Two corner languages, same discipline as every sibling
+ * template's split, opposite values: sharp by default, a true circle only
+ * for an icon-only control.
+ */
+.brasa-frame {
+  border-radius: 0;
+}
+.brasa-circle {
+  border-radius: 999px;
+}
+
+/*
+ * The source's own literal tilt.
+ *
+ * Its home-page dish cards are not laid flat — each one's outer container
+ * carries a literal `transform: rotate(-10deg)` (recovered from the
+ * source's own inline style on the "Popular Dishes" cards), with the photo
+ * itself sitting inside a thick, literal `border: 6px solid` marigold frame
+ * over a chili-red mat. Kept here as a small set of fixed tilt angles
+ * rather than one repeated value, so a row of cards reads as loosely pinned
+ * photos rather than a uniform stamp.
+ */
+.brasa-tilt-a {
+  transform: rotate(-6deg);
+}
+.brasa-tilt-b {
+  transform: rotate(4deg);
+}
+.brasa-tilt-c {
+  transform: rotate(-3deg);
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS, no motion library.
+
+   A deliberately different animation language from every sibling: tavola
+   fades a plain translateY/opacity in, forno bounces in with scale + rotate
+   overshoot, aurelia softens into focus with a blur. Brasa wipes into view
+   instead — a `clip-path` reveal that uncovers each element from the
+   bottom up, like a menu board being unrolled, paired with only a small
+   lift and no bounce or blur.
+   -------------------------------------------------------------------------- */
+
+.brasa-reveal {
+  opacity: 0;
+  clip-path: inset(0 0 100% 0);
+  transform: translateY(10px);
+  transition:
+    opacity 0.5s ease,
+    clip-path 0.6s cubic-bezier(0.65, 0, 0.35, 1),
+    transform 0.6s cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+.brasa-reveal-in {
+  opacity: 1;
+  clip-path: inset(0 0 0% 0);
+  transform: none;
+}
+
+/*
+ * A continuous, independent third motion: a slow linear spin, matching the
+ * source's own circular "Rotating Image" badge layer (a JS-spun component
+ * in its compiled bundle — hand-matched here as plain CSS, see defaults.ts)
+ * — a literal rotation, distinct from both the reveal above and from
+ * forno's vertical float or aurelia's horizontal marquee.
+ */
+@keyframes brasa-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.brasa-spin {
+  animation: brasa-spin 16s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brasa-reveal {
+    opacity: 1;
+    clip-path: none;
+    transform: none;
+    transition: none;
+  }
+  .brasa-spin {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * The tilted photo stack and dish cards sit rotated outside their own box on
+ * desktop. `clip` rather than `hidden`: it stops the overflow without making
+ * this a scroll container, so `position: sticky` inside still works.
+ */
+.brasa-root {
+  overflow-x: clip;
+}

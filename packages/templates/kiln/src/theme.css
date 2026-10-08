@@ -1,0 +1,176 @@
+/*
+ * kiln, scoped to its own root.
+ *
+ * Nine-plus templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one imported
+ * wins for every other template and the surrounding dashboard inherits
+ * whichever that was. The template root div carries this class, so every
+ * custom property still resolves.
+ */
+
+/*
+ * Typography, self-hosted. Three real families back the source site —
+ * "Clash Grotesk" (a Fontshare geometric sans, weight 700 only, used here
+ * for every headline) and "Switzer" (a Fontshare grotesk sans, weights
+ * 400/700, used for body copy, nav, and small labels), plus "Geist Mono"
+ * (weight 500) for the source's own tabular-numeral counters — all three
+ * vendored locally into this repo's own /t/kiln/fonts/ rather than linked
+ * from a font CDN, the same reasoning aurelia, tavola and forno gave: a
+ * page that silently falls back because a font host was unreachable is
+ * worse than one that never asked.
+ *
+ * A deliberately different pairing from both siblings: two geometric Swiss
+ * sans faces plus a monospace for numerals — no serif (aurelia), no rounded
+ * display face, and the only template in the library that gives its prices
+ * their own typeface.
+ */
+@font-face {
+  font-family: 'Clash Grotesk';
+  src: url('/t/kiln/fonts/clash-grotesk-700.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+@font-face {
+  font-family: 'Switzer';
+  src: url('/t/kiln/fonts/switzer-400.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Switzer';
+  src: url('/t/kiln/fonts/switzer-700.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/t/kiln/fonts/geist-mono-500.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+
+/* ==========================================================================
+   KILN — design tokens, measured from the source Framer HTML/CSS.
+
+   A strictly monochrome palette: pure white (`#ffffff`) and a literal
+   off-white section alternate (`rgb(246,246,246)`, the source's own token)
+   against a near-black ink (`rgb(10,10,10)`, the source's own literal
+   heading and price colour) — with two literal greys for body copy
+   (`rgb(79,79,79)`) and secondary text (`rgb(109,109,109)`), and a light
+   grey (`rgb(176,176,176)`) for hairlines and footer text. No accent hue
+   anywhere: confirmed against the source's own CSS, which draws no filled
+   button and no coloured link anywhere in its real content. Genuinely
+   distinct from aurelia's plum-and-gold, tavola's single gold-on-near-black
+   and forno's red/orange/yellow-on-white — the only sibling with no colour
+   accent at all.
+   ========================================================================== */
+
+@theme inline {
+  --color-kiln-bg: #ffffff;
+  --color-kiln-surface: #f6f6f6;
+  --color-kiln-ink: #0a0a0a;
+  --color-kiln-muted: #4f4f4f;
+  --color-kiln-faint: #6d6d6d;
+  --color-kiln-border: #b0b0b0;
+
+  /*
+   * Namespaced, not the generic `--font-display` / `--font-body` every
+   * sibling template (and the host shell itself) also declares — see
+   * forno's own note on why a shared name loses a collision silently.
+   */
+  --font-kiln-display: 'Clash Grotesk', sans-serif;
+  --font-kiln-body: 'Switzer', 'Switzer Placeholder', sans-serif;
+  --font-kiln-mono: 'Geist Mono', monospace;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.kiln-root {
+  background: var(--color-kiln-bg);
+  color: var(--color-kiln-muted);
+  font-family: var(--font-kiln-body);
+}
+
+.kiln-root h1,
+.kiln-root h2,
+.kiln-root h3,
+.kiln-root .font-kiln-display {
+  font-family: var(--font-kiln-display);
+  font-weight: 700;
+}
+
+.kiln-root .font-kiln-mono {
+  font-family: var(--font-kiln-mono);
+  font-feature-settings: 'tnum';
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.04em;
+}
+
+/*
+ * The source's real corner language, kept apart on purpose.
+ *
+ * The source's own only non-zero, non-inherited `border-radius` anywhere in
+ * its CSS is a literal `4px` — confirmed on its menu card wrapper. Not a
+ * pill (aurelia's `999px`) and not a soft card curve (tavola's, forno's
+ * 16–24px) — a tight, near-square corner, the same restrained language a
+ * Swiss grid system draws everywhere else on this page.
+ */
+.kiln-card {
+  border-radius: 4px;
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS, no motion library.
+
+   A deliberately different animation language from every sibling: aurelia
+   softens into place with a blur-to-focus reveal, tavola fades a plain
+   translateY/opacity in, forno bounces with scale + rotate overshoot. Kiln
+   does none of that — a fast, no-blur rise on a brisk linear-ish curve,
+   reading as a crisp Swiss-grid snap into place rather than an unhurried or
+   playful move. The source's own scroll-reveal is a JS-only Framer
+   "appear" effect built from runtime spring physics with no fixed value in
+   its static HTML/CSS (see the compiled bundle's own easing-curve
+   generator) — hand-matched here as this plain CSS transition instead of
+   ported literally, since no static curve exists to port.
+   -------------------------------------------------------------------------- */
+
+.kiln-reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 0.5s cubic-bezier(0.44, 0, 0.56, 1),
+    transform 0.5s cubic-bezier(0.44, 0, 0.56, 1);
+}
+
+.kiln-reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kiln-reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * `clip` rather than `hidden`: it stops the overflow without making this a
+ * scroll container, so `position: sticky` inside still works.
+ */
+.kiln-root {
+  overflow-x: clip;
+}

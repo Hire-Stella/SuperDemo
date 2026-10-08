@@ -14,6 +14,22 @@ const nextConfig = {
     '@stella/template-stackgrid',
     '@stella/template-utomic',
     '@stella/template-zova',
+    '@stella/template-tavola',
+    '@stella/template-forno',
+    '@stella/template-aurelia',
+    '@stella/template-brasa',
+    '@stella/template-yokai',
+    '@stella/template-natsu',
+    '@stella/template-kiln',
+    '@stella/template-folio',
+    '@stella/template-pearl',
+    '@stella/template-sucre',
+    '@stella/template-oscar',
+    '@stella/template-cryptix',
+    '@stella/template-fluxo',
+    '@stella/template-insunet',
+    '@stella/template-summit',
+    '@stella/template-vantra',
     '@stella/template-runtime',
     '@stella/template-schema',
   ],
@@ -69,9 +85,12 @@ const nextConfig = {
       })(),
     ],
   },
-  // The dev indicator defaults to bottom-left, directly on top of the sidebar's
-  // presence selector. Dev-only, but it hides a control agents use constantly.
-  devIndicators: { position: 'bottom-right' },
+  // Bottom-left sits on the dashboard sidebar's presence selector; bottom-right
+  // sits on the oscar template's own Dograh launcher and silently eats every
+  // click on it (its portal intercepts pointer events even though the badge
+  // itself is tiny — found by a real click timing out in a scripted test, not
+  // by eye). Top-right is clear of both.
+  devIndicators: { position: 'top-right' },
   eslint: { ignoreDuringBuilds: true },
   typescript: { ignoreBuildErrors: false },
 };

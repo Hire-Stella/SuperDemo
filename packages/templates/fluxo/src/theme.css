@@ -1,0 +1,205 @@
+/*
+ * fluxo, scoped to its own root.
+ *
+ * Nine-plus templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one imported
+ * wins for every other template and the surrounding dashboard inherits
+ * whichever that was. The template root div carries this class, so every
+ * custom property still resolves.
+ */
+
+/*
+ * Typography, self-hosted, and deliberately not the source's own faces.
+ *
+ * The source site's compiled CSS carries three real families — "Inter"
+ * (body), "Satoshi" (nowhere actually assigned in its rendered output) and
+ * "Switzer" (its own literal `--framer-font-family` fallback token) — and
+ * all three are already spoken for elsewhere in this library: Inter pairs
+ * with Gilda Display in aurelia, Satoshi with Forum in tavola, Switzer
+ * with Clash Grotesk and Geist Mono in kiln. Reusing any of the three would
+ * put fluxo one degree away from a sibling's own type voice even with a
+ * different partner face, so this port draws a fresh pair instead: display
+ * headings in "Instrument Sans" (a Google-hosted geometric grotesk with the
+ * same confident, slightly squared character as the source's own Inter
+ * display use) and body copy in "Manrope" (a warmer, more open grotesk that
+ * keeps small print legible at the source's own tight tracking) — vendored
+ * locally into this repo's own /t/fluxo/fonts/ as the two families' own
+ * variable-font files, the same reasoning every sibling template gives: a
+ * page that silently falls back because a font host was unreachable is
+ * worse than one that never asked. Each is declared once per weight the
+ * page actually uses, all pointing at the same variable file — the same
+ * static-instance trick Google's own stylesheet uses for a variable family.
+ */
+@font-face {
+  font-family: 'Instrument Sans';
+  src: url('/t/fluxo/fonts/instrument-sans-var.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+@font-face {
+  font-family: 'Instrument Sans';
+  src: url('/t/fluxo/fonts/instrument-sans-var.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+@font-face {
+  font-family: 'Manrope';
+  src: url('/t/fluxo/fonts/manrope-var.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Manrope';
+  src: url('/t/fluxo/fonts/manrope-var.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 500;
+}
+@font-face {
+  font-family: 'Manrope';
+  src: url('/t/fluxo/fonts/manrope-var.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   FLUXO — design tokens, measured from the source Framer HTML/CSS.
+
+   A deep-indigo-and-violet palette on off-white, not aurelia's plum-and-gold,
+   tavola's gold-on-near-black, forno's red/orange/yellow, kiln's monochrome
+   or natsu's caramel-and-cream: every literal token below is the source's
+   own, confirmed against its compiled CSS custom properties —
+   `rgb(17, 14, 52)` (its own button/link fill, `--fluxo-primary` here),
+   `rgb(35, 31, 82)` (its own hover state), `rgb(184, 121, 253)` (its own
+   small-highlight violet), `rgb(243, 243, 255)` (its own lavender section
+   tint), `rgb(18, 18, 18)` (its own ink) and `rgb(125, 125, 125)` (its own
+   muted grey). No warm hue anywhere — a cool, software-native palette
+   matching a dashboard product rather than a hospitality one.
+   ========================================================================== */
+
+@theme inline {
+  --color-fluxo-bg: #ffffff;
+  --color-fluxo-surface: #f3f3ff;
+  --color-fluxo-ink: #121212;
+  --color-fluxo-muted: #6b6b76;
+  --color-fluxo-faint: #8d8d97;
+  --color-fluxo-border: #e7e7f3;
+  --color-fluxo-primary: #110e34;
+  --color-fluxo-primary-hover: #231f52;
+  --color-fluxo-accent: #b879fd;
+
+  /*
+   * Namespaced, not the generic `--font-display` / `--font-body` every
+   * sibling template (and the host shell itself) also declares — see
+   * forno's own note on why a shared name loses a collision silently.
+   */
+  --font-fluxo-display: 'Instrument Sans', 'Instrument Sans Placeholder', sans-serif;
+  --font-fluxo-body: 'Manrope', 'Manrope Placeholder', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.fluxo-root {
+  background: var(--color-fluxo-bg);
+  color: var(--color-fluxo-muted);
+  font-family: var(--font-fluxo-body);
+}
+
+.fluxo-root h1,
+.fluxo-root h2,
+.fluxo-root h3,
+.fluxo-root .font-fluxo-display {
+  font-family: var(--font-fluxo-display);
+  font-weight: 700;
+}
+
+/*
+ * The source's real corner language: a literal `border-radius: 100px` on
+ * every button in its compiled CSS (`Primary - large` / `Primary - small`),
+ * confirmed against its SSR HTML — a full pill, not aurelia's soft square
+ * or kiln's near-square 4px. Cards use a softer, still-literal 20px, between
+ * the source's own 12px nav container and its ~8px micro-cards.
+ */
+.fluxo-pill {
+  border-radius: 999px;
+}
+.fluxo-card {
+  border-radius: 20px;
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS, no motion library, no clip-path.
+
+   A deliberately different animation language from every sibling: aurelia
+   softens into focus with a blur, tavola fades a plain translateY/opacity
+   in, forno bounces with scale + rotate overshoot, kiln snaps up on a brisk
+   near-linear curve, natsu blooms open behind a circular clip-path mask.
+   Fluxo rises AND settles from a slight scale on a soft "ease-out-expo"
+   curve — the unhurried deceleration of a dashboard card docking into
+   place — using only `opacity` and `transform` (`translateY` + `scale`), so
+   there is no layout-collapsing property for an IntersectionObserver to
+   measure the observed element's own box against (see Reveal.tsx's doc
+   comment, and natsu's/brasa's own `Reveal.tsx`, for the clip-path +
+   IntersectionObserver bug this sidesteps entirely by construction).
+   -------------------------------------------------------------------------- */
+
+.fluxo-reveal {
+  opacity: 0;
+  transform: translateY(18px) scale(0.98);
+  transition:
+    opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.fluxo-reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fluxo-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .fluxo-marquee {
+    animation: none !important;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/* Integrations marquee — a plain CSS loop, paused on hover/touch focus. */
+@keyframes fluxo-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.fluxo-marquee {
+  animation: fluxo-marquee 26s linear infinite;
+}
+
+.fluxo-marquee:hover {
+  animation-play-state: paused;
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * `clip` rather than `hidden`: it stops the overflow without making this a
+ * scroll container, so `position: sticky` inside still works.
+ */
+.fluxo-root {
+  overflow-x: clip;
+}

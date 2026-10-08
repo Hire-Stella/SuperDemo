@@ -60,8 +60,9 @@ async function waitForPort(port, label, tries = 60) {
 
 function pgBinDir() {
   // Resolve the platform-specific package that holds initdb/pg_ctl/postgres.
+  const platform = process.platform === 'win32' ? 'windows' : process.platform;
   const candidates = [
-    `@embedded-postgres/${process.platform}-${process.arch === 'x64' ? 'x64' : 'arm64'}`,
+    `@embedded-postgres/${platform}-${process.arch === 'x64' ? 'x64' : 'arm64'}`,
   ];
   for (const pkg of candidates) {
     for (const base of [ROOT, join(ROOT, 'node_modules', '.pnpm')]) {

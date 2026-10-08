@@ -22,6 +22,22 @@
 @source "../../../packages/templates/stackgrid/src";
 @source "../../../packages/templates/utomic/src";
 @source "../../../packages/templates/zova/src";
+@source "../../../packages/templates/tavola/src";
+@source "../../../packages/templates/forno/src";
+@source "../../../packages/templates/aurelia/src";
+@source "../../../packages/templates/brasa/src";
+@source "../../../packages/templates/yokai/src";
+@source "../../../packages/templates/natsu/src";
+@source "../../../packages/templates/kiln/src";
+@source "../../../packages/templates/folio/src";
+@source "../../../packages/templates/pearl/src";
+@source "../../../packages/templates/sucre/src";
+@source "../../../packages/templates/oscar/src";
+@source "../../../packages/templates/cryptix/src";
+@source "../../../packages/templates/fluxo/src";
+@source "../../../packages/templates/insunet/src";
+@source "../../../packages/templates/summit/src";
+@source "../../../packages/templates/vantra/src";
 @import '@stella/template-sanvera/theme.css';
 @import '@stella/template-momentum/theme.css';
 @import '@stella/template-reodental/theme.css';
@@ -31,7 +47,22 @@
 @import '@stella/template-stackgrid/theme.css';
 @import '@stella/template-utomic/theme.css';
 @import '@stella/template-zova/theme.css';
-
+@import '@stella/template-tavola/theme.css';
+@import '@stella/template-forno/theme.css';
+@import '@stella/template-aurelia/theme.css';
+@import '@stella/template-brasa/theme.css';
+@import '@stella/template-yokai/theme.css';
+@import '@stella/template-natsu/theme.css';
+@import '@stella/template-kiln/theme.css';
+@import '@stella/template-folio/theme.css';
+@import '@stella/template-pearl/theme.css';
+@import '@stella/template-sucre/theme.css';
+@import '@stella/template-oscar/theme.css';
+@import '@stella/template-cryptix/theme.css';
+@import '@stella/template-fluxo/theme.css';
+@import '@stella/template-insunet/theme.css';
+@import '@stella/template-summit/theme.css';
+@import '@stella/template-vantra/theme.css';
 
 @custom-variant dark (&:is(.dark *));
 

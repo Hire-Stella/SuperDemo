@@ -22,6 +22,28 @@ export const manifest: TemplateManifest = {
   source: 'Templates-Pruthviraj/reodental-clone',
   supports: SUPPORTS,
   preview: '/previews/reodental.png',
+  /**
+   * Derived from the source's own primary CTA, `LabelTrackButton` with
+   * `variant="primary"` (`components/LabelTrackButton.tsx`) as it actually
+   * renders in `page.tsx`: both real instances — the hero's "Book an
+   * appointment" and the contact band's identical CTA — override the
+   * component's bare-primary `bg-ink` with `!bg-cream !text-ink`, since both
+   * sit on the dark `bg-ink` hero/contact bands. `accent`/`onAccent` are
+   * that actual rendered pair, `--color-cream` (`#fafaf8`) under
+   * `--color-ink` (`#121212`) from `theme.css` — not `--color-gold`, which
+   * the source uses only for small-caps eyebrow labels, never a button.
+   * `radius` is the button's own `rounded-full`. `font` is the root's body
+   * face, Geist Sans (`--font-geist-sans`, see `.reodental-root` in
+   * `theme.css`). `transition` mirrors the button's own `transition-colors`
+   * class (Tailwind's default 150ms color easing).
+   */
+  widgetTheme: {
+    accent: '#fafaf8',
+    onAccent: '#121212',
+    radius: '9999px',
+    font: '"Geist", ui-sans-serif, system-ui, sans-serif',
+    transition: 'background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1), color 0.15s cubic-bezier(0.4, 0, 0.2, 1)',
+  },
 };
 
 /**

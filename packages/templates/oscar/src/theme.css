@@ -1,0 +1,10 @@
+/*
+ * oscar carries no separate theme stylesheet.
+ *
+ * Unlike every other template here, oscar is a literal mirror of the centre's
+ * real site (see index.tsx's file header) — its actual CSS is the scraped
+ * `shared.css` + `style.css` in mirror-content.ts, injected inline by the
+ * component itself so it travels with the markup it belongs to. This file
+ * exists only so `themeHref`/the package's `./theme.css` export keep
+ * resolving for any consumer that expects every registry entry to have one.
+ */

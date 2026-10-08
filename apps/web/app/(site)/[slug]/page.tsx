@@ -15,6 +15,8 @@ import {
   THEME_PRESETS,
   themeToCss,
 } from '@superdemo/contracts';
+import { TEMPLATES as LIBRARY } from '@stella/template-runtime';
+import { TalkToStellaWidget as OscarTalkToStellaWidget } from '@stella/template-oscar';
 import { SiteRender } from '@/components/site/templates';
 import { DograhWidget } from '@/components/site/dograh-widget';
 import { CallPanel } from '@/components/site/call-panel';
@@ -165,6 +167,31 @@ export default async function TenantSitePage({ params, searchParams }: Params) {
   const themeCss = themeToCss(resolveThemeTokens(site.themePreset, site.themeTokens));
   const styleCss = siteStyleToCss(site.style);
 
+  /**
+   * The chat launcher's skin, keyed off the ported template's own manifest.
+   *
+   * Set at `:root` rather than on the template's `.{id}-root` div: the
+   * launcher renders as this page's sibling, not the template's descendant,
+   * so a scoped variable would never reach it. In-house templates (solaris,
+   * sentira, …) declare no manifest here and the launcher keeps its current
+   * generic look, unchanged.
+   */
+  const widgetTheme = LIBRARY[site.template]?.manifest.widgetTheme;
+  const widgetThemeCss = widgetTheme
+    ? `:root{${(
+        [
+          ['--widget-accent', widgetTheme.accent],
+          ['--widget-on-accent', widgetTheme.onAccent],
+          ['--widget-radius', widgetTheme.radius],
+          ['--widget-font', widgetTheme.font],
+          ['--widget-transition', widgetTheme.transition],
+        ] as const
+      )
+        .filter(([, v]) => v)
+        .map(([k, v]) => `${k}:${v};`)
+        .join('')}}`
+    : '';
+
   return (
     <>
       {/*
@@ -176,16 +203,36 @@ export default async function TenantSitePage({ params, searchParams }: Params) {
       */}
       {themeCss && <style dangerouslySetInnerHTML={{ __html: themeCss }} />}
       <style dangerouslySetInnerHTML={{ __html: styleCss }} />
+      {widgetThemeCss && <style dangerouslySetInnerHTML={{ __html: widgetThemeCss }} />}
       <SiteRender site={site} />
       {/*
         Decided here, not in the widget: the prop is serialised into the flight
         payload, so anything passed is public. Preview renders nothing at all.
+
+        oscar carries its own hand-built launcher (see
+        packages/templates/oscar/src/talk-to-stella.tsx for why it isn't the
+        generic DograhWidget below), so it gets the connection's raw tokens
+        instead — the chat token has to be pulled out of chatScriptSrc's own
+        query string since DograhWidgetDto only carries the built URL, not the
+        bare token, for every other template's benefit.
       */}
-      <DograhWidget
-        src={previewing || !site.dograh.enabled ? null : site.dograh.scriptSrc}
-        chatSrc={previewing || !site.dograh.enabled ? null : site.dograh.chatScriptSrc}
-        chatContainerId={site.dograh.chatContainerId}
-      />
+      {site.template === 'oscar' && !previewing && site.dograh.enabled && site.dograh.baseUrl && site.dograh.embedToken ? (
+        <OscarTalkToStellaWidget
+          baseUrl={site.dograh.baseUrl}
+          voiceToken={site.dograh.embedToken}
+          chatToken={
+            (site.dograh.chatScriptSrc && new URL(site.dograh.chatScriptSrc).searchParams.get('token')) ||
+            site.dograh.embedToken
+          }
+          chatContainerId={site.dograh.chatContainerId}
+        />
+      ) : (
+        <DograhWidget
+          src={previewing || !site.dograh.enabled ? null : site.dograh.scriptSrc}
+          chatSrc={previewing || !site.dograh.enabled ? null : site.dograh.chatScriptSrc}
+          chatContainerId={site.dograh.chatContainerId}
+        />
+      )}
       {/* The centre's demo calls — talk now, call me back, info call. */}
       {!previewing && (
         <CallPanel

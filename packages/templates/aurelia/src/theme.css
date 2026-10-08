@@ -1,0 +1,187 @@
+/*
+ * aurelia, scoped to its own root.
+ *
+ * Nine-plus templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+/*
+ * Typography, self-hosted. Two real families back the source site — "Gilda
+ * Display" (a Google-hosted transitional serif, weight 400 only) for every
+ * heading, and "Inter" (a Google variable sans, weights 400–700 in one file)
+ * for body copy and buttons — both vendored locally into this repo's own
+ * /t/aurelia/fonts/ rather than linked from a font CDN, the same reasoning
+ * tavola and forno gave: a page that silently falls back because a font
+ * host was unreachable is worse than one that never asked.
+ *
+ * A deliberately different pairing from both siblings: an elegant serif
+ * (not Forum, not a bubble display face) on a plain grotesk sans (not
+ * Satoshi, not Gabarito).
+ */
+@font-face {
+  font-family: 'Gilda Display';
+  src: url('/t/aurelia/fonts/gilda-display-400.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('/t/aurelia/fonts/inter-variable.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400 700;
+}
+
+/* ==========================================================================
+   AURELIA — design tokens, measured from the source Framer HTML/CSS.
+
+   A warm, jewel-toned palette: an off-white page background with a hint of
+   pink (`rgb(255,246,255)`), a near-black plum ink for dark bands
+   (`rgb(24,3,24)`, the source's own literal token), a deep plum for
+   headings (`rgb(94,49,94)`), a magenta-purple accent for eyebrows
+   (`rgb(163,79,163)`), and a warm gold (`rgb(251,192,41)`, the source's own
+   literal button colour and rating-star colour) for every call to action
+   and big number. Genuinely distinct from tavola's single muted gold-on-
+   near-black and forno's red/orange/yellow-on-white: a plum-and-gold duet
+   on a warm off-white ground, not a single accent on a fixed dark or white
+   page.
+
+   The source's own literal secondary-text grey (`rgb(153,153,153)`, used
+   for paragraph copy) reads at roughly 2.7:1 against the page background —
+   well under the 4.5:1 AA minimum for body text. `--color-aurelia-muted`
+   below is deliberately darkened (and plum-tinted, to stay in the family)
+   from that literal value, the same kind of legibility fix tavola's and
+   forno's own hard-lesson notes describe; `--color-aurelia-border` keeps
+   the lighter literal token since it is only ever used for hairlines, not
+   text.
+   ========================================================================== */
+
+@theme inline {
+  --color-aurelia-bg: #fff6ff;
+  --color-aurelia-surface: #ffffff;
+  --color-aurelia-ink: #180318;
+  --color-aurelia-plum: #5e315e;
+  --color-aurelia-accent: #a34fa3;
+  --color-aurelia-muted: #5a4a5a;
+  --color-aurelia-border: #c2bec2;
+  --color-aurelia-gold: #fbc029;
+
+  /*
+   * Namespaced, not the generic `--font-display` / `--font-body` every
+   * sibling template (and the host shell itself) also declares — see
+   * forno's own note on why a shared name loses a collision silently.
+   */
+  --font-aurelia-display: 'Gilda Display', serif;
+  --font-aurelia-body: 'Inter', 'Inter Placeholder', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.aurelia-root {
+  background: var(--color-aurelia-bg);
+  color: var(--color-aurelia-muted);
+  font-family: var(--font-aurelia-body);
+}
+
+.aurelia-root h1,
+.aurelia-root h2,
+.aurelia-root h3,
+.aurelia-root .font-aurelia-display {
+  font-family: var(--font-aurelia-display);
+  font-weight: 400;
+}
+
+/*
+ * The source's real corner language, kept apart on purpose.
+ *
+ * Every button/pill CTA in the source is a true pill — literally
+ * `border-radius: 150px` on a control short enough for it to resolve to a
+ * full stadium shape (the same real button that gave `widgetTheme.radius`
+ * its value). Photo frames and cards use a literal, much tighter 6px —
+ * confirmed on the source's own frosted rating-badge chip — not a soft
+ * 16–24px rounding the way tavola's and forno's cards use. Two corner
+ * languages, same discipline as both siblings, genuinely different values.
+ */
+.aurelia-pill {
+  border-radius: 999px;
+}
+.aurelia-card {
+  border-radius: 6px;
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS, no motion library.
+
+   A deliberately different animation language from both siblings: tavola
+   fades a plain translateY/opacity in on an ease-out curve, forno bounces
+   in with scale + rotate overshoot. Aurelia softens into place instead —
+   a blur-to-focus reveal paired with only a small lift, reading as an
+   unhurried, editorial move rather than either a plain fade or a bounce.
+   -------------------------------------------------------------------------- */
+
+.aurelia-reveal {
+  opacity: 0;
+  filter: blur(10px);
+  transform: translateY(14px);
+  transition:
+    opacity 0.9s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.9s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.aurelia-reveal-in {
+  opacity: 1;
+  filter: blur(0);
+  transform: none;
+}
+
+/*
+ * The stats band's continuous ticker — a third, independent motion: a
+ * linear infinite horizontal scroll, distinct from both the scroll-triggered
+ * reveal above and from forno's floating bob (a vertical oscillation).
+ * Duplicated content in the marquee track (see Stats.tsx) is what lets the
+ * loop point be invisible.
+ */
+@keyframes aurelia-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.aurelia-marquee-track {
+  animation: aurelia-marquee 22s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aurelia-reveal {
+    opacity: 1;
+    filter: none;
+    transform: none;
+    transition: none;
+  }
+  .aurelia-marquee-track {
+    animation: none;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * `clip` rather than `hidden`: it stops the overflow without making this a
+ * scroll container, so `position: sticky` inside still works.
+ */
+.aurelia-root {
+  overflow-x: clip;
+}

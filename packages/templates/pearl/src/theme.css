@@ -1,0 +1,228 @@
+/*
+ * pearl, scoped to its own root.
+ *
+ * Nine-plus templates share one stylesheet in a host app, and their
+ * palettes all named themselves `:root`. Unscoped, the last one
+ * imported wins for every other template and the surrounding
+ * dashboard inherits whichever that was. The template root div
+ * carries this class, so every custom property still resolves.
+ */
+
+/*
+ * Typography, self-hosted. Two real Google Fonts — "Fredoka" (a rounded,
+ * bubble-lettered display face, weight 600 only, used for every headline
+ * and the wordmark) and "Nunito" (three static weights, 400/600/700, used
+ * for body copy, nav and buttons) — both vendored locally into this repo's
+ * own /t/pearl/fonts/ rather than linked from a font CDN, the same
+ * reasoning every sibling template gives: a page that silently falls back
+ * because a font host was unreachable is worse than one that never asked.
+ *
+ * A pairing genuinely different from every sibling: a rounded, playful
+ * geometric display face (not Forum's serif, not Cherry Bomb One's bubble
+ * cursive, not Clash Grotesk's sharp geometric, not Yuji Boku's brush
+ * calligraphy) on a rounded humanist sans (not Satoshi, Switzer, IBM Plex
+ * Sans or Fira Sans Extra Condensed) — the only pairing in this library
+ * where both faces share the same soft, circular terminals, matching a
+ * shop built around a round tapioca pearl.
+ */
+@font-face {
+  font-family: 'Fredoka';
+  src: url('/t/pearl/fonts/fredoka-600.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+@font-face {
+  font-family: 'Nunito';
+  src: url('/t/pearl/fonts/nunito-400.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+@font-face {
+  font-family: 'Nunito';
+  src: url('/t/pearl/fonts/nunito-600.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 600;
+}
+@font-face {
+  font-family: 'Nunito';
+  src: url('/t/pearl/fonts/nunito-700.woff2') format('woff2');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+
+/* ==========================================================================
+   PEARL — an original design system, not measured from any source template.
+
+   A milky, warm cream page (`#fff7f1`) rather than any sibling's own cream
+   (natsu's cooler `#f3efea`, brasa's yellower `#f7efd4`) or kiln's pure
+   white, with a deep plum-brown ink (`#3a2432`) for text — warmer and more
+   purple than aurelia's near-black plum (`#180318`) or yokai's soot ink
+   (`#17130f`). One saturated accent, a taro purple (`#7a5c9e`), does every
+   button and primary tag; a rose "berry" (`#c24164`) sits beside it for a
+   second small-text accent, and a deep brown-sugar ink (`#6b4a34`) marks
+   numerals and pearl dots. Genuinely distinct from every sibling cafe/
+   restaurant template's palette: a purple-and-berry duo on milky cream,
+   not natsu's cream-and-caramel, kiln's all-monochrome, tavola's
+   gold-on-near-black, forno's red/orange/yellow-on-white, aurelia's
+   plum-and-gold-on-blush, brasa's marigold-and-chili-on-cream, or yokai's
+   lantern-red-on-soot.
+
+   Contrast was checked with the actual formula, not eyeballed — the same
+   hard lesson every sibling template's own fix describes.
+   ========================================================================== */
+
+@theme inline {
+  --color-pearl-bg: #fff7f1;
+  --color-pearl-surface: #ffffff;
+  --color-pearl-ink: #3a2432;
+  /* #7c6b78 on #fff7f1 is ~4.7:1 — just clears the 4.5:1 AA minimum for
+     body-sized text, checked after a first pass at a lighter #9c8b98 (only
+     ~3.1:1) failed it. */
+  --color-pearl-muted: #7c6b78;
+  /* The decorative tint used for badge fills and the hero inset ring —
+     never for small text on its own (see `--color-pearl-taro` below for
+     the darkened value that carries text). */
+  --color-pearl-taro-soft: #8b6fb0;
+  /* #7a5c9e on white is ~5.45:1 — darkened one step from the `-soft` tint
+     above specifically to clear 4.5:1 for button labels and small text. */
+  --color-pearl-taro: #7a5c9e;
+  /* #c24164 on #fff7f1 is ~4.7:1 — a second small-text accent, kept apart
+     from the lighter decorative pink used only on large fills. */
+  --color-pearl-berry: #c24164;
+  --color-pearl-berry-soft: #f2708a;
+  --color-pearl-sugar: #6b4a34;
+  --color-pearl-border: #ecdce4;
+
+  /*
+   * Namespaced, not the generic `--font-display` / `--font-body` every
+   * sibling template (and the host shell itself) also declares — see
+   * forno's own note on why a shared name loses a collision silently.
+   */
+  --font-pearl-display: 'Fredoka', sans-serif;
+  --font-pearl-body: 'Nunito', 'Nunito Placeholder', sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+.pearl-root {
+  background: var(--color-pearl-bg);
+  color: var(--color-pearl-muted);
+  font-family: var(--font-pearl-body);
+}
+
+.pearl-root h1,
+.pearl-root h2,
+.pearl-root h3,
+.pearl-root .font-pearl-display {
+  font-family: var(--font-pearl-display);
+  font-weight: 600;
+}
+
+/*
+ * This template's own corner language, kept apart on purpose from every
+ * sibling's: a "cup" shape — rounded 28px on the top two corners, a
+ * flatter 8px on the bottom two, like a boba cup's domed lid over a
+ * squarer base — for photos and cards, and a true pill (999px) for buttons,
+ * badges and the hero's round bubble inset. Two values, same discipline as
+ * every sibling's own split, but a genuinely different shape from kiln's
+ * uniform near-square 4px, natsu's uniform pill-and-soft pairing, yokai's
+ * diagonal "tag" corner, and tavola's/aurelia's/forno's/brasa's own splits.
+ */
+.pearl-cup {
+  border-radius: 28px 28px 8px 8px;
+}
+.pearl-pill {
+  border-radius: 999px;
+}
+
+/* --------------------------------------------------------------------------
+   Interactions — plain CSS, no motion library.
+
+   A pairing genuinely different from every sibling: kiln rises fast with no
+   blur, natsu blooms open with a circular clip-path iris, tavola fades a
+   plain translateY/opacity, forno bounces in with a combined scale + rotate
+   overshoot, aurelia softens into focus with a blur, brasa wipes up with a
+   clip-path inset, and yokai lifts and settles with no overshoot at all.
+   Pearl pops in instead — a pure scale-and-lift with a springy overshoot on
+   a different curve than forno's, and deliberately no rotation at all, so
+   it reads as a bubble popping into shape rather than a bounce, a blur, a
+   wipe or a plain slide.
+   -------------------------------------------------------------------------- */
+
+.pearl-reveal {
+  opacity: 0;
+  transform: translateY(14px) scale(0.86);
+  transition:
+    opacity 0.45s ease,
+    transform 0.6s cubic-bezier(0.22, 1.61, 0.36, 1);
+}
+
+.pearl-reveal-in {
+  opacity: 1;
+  transform: none;
+}
+
+/*
+ * A continuous, independent third motion: small filled "pearl" dots rising
+ * and drifting gently side to side while fading out, looping — standing in
+ * for tapioca pearls floating up through milk tea, matching the hero's own
+ * bubble-tea photo rather than borrowing brasa's/natsu's spin, forno's
+ * up-down float, aurelia's horizontal marquee, or yokai's widening steam.
+ * Each instance sets its own duration/delay inline (see Hero.tsx) so
+ * identical dots don't rise in lockstep.
+ */
+@keyframes pearl-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(0) translateX(0);
+  }
+  15% {
+    opacity: 0.85;
+  }
+  50% {
+    transform: translateY(-22px) translateX(4px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-46px) translateX(-3px);
+  }
+}
+
+.pearl-rise {
+  animation: pearl-rise var(--pearl-rise-duration, 3.6s) ease-in-out infinite;
+  animation-delay: var(--pearl-rise-delay, 0s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pearl-reveal {
+    opacity: 1;
+    transform: none;
+    filter: none;
+    transition: none;
+  }
+  .pearl-rise {
+    animation: none;
+    opacity: 0;
+  }
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+/*
+ * Entrance animations must not create a horizontal scrollbar.
+ *
+ * Every reveal's scale-in start state sits slightly *smaller* than its
+ * settled size (never larger, so it can't itself cause overflow). `clip`
+ * rather than `hidden`: it stops the overflow without making this a scroll
+ * container, so `position: sticky` inside still works.
+ */
+.pearl-root {
+  overflow-x: clip;
+}
