@@ -21,7 +21,8 @@ export const CALENDAR_PROVIDERS = ['mock', 'calcom'] as const;
 export const CalendarProviderKind = z.enum(CALENDAR_PROVIDERS);
 export type CalendarProviderKind = z.infer<typeof CalendarProviderKind>;
 
-export const BOOKING_SOURCES = ['dashboard', 'website', 'voice'] as const;
+/** calcom: booked directly on the centre's Cal.com page and pulled in by the sync. */
+export const BOOKING_SOURCES = ['dashboard', 'website', 'voice', 'calcom'] as const;
 export const BookingSource = z.enum(BOOKING_SOURCES);
 export type BookingSource = z.infer<typeof BookingSource>;
 
@@ -63,6 +64,82 @@ export const CalendarConfigView = z.object({
   timezone: z.string(),
 });
 export type CalendarConfigView = z.infer<typeof CalendarConfigView>;
+
+/* ================================ Cal.com ================================= */
+
+/*
+ * A centre that runs Cal.com makes it the calendar: slots come from its
+ * Cal.com availability for one event type, every booking made here — on the
+ * dashboard, the landing page or by the voice agent — is created there (so it
+ * reaches their Google or Outlook and sends the invite), and bookings made on
+ * their own cal.com link are pulled back in. CalendarBooking stays the local
+ * copy the week view reads.
+ */
+
+export const CalcomEventType = z.object({
+  id: z.number().int(),
+  title: z.string(),
+  slug: z.string(),
+  lengthMinutes: z.number().int(),
+});
+export type CalcomEventType = z.infer<typeof CalcomEventType>;
+
+export const CalcomAccount = z.object({
+  id: z.number().int(),
+  username: z.string().nullable(),
+  email: z.string(),
+  name: z.string().nullable(),
+  timeZone: z.string().nullable(),
+});
+export type CalcomAccount = z.infer<typeof CalcomAccount>;
+
+/** Setting.calcomPublic: everything about the connection except the key. */
+export const CalcomPublic = z.object({
+  account: CalcomAccount,
+  eventType: CalcomEventType,
+  /** Fingerprint of the stored key, so the page can say which key is in use. */
+  keyHint: z.string(),
+  /** Set when a webhook was registered (needs PUBLIC_BASE_URL); else polling only. */
+  /** Cal.com webhook ids are UUIDs; numbers accepted from older rows. */
+  webhookId: z.union([z.string(), z.number()]).transform(String).nullable().default(null),
+  lastSyncedAt: z.string().nullable().default(null),
+  lastError: z.string().nullable().default(null),
+});
+export type CalcomPublic = z.infer<typeof CalcomPublic>;
+
+export const CalcomStatus = z.object({
+  connected: z.boolean(),
+  account: CalcomAccount.nullable(),
+  eventType: CalcomEventType.nullable(),
+  /** The public booking page for the event type, e.g. https://cal.com/jane/consultation. */
+  bookingUrl: z.string().nullable(),
+  keyHint: z.string().nullable(),
+  /** True when Cal.com pushes changes to us; false means we poll every minute. */
+  webhook: z.boolean(),
+  lastSyncedAt: z.string().nullable(),
+  lastError: z.string().nullable(),
+});
+export type CalcomStatus = z.infer<typeof CalcomStatus>;
+
+/** Look up the account and its event types for a key, before connecting. */
+export const CalcomLookupInput = z.object({
+  /** Omit to use the key already stored for this centre. */
+  apiKey: z.string().trim().min(10, 'Paste your Cal.com API key').max(200).optional(),
+});
+export type CalcomLookupInput = z.infer<typeof CalcomLookupInput>;
+
+export const CalcomLookupOutput = z.object({
+  account: CalcomAccount,
+  eventTypes: z.array(CalcomEventType),
+});
+export type CalcomLookupOutput = z.infer<typeof CalcomLookupOutput>;
+
+export const CalcomConnectInput = z.object({
+  /** Omit to keep the stored key and only change the event type. */
+  apiKey: z.string().trim().min(10, 'Paste your Cal.com API key').max(200).optional(),
+  eventTypeId: z.number().int().positive('Pick an event type'),
+});
+export type CalcomConnectInput = z.infer<typeof CalcomConnectInput>;
 
 export const BookingRow = z.object({
   id: z.string(),

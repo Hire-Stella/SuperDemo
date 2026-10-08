@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
+  CalendarCheck,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -19,6 +20,7 @@ import {
   type BookingSource,
   type CalendarConfig,
   type CalendarConfigView,
+  type CalcomStatus,
   WEEKDAY_LABELS,
   WEEKDAY_ORDER,
   addDaysIso,
@@ -30,6 +32,7 @@ import { api, qs } from '@/lib/api';
 import { phone as formatPhone } from '@/lib/format';
 import { useSession } from '@/components/providers';
 import { NewBookingDialog, clockOf } from '@/components/new-booking-dialog';
+import { CalcomCard } from '@/components/calcom-card';
 import {
   Badge,
   Button,
@@ -62,7 +65,17 @@ const SOURCE_STYLE: Record<BookingSource, { label: string; className: string; ic
   voice: { label: 'Voice agent', className: 'bg-ai-soft text-ai', icon: Mic },
   website: { label: 'Website', className: 'bg-brand-soft text-primary', icon: Globe },
   dashboard: { label: 'Dashboard', className: 'bg-muted text-muted-foreground', icon: LayoutDashboard },
+  calcom: { label: 'Cal.com', className: 'bg-live-soft text-live', icon: CalendarCheck },
 };
+
+/**
+ * With Cal.com connected, its availability decides which days and hours are
+ * bookable, so the page stops second-guessing it with the built-in hours: every
+ * day is open and the slot list is whatever Cal.com offers.
+ */
+function openAllHours(cfg: CalendarConfig): CalendarConfig {
+  return { ...cfg, workingDays: [0, 1, 2, 3, 4, 5, 6], openTime: '00:00', closeTime: '23:59' };
+}
 
 const SLOT_LENGTHS = [15, 20, 30, 45, 60, 90, 120] as const;
 
@@ -73,10 +86,15 @@ export default function CalendarPage() {
   // A platform operator reads but cannot write — the API refuses their writes
   // anyway, so offering the buttons would only offer a 403.
   const canWrite = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
+  const canManage = user?.role === 'ADMIN';
 
   const config = useQuery({
     queryKey: ['calendar', 'config'],
     queryFn: () => api.get<CalendarConfigView>('/calendar/config'),
+  });
+  const calcom = useQuery({
+    queryKey: ['calendar', 'calcom'],
+    queryFn: () => api.get<CalcomStatus>('/calendar/calcom'),
   });
   const tz = config.data?.timezone ?? 'Asia/Dubai';
   const today = zonedParts(new Date(), tz).date;
@@ -98,6 +116,8 @@ export default function CalendarPage() {
     queryKey: ['calendar', 'bookings', range.from, range.to],
     queryFn: () => api.get<BookingRow[]>(`/calendar/bookings${qs(range)}`),
     enabled: Boolean(config.data),
+    // Bookings made on the Cal.com page arrive through the sync; keep the week fresh.
+    refetchInterval: calcom.data?.connected ? 30_000 : false,
   });
 
   const [creating, setCreating] = useState(false);
@@ -126,7 +146,8 @@ export default function CalendarPage() {
   if (config.isError) {
     return <p className="p-6 text-sm text-destructive">{(config.error as Error).message}</p>;
   }
-  const cfg = config.data!.config;
+  const connected = calcom.data?.connected === true;
+  const cfg = connected ? openAllHours(config.data!.config) : config.data!.config;
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-5 sm:px-6">
@@ -147,12 +168,14 @@ export default function CalendarPage() {
         )}
       </header>
 
-      <div className="mb-4">
-        <MockNotice>
-          Bookings are held in this platform&rsquo;s own calendar — no Cal.com or Google calendar
-          is connected. Slots, clashes and opening hours all behave as they will once one is.
-        </MockNotice>
-      </div>
+      {calcom.data && !connected && (
+        <div className="mb-4">
+          <MockNotice>
+            Bookings are held in this platform&rsquo;s own calendar — no Cal.com calendar is
+            connected. Slots, clashes and opening hours all behave as they will once one is.
+          </MockNotice>
+        </div>
+      )}
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Metric label="Booked this week" value={stats.booked} tone="brand" />
@@ -163,7 +186,11 @@ export default function CalendarPage() {
 
       <Card
         title={weekTitle(days[0]!, days[6]!)}
-        subtitle={`${cfg.openTime}–${cfg.closeTime} · ${cfg.slotMinutes}-minute slots`}
+        subtitle={
+          connected
+            ? `Cal.com · ${calcom.data?.eventType?.title} · ${calcom.data?.eventType?.lengthMinutes}-minute appointments`
+            : `${cfg.openTime}–${cfg.closeTime} · ${cfg.slotMinutes}-minute slots`
+        }
         action={
           <div className="flex items-center gap-1">
             <Button
@@ -223,8 +250,10 @@ export default function CalendarPage() {
       </Card>
 
       {canWrite && (
-        <div className="mt-4 max-w-2xl">
-          <HoursCard view={config.data!} />
+        <div className="mt-4 grid max-w-5xl items-start gap-4 lg:grid-cols-2">
+          {calcom.data && <CalcomCard status={calcom.data} canManage={canManage} />}
+          {/* Cal.com's own availability replaces these hours while it is connected. */}
+          {!connected && <HoursCard view={config.data!} />}
         </div>
       )}
 

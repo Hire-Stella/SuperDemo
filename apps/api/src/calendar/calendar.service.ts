@@ -31,6 +31,8 @@ import { TenantContext } from '../tenancy/tenant-context.service';
 import type { CalendarProvider } from './calendar.provider';
 import { MockCalendarProvider, toBookingRow } from './mock-calendar.provider';
 import { readCalendarSettings } from './calendar-settings';
+import { CalcomCalendarProvider } from './calcom/calcom-calendar.provider';
+import { CalcomService } from './calcom/calcom.service';
 
 /**
  * A centre's appointment book.
@@ -56,6 +58,8 @@ export class CalendarService {
     private readonly prisma: PrismaService,
     private readonly tenants: TenantContext,
     private readonly mock: MockCalendarProvider,
+    private readonly calcomProvider: CalcomCalendarProvider,
+    private readonly calcom: CalcomService,
   ) {}
 
   /* ============================ tenant-facing ============================= */
@@ -111,12 +115,12 @@ export class CalendarService {
   async updateConfig(input: CalendarConfig): Promise<CalendarConfigView> {
     const orgId = this.tenants.requireOrgId();
     /*
-     * Refused up front rather than saved and then failing every read: a centre
-     * that selected Cal.com today would have a calendar that 400s on the page,
-     * the landing page and mid-call, all from one dropdown.
+     * The provider is not this form's to change: Cal.com is switched on and
+     * off by connecting and disconnecting it, so a centre can never select a
+     * calendar it has no key for. Whatever was sent, the stored one is kept.
      */
-    if (input.provider === 'calcom') throw calcomNotConnected();
-    const config = CalendarConfig.parse(input);
+    const { config: current } = await readCalendarSettings(this.prisma, orgId);
+    const config = CalendarConfig.parse({ ...input, provider: current.provider });
     await this.prisma.setting.upsert({
       where: { orgId },
       create: { orgId, calendarConfig: config },
@@ -319,7 +323,7 @@ export class CalendarService {
         // Offer the alternatives in the same breath, so the agent does not
         // need a second tool call to recover.
         const local = zonedParts(startsAt, timezone);
-        const alt = await this.mock
+        const alt = await (await this.providerFor(org.id))
           .availability(org.id, local.date)
           .then((d) =>
             nearest(d.slots, startsAt, 3).map((s) => spokenTime(new Date(s.startsAt), timezone)),
@@ -339,15 +343,15 @@ export class CalendarService {
   /* ================================ helpers =============================== */
 
   /**
-   * The provider this centre's config selects.
-   *
-   * Only the mock exists. Cal.com is a named option so the selection is real
-   * code rather than a comment, and refuses clearly until it is built.
+   * The provider this centre's config selects. Cal.com selected but no longer
+   * usable (key removed) refuses clearly rather than silently booking into
+   * the built-in calendar, which would double-book against the real one.
    */
   private async providerFor(orgId: string): Promise<CalendarProvider> {
     const { config } = await readCalendarSettings(this.prisma, orgId);
-    if (config.provider === 'calcom') throw calcomNotConnected();
-    return this.mock;
+    if (config.provider !== 'calcom') return this.mock;
+    if (!(await this.calcom.connection(orgId))) throw calcomNotConnected();
+    return this.calcomProvider;
   }
 
   /**
@@ -446,7 +450,7 @@ const LOOKAHEAD_DAYS = 14;
 const SPOKEN_SLOTS = 6;
 
 function calcomNotConnected(): BadRequestException {
-  return new BadRequestException('Cal.com is not connected yet');
+  return new BadRequestException('Cal.com is selected but not connected. Reconnect it on the Calendar page.');
 }
 
 function requireDate(date: string | undefined): string {
