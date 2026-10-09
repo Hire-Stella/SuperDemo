@@ -12,7 +12,7 @@
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@elevenlabs/react": "^1.12.0",
-    "@hire-stella/ui": "file:/private/tmp/claude-501/-Users-adityanarayan-Projects/e076c7f0-603f-4648-a842-e1fb88d84e23/scratchpad/hire-stella-ui-0.9.0.tgz",
+    "@hire-stella/ui": "^0.9.0",
     "@stella/template-aurelia": "workspace:*",
     "@stella/template-brasa": "workspace:*",
     "@stella/template-cryptix": "workspace:*",

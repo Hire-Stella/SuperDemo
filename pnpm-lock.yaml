@@ -181,8 +181,8 @@ importers:
         specifier: ^1.12.0
         version: 1.12.0(@types/dom-mediacapture-record@1.0.22)(react@19.2.8)
       '@hire-stella/ui':
-        specifier: file:/private/tmp/claude-501/-Users-adityanarayan-Projects/e076c7f0-603f-4648-a842-e1fb88d84e23/scratchpad/hire-stella-ui-0.9.0.tgz
-        version: file:../../../../private/tmp/claude-501/-Users-adityanarayan-Projects/e076c7f0-603f-4648-a842-e1fb88d84e23/scratchpad/hire-stella-ui-0.9.0.tgz(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+        specifier: ^0.9.0
+        version: 0.9.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
       '@stella/template-aurelia':
         specifier: workspace:*
         version: link:../../packages/templates/aurelia
@@ -1742,9 +1742,8 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@hire-stella/ui@file:../../../../private/tmp/claude-501/-Users-adityanarayan-Projects/e076c7f0-603f-4648-a842-e1fb88d84e23/scratchpad/hire-stella-ui-0.9.0.tgz':
-    resolution: {integrity: sha512-k5NWotjDCTZTFNN2QPKdE+uSeZ9J0y481wjh2k0uUiLKrbIR17BvAh3n03ayG2MeyQN7U7a++7eQt3/KNb8TlQ==, tarball: file:../../../../private/tmp/claude-501/-Users-adityanarayan-Projects/e076c7f0-603f-4648-a842-e1fb88d84e23/scratchpad/hire-stella-ui-0.9.0.tgz}
-    version: 0.9.0
+  '@hire-stella/ui@0.9.0':
+    resolution: {integrity: sha512-lZ1PiP9Edq7u3neeywWTJ7RVMIQeUGnglXSxQ+hxNbnNiTBaKct0nys1ZxIZmmG1z1pZp0XK4OdGUOfqZbYX9Q==, tarball: https://npm.pkg.github.com/download/@hire-stella/ui/0.9.0/1a646f739d012e26b208609bc91d04f55ec1c90e}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
@@ -6107,7 +6106,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@hire-stella/ui@file:../../../../private/tmp/claude-501/-Users-adityanarayan-Projects/e076c7f0-603f-4648-a842-e1fb88d84e23/scratchpad/hire-stella-ui-0.9.0.tgz(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
+  '@hire-stella/ui@0.9.0(@types/react@19.2.18)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)':
     dependencies:
       lucide-react: 1.53.0(@types/react@19.2.18)(react@19.2.8)
       react: 19.2.8
