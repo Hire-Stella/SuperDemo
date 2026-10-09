@@ -61,12 +61,17 @@ import {
  * much as the time is: it is how a centre sees the agent doing real work.
  */
 
-const SOURCE_STYLE: Record<BookingSource, { label: string; className: string; icon: typeof Mic }> = {
-  voice: { label: 'Voice agent', className: 'bg-ai-soft text-ai', icon: Mic },
-  website: { label: 'Website', className: 'bg-brand-soft text-primary', icon: Globe },
-  dashboard: { label: 'Dashboard', className: 'bg-muted text-muted-foreground', icon: LayoutDashboard },
-  calcom: { label: 'Cal.com', className: 'bg-live-soft text-live', icon: CalendarCheck },
-};
+const SOURCE_STYLE: Record<BookingSource, { label: string; className: string; icon: typeof Mic }> =
+  {
+    voice: { label: 'Voice agent', className: 'bg-ai-soft text-ai', icon: Mic },
+    website: { label: 'Website', className: 'text-foreground', icon: Globe },
+    dashboard: {
+      label: 'Dashboard',
+      className: 'bg-muted text-muted-foreground',
+      icon: LayoutDashboard,
+    },
+    calcom: { label: 'Cal.com', className: 'bg-live-soft text-live', icon: CalendarCheck },
+  };
 
 /**
  * With Cal.com connected, its availability decides which days and hours are
@@ -178,10 +183,23 @@ export default function CalendarPage() {
       )}
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric label="Booked this week" value={stats.booked} tone="brand" />
-        <Metric label="By the voice agent" value={stats.voice} tone="ai" icon={<Mic className="size-4" />} />
-        <Metric label="From the website" value={stats.website} icon={<Globe className="size-4" />} />
-        <Metric label="Cancelled" value={stats.cancelled} tone={stats.cancelled ? 'warn' : 'default'} />
+        <Metric label="Booked this week" value={stats.booked} />
+        <Metric
+          label="By the voice agent"
+          value={stats.voice}
+          tone="ai"
+          icon={<Mic className="size-4" />}
+        />
+        <Metric
+          label="From the website"
+          value={stats.website}
+          icon={<Globe className="size-4" />}
+        />
+        <Metric
+          label="Cancelled"
+          value={stats.cancelled}
+          tone={stats.cancelled ? 'warn' : 'default'}
+        />
       </div>
 
       <Card
@@ -338,7 +356,15 @@ function DayColumn({
   );
 }
 
-function BookingCard({ booking, tz, canWrite }: { booking: BookingRow; tz: string; canWrite: boolean }) {
+function BookingCard({
+  booking,
+  tz,
+  canWrite,
+}: {
+  booking: BookingRow;
+  tz: string;
+  canWrite: boolean;
+}) {
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const cancelled = booking.status === 'CANCELLED';
@@ -364,7 +390,10 @@ function BookingCard({ booking, tz, canWrite }: { booking: BookingRow; tz: strin
     >
       <div className="flex items-center justify-between gap-2">
         <span
-          className={cn('tnum font-semibold whitespace-nowrap text-foreground', cancelled && 'line-through')}
+          className={cn(
+            'tnum font-semibold whitespace-nowrap text-foreground',
+            cancelled && 'line-through',
+          )}
         >
           {clockOf(booking.startsAt, tz)}–{clockOf(booking.endsAt, tz)}
         </span>
@@ -381,7 +410,10 @@ function BookingCard({ booking, tz, canWrite }: { booking: BookingRow; tz: strin
           </span>
         )}
       </div>
-      <p className={cn('mt-1 truncate text-sm font-medium', cancelled && 'line-through')} title={booking.name}>
+      <p
+        className={cn('mt-1 truncate text-sm font-medium', cancelled && 'line-through')}
+        title={booking.name}
+      >
         {booking.name}
       </p>
       <a
@@ -573,7 +605,9 @@ function mondayOf(date: string): string {
 /** "12 – 18 October 2026", or "28 September – 4 October 2026" across months. */
 function weekTitle(first: string, last: string): string {
   const fmt = (d: string, opts: Intl.DateTimeFormatOptions) =>
-    new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`));
+    new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: 'UTC' }).format(
+      new Date(`${d}T12:00:00Z`),
+    );
   const sameMonth = first.slice(0, 7) === last.slice(0, 7);
   return sameMonth
     ? `${Number(first.slice(8))} – ${fmt(last, { day: 'numeric', month: 'long', year: 'numeric' })}`

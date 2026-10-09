@@ -15,9 +15,9 @@ came out differently in practice, and the reasons matter more than the plan did:
 |---|---|---|
 | Fastify adapter | **Express adapter** | Fastify + socket.io + Nest 11 has sharp edges, and at 12 agents the throughput difference is irrelevant. Chose the boring path that provably works over the theoretically faster one. |
 | pgvector | **`Float[]` + in-process BM25/IDF ranking** | The vendored Postgres can't build extensions. At 34 chunks the scan is sub-millisecond, and calibrated retrieval mattered far more than the storage mechanism — see the confidence note below. |
-| shadcn/ui via CLI | **shadcn/ui, installed via the CLI** into `components/ui/*` | As planned. Primitives are owned source — `button.tsx` was extended in place with `danger`/`live` variants and a `loading` prop rather than wrapped. App-level compounds (Metric, Panel-style Card, MockNotice) sit in `components/composites.tsx` on top. |
+| shadcn/ui via CLI | **shadcn/ui, installed via the CLI** into `components/ui/*` | As planned. Primitives are owned source — `button.tsx` was extended in place with `danger`/`live` variants and a `loading` prop rather than wrapped. App-level compounds (Metric, Panel-style Card, MockNotice) sit in `components/composites.tsx` on top. **v2:** replaced by `@hire-stella/ui`; the same files are now thin adapters over it and unused primitives were removed. |
 | wavesurfer.js waveform | **progress bar with the handoff marked** | Real waveform rendering needs decoded audio; the useful part for a supervisor is *where the AI handed off*, which this shows. wavesurfer is a drop-in upgrade. |
-| shadcn Radix `Select` everywhere | **native `<select>` styled with shadcn tokens** | Selects here live in dense table rows and the docked softphone. Native gives real keyboard behaviour, the OS picker on mobile, and no portal fighting the softphone's z-index. `components/ui/select.tsx` is installed for anywhere the richer picker is worth it. |
+| shadcn Radix `Select` everywhere | **native `<select>` styled with shadcn tokens** | Selects here live in dense table rows and the docked softphone. Native gives real keyboard behaviour, the OS picker on mobile, and no portal fighting the softphone's z-index. For a searchable picker use `Combobox` from `@hire-stella/ui`. |
 | casl | **role guard + `@Roles()`** | Three roles and coarse rules. casl's cost is justified by row-level abilities, which single-tenant doesn't have yet. |
 | nestjs-zod | **own `ZodValidationPipe`** (~35 lines) | Same outcome, one fewer dependency, and it reuses `@superdemo/contracts` verbatim. |
 | nestjs-pino / terminus | **Nest logger + plain `/ready`** | `/ready` checks Postgres and Redis and reports active drivers, which is what a deploy gate needs. Structured logging is worth adding before production. |
@@ -78,14 +78,14 @@ courses FIT doesn't teach.
 |---|---|---|---|
 | Framework | **Next.js 15** App Router, React 19 | Server Components for shells; Client Components for the realtime surfaces | v1 |
 | Styling | **Tailwind v4** | New engine, CSS-first config, no `tailwind.config.js` sprawl | v1 |
-| Components | **shadcn/ui** | Source-in-repo, not a dependency — extended in place for the call-control variants, and the whole app re-themes from CSS variables | v1 |
+| Components | **@hire-stella/ui** (HireStella design system) | Brand-book components and tokens shared across HireStella products; `composites.tsx` and `components/ui/*` are adapters that keep page imports unchanged. Replaced shadcn/ui primitives | v2 |
 | Server state | **TanStack Query v5** | Socket events patch/invalidate the cache — zero polling anywhere in the app | v1 |
 | Local state | **Zustand** | Only for the softphone state machine. Deliberately no global store | v1 |
 | Tables | **TanStack Table v8** | Headless: server-side sort/filter/paginate on 100k+ conversations | v1 |
 | Forms | **react-hook-form** + zod resolver | Same schemas as the API | v1 |
-| Charts | **Recharts** | Composable, SSR-safe, one shared theme, light+dark, colour-blind-safe ramp | v1 |
+| Charts | **@hire-stella/ui charts** (LineChart, BarList) | Plain SVG, no extra dependency; brand neutral + one orange emphasis, validated colour-blind-safe palette for multi-series, table view built in. Replaced Recharts | v2 |
 | Audio playback | **wavesurfer.js** | Waveform with transcript scroll-locked to playhead; escalation marked on the timeline | v1 |
-| Icons | **lucide-react** | Matches shadcn | v1 |
+| Icons | **lucide-react** | The brand book's icon set: 1.5px stroke, 20/24px | v1 |
 | Dates / tz | **date-fns** + `date-fns-tz` | Dubai / Kolkata / Cairo are all in play — tz is a correctness issue, not cosmetic | v1 |
 | Toasts | **sonner** | Incoming-call and sync-failure surfacing | v1 |
 | Theme | **next-themes** + 3-way toggle (light / dark / system) | Dark mode for agents on night shift. The whole palette derives from two CSS variables (`--fit-red`, `--fit-red-dark`) so FIT's real brand hex is a one-line change | v1 |

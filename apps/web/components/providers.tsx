@@ -188,7 +188,8 @@ function SessionProvider({ children }: { children: ReactNode }) {
 export function ThemeShell({ children }: { children: ReactNode }) {
   return (
     <ThemeProvider
-      attribute="class"
+      // `.dark` drives the shadcn tokens; `data-hs-theme` drives @hire-stella/ui. One toggle, both systems.
+      attribute={['class', 'data-hs-theme']}
       defaultTheme="system"
       enableSystem
       // Theme changes shouldn't animate every colour on the page at once.

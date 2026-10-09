@@ -108,7 +108,7 @@ SuperDemo/                      github.com/Hire-Stella/SuperDemo; the packages
 ├── packages/
 │   ├── contracts/              zod schemas · DTOs · socket event types · env schema
 │   ├── db/                     Prisma schema · migrations · seed (real FIT data)
-│   ├── ui/                     shadcn/ui primitives + shared charts
+│   ├── ui/                     adapters over @hire-stella/ui (button, input, dialog, toasts…)
 │   └── config/                 eslint · tsconfig · tailwind presets
 │
 ├── ARCHITECTURE.md   SKILLS.md   NOT-IMPLEMENTED.md
@@ -470,9 +470,9 @@ That `telephony.externalcall.*` sequence is the demo's closing move: *"your team
 - **State:** TanStack Query v5 for server state (WebSocket events invalidate or patch the cache — no polling anywhere). Zustand for the softphone's local state machine only. No global Redux.
 - **The softphone is docked, not a page.** It lives in the `(app)` layout so an agent can browse conversations while on a call — a real contact-centre requirement that page-based softphones fail.
 - **Timezones are first-class.** Agents span Asia/Dubai, Asia/Kolkata, Africa/Cairo. All timestamps stored UTC, rendered in the viewer's tz, and analytics bucketed in the *institute's* tz (Asia/Dubai) so "calls by hour" means something.
-- **Charts:** Recharts, one shared theme, light+dark, colour-blind-safe categorical ramp.
+- **Charts:** @hire-stella/ui (plain SVG): brand neutral + one orange emphasis, validated colour-blind-safe palette for multi-series, light+dark, table view.
 - **Recording playback:** wavesurfer.js waveform with the transcript scroll-locked to playhead via `audioOffsetMs`, escalation marked on the timeline.
-- **Accessibility:** shadcn/Radix primitives, keyboard-driven softphone (answer/hangup/hold on hotkeys — agents don't use mice), visible focus, live-region announcements for incoming calls.
+- **Accessibility:** base-ui + @hire-stella/ui primitives, keyboard-driven softphone (answer/hangup/hold on hotkeys — agents don't use mice), visible focus, live-region announcements for incoming calls.
 
 **Screens**
 

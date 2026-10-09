@@ -3,7 +3,17 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowDownLeft, ArrowUpRight, CheckCircle2, Download, Inbox, MessageCircle, Phone, Search, Sparkles } from 'lucide-react';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  CheckCircle2,
+  Download,
+  Inbox,
+  MessageCircle,
+  Phone,
+  Search,
+  Sparkles,
+} from 'lucide-react';
 import {
   Disposition,
   dispositionLabel,
@@ -38,8 +48,8 @@ import {
  */
 const OUTCOME_TONE: Record<Disposition, string> = {
   LEAD_QUALIFIED: 'bg-live-soft text-live',
-  ENROLMENT_INTEREST: 'bg-brand-soft text-primary',
-  CALLBACK_REQUESTED: 'bg-amber-500/10 text-amber-600',
+  ENROLMENT_INTEREST: 'text-foreground',
+  CALLBACK_REQUESTED: 'bg-warn-soft text-warn',
   FEE_ENQUIRY: '',
   INFO_PROVIDED: '',
   EXISTING_STUDENT_SUPPORT: '',
@@ -176,6 +186,7 @@ export default function ConversationsPage() {
             <option value="NONE">No outcome recorded</option>
           </Select>
           <Button
+            variant="secondary"
             className="ml-auto"
             onClick={() =>
               void api
@@ -254,7 +265,11 @@ export default function ConversationsPage() {
                         follow-up reads very differently from an inbound enquiry. */}
                     <span
                       className="ml-1.5 inline-flex items-center gap-0.5 text-[11px] text-muted-foreground"
-                      title={c.direction === 'OUTBOUND' ? 'Outbound — we called them' : 'Inbound — they called us'}
+                      title={
+                        c.direction === 'OUTBOUND'
+                          ? 'Outbound — we called them'
+                          : 'Inbound — they called us'
+                      }
                     >
                       {c.direction === 'OUTBOUND' ? (
                         <ArrowUpRight className="size-3" aria-hidden />
@@ -293,7 +308,7 @@ export default function ConversationsPage() {
                             className={
                               evalBand(c.evalScore) === 'poor'
                                 ? 'bg-destructive/10 text-destructive'
-                                : 'bg-amber-500/10 text-amber-600'
+                                : 'bg-ai-soft text-ai'
                             }
                           >
                             {c.evalScore}

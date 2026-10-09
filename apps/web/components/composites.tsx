@@ -1,35 +1,25 @@
 'use client';
 
 /**
- * App composites.
+ * App composites — built on @hire-stella/ui.
  *
- * shadcn primitives live in `components/ui/*` and are owned source — edit them
- * freely. This file is the layer above: the handful of compound pieces this
- * dashboard uses repeatedly, built *on* those primitives so theming stays in one
- * place (the CSS variables in globals.css).
+ * This is the layer pages import from. Each piece keeps the API it had on shadcn, so
+ * pages migrated to the HireStella design system without touching their call sites;
+ * the visuals, tokens and behaviour now come from the brand library.
  *
- * Pages import from here rather than reaching for primitives directly, which is
- * what keeps a 10-page operations app visually consistent.
+ * Strict brand rules apply here: orange marks the one thing that needs action, Mist
+ * marks handoff / AI-handled work, everything else is neutral — and every state is
+ * carried by an icon or a label, never by colour alone.
  */
 
 import type { ReactNode } from 'react';
-import { Loader2 } from 'lucide-react';
+import {
+  Avatar as HsAvatar,
+  EmptyState as HsEmptyState,
+  Loader,
+  Skeleton as HsSkeleton,
+} from '@hire-stella/ui';
 import { cn } from '@/lib/utils';
-import {
-  Card as ShadCard,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Badge as ShadBadge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Table as ShadTable,
-  TableCell,
-  TableHead,
-} from '@/components/ui/table';
-import { Avatar as ShadAvatar, AvatarFallback } from '@/components/ui/avatar';
 
 /* Re-exported so pages have one import site for everything. */
 export { Button } from '@/components/ui/button';
@@ -43,12 +33,8 @@ export { cn } from '@/lib/utils';
 /* ------------------------------- Panel/Card ------------------------------- */
 
 /**
- * shadcn's Card is fully composable (CardHeader/CardTitle/CardContent). Nearly
- * every card in this app is the same shape — title, optional subtitle, optional
- * right-aligned action, then content — so this wraps that one shape rather than
- * repeating five elements on every page.
- *
- * Reach for the shadcn primitives directly when a card genuinely differs.
+ * The one card shape this app repeats: title, optional subtitle, optional right-aligned action,
+ * then content. A HireStella glass panel with a hairline header.
  */
 export function Card({
   children,
@@ -67,30 +53,30 @@ export function Card({
 }) {
   const hasHeader = Boolean(title || action);
   return (
-    <ShadCard className={cn('gap-0 overflow-hidden py-0', className)}>
+    <section className={cn('hs-sd-card', className)}>
       {hasHeader && (
-        <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0 border-b px-4 py-3">
+        <header className="hs-sd-card__head">
           <div className="min-w-0">
-            {title && <CardTitle className="text-sm font-semibold">{title}</CardTitle>}
-            {subtitle && (
-              <CardDescription className="mt-0.5 text-xs">{subtitle}</CardDescription>
-            )}
+            {title && <h3 className="hs-sd-card__title">{title}</h3>}
+            {subtitle && <p className="hs-sd-card__subtitle">{subtitle}</p>}
           </div>
           {action && <div className="shrink-0">{action}</div>}
-        </CardHeader>
+        </header>
       )}
-      <CardContent className={cn('p-0', contentClassName)}>{children}</CardContent>
-    </ShadCard>
+      <div className={cn('hs-sd-card__body', contentClassName)}>{children}</div>
+    </section>
   );
 }
 
 /* --------------------------------- Metric --------------------------------- */
 
 /**
- * A metric tile.
+ * A metric tile (HireStella stat tile). `hint` is not decoration: "82%" invites the wrong
+ * conclusion without "of calls resolved without an agent".
  *
- * `hint` is not decoration: "82%" on a dashboard invites the wrong conclusion
- * without "of calls resolved without an agent".
+ * Strict brand: `warn`, `danger` and `brand` are the tones that ask for attention, so they
+ * carry the orange emphasis (border + label). `ai` and `live` are calm states and render
+ * neutral. Use emphasis on one tile per row at most.
  */
 export function Metric({
   label,
@@ -105,27 +91,21 @@ export function Metric({
   tone?: 'default' | 'brand' | 'ai' | 'live' | 'warn' | 'danger';
   icon?: ReactNode;
 }) {
-  const toneClass = {
-    default: 'text-foreground',
-    brand: 'text-primary',
-    ai: 'text-ai',
-    live: 'text-live',
-    warn: 'text-warn',
-    danger: 'text-destructive',
-  }[tone];
-
+  const emphasis = tone === 'warn' || tone === 'danger' || tone === 'brand';
   return (
-    <div className="rounded-lg border bg-card px-4 py-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        {icon && <span className="text-muted-foreground/60">{icon}</span>}
+    <div className={cn('hs-stat hs-sd-metric', emphasis && 'hs-stat--emphasis')}>
+      <div className="hs-stat__body">
+        <div className="flex items-center justify-between gap-2">
+          <span className="hs-stat__label">{label}</span>
+          {icon && (
+            <span className="hs-sd-metric__icon" aria-hidden>
+              {icon}
+            </span>
+          )}
+        </div>
+        <span className="hs-stat__value tnum">{value}</span>
+        {hint && <span className="hs-stat__caption">{hint}</span>}
       </div>
-      <div className={cn('tnum mt-1.5 text-2xl font-semibold tracking-tight', toneClass)}>
-        {value}
-      </div>
-      {hint && (
-        <p className="mt-1 text-xs leading-snug text-muted-foreground/80">{hint}</p>
-      )}
     </div>
   );
 }
@@ -133,8 +113,9 @@ export function Metric({
 /* --------------------------------- Badge ---------------------------------- */
 
 /**
- * shadcn Badge plus an optional status dot — used constantly for call state and
- * agent presence, where the dot carries the "live" signal.
+ * A status chip with an optional dot — used for call state and agent presence. Callers pass
+ * token classes (`bg-live-soft text-live`, dot `bg-live`), which resolve to the brand's
+ * neutral / Mist / orange states through globals.css.
  */
 export function Badge({
   children,
@@ -143,32 +124,22 @@ export function Badge({
 }: {
   children: ReactNode;
   className?: string;
-  dot?: string;
+  dot?: string | false;
 }) {
   return (
-    <ShadBadge
-      variant="secondary"
-      className={cn('gap-1.5 rounded-full font-medium whitespace-nowrap', className)}
-    >
-      {dot && <span className={cn('size-1.5 rounded-full', dot)} aria-hidden />}
+    <span className={cn('hs-sd-badge', className)}>
+      {dot && <span className={cn('size-1.5 shrink-0 rounded-full', dot)} aria-hidden />}
       {children}
-    </ShadBadge>
+    </span>
   );
 }
 
 /* --------------------------------- Select --------------------------------- */
 
 /**
- * A native `<select>` styled with the shadcn tokens.
- *
- * Deliberate: shadcn's Radix Select is the right choice for a rich, searchable
- * picker, but this app's selects are short option lists inside dense table rows
- * and a docked softphone. Native wins there — real keyboard behaviour, the OS
- * picker on mobile, no portal fighting the softphone's z-index, and it works
- * inside a `<td>` without layout surprises.
- *
- * `components/ui/select.tsx` is installed and available wherever the richer
- * behaviour is worth it.
+ * A native `<select>` in HireStella's control style. Native on purpose: these are short lists in
+ * dense table rows and a docked softphone — real keyboard behaviour, the OS picker on mobile, no
+ * portal fighting the softphone's z-index.
  */
 export function Select({
   className,
@@ -176,18 +147,7 @@ export function Select({
   ...rest
 }: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <select
-      data-slot="native-select"
-      {...rest}
-      className={cn(
-        'h-9 w-full rounded-md border border-input bg-transparent px-2.5 text-sm shadow-xs',
-        'transition-[color,box-shadow] outline-none',
-        'focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-        'disabled:cursor-not-allowed disabled:opacity-50',
-        'dark:bg-input/30',
-        className,
-      )}
-    >
+    <select data-slot="native-select" {...rest} className={cn('hs-sd-select', className)}>
       {children}
     </select>
   );
@@ -196,34 +156,24 @@ export function Select({
 /* --------------------------------- Avatar --------------------------------- */
 
 /**
- * Initials avatar. Built on shadcn's Avatar so sizing and shape stay consistent;
- * the per-agent colour comes from the seed so the same person is always the same
- * colour across the live board, the inbox and the softphone.
+ * Initials avatar for people (HireStella Avatar). One neutral colour for everyone, per the brand
+ * book — identity comes from the initials and the name beside them. `color` is accepted for API
+ * compatibility and ignored.
  */
 export function Avatar({
   name,
-  color,
   size = 28,
 }: {
   name: string | null | undefined;
   color?: string;
   size?: number;
 }) {
-  const text = (name ?? '?')
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('');
-
   return (
-    <ShadAvatar className="shrink-0" style={{ width: size, height: size }}>
-      <AvatarFallback
-        className="font-semibold text-white"
-        style={{ background: color ?? 'var(--primary)', fontSize: size * 0.38 }}
-      >
-        {text}
-      </AvatarFallback>
-    </ShadAvatar>
+    <HsAvatar
+      name={name ?? '?'}
+      size={32}
+      style={{ width: size, height: size, fontSize: size * 0.38 }}
+    />
   );
 }
 
@@ -241,21 +191,20 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
-      {icon && <div className="mb-3 text-muted-foreground/50">{icon}</div>}
-      <p className="text-sm font-medium">{title}</p>
-      {hint && (
-        <p className="mt-1 max-w-sm text-xs leading-relaxed text-muted-foreground">{hint}</p>
-      )}
-      {action && <div className="mt-4">{action}</div>}
-    </div>
+    <HsEmptyState
+      className="hs-sd-empty"
+      icon={icon}
+      title={title}
+      description={hint}
+      action={action}
+    />
   );
 }
 
 export function Spinner({ label }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center gap-2 px-6 py-10 text-sm text-muted-foreground">
-      <Loader2 className="size-4 animate-spin" aria-hidden />
+    <div className="flex items-center justify-center gap-3 px-6 py-10 text-sm text-muted-foreground">
+      <Loader label={label ?? 'Loading'} />
       {label ?? 'Loading…'}
     </div>
   );
@@ -268,10 +217,10 @@ export function SkeletonRows({ rows = 6, cols = 4 }: { rows?: number; cols?: num
       {Array.from({ length: rows }).map((_, r) => (
         <div key={r} className="flex gap-4 px-4 py-3">
           {Array.from({ length: cols }).map((__, c) => (
-            <Skeleton
+            <HsSkeleton
               key={c}
-              className="h-4 flex-1"
-              style={{ maxWidth: c === 0 ? '30%' : undefined }}
+              height={14}
+              style={{ flex: 1, maxWidth: c === 0 ? '30%' : undefined }}
             />
           ))}
         </div>
@@ -282,22 +231,17 @@ export function SkeletonRows({ rows = 6, cols = 4 }: { rows?: number; cols?: num
 
 /* --------------------------------- Table ---------------------------------- */
 
-/**
- * Wide tables scroll inside their own container, so the page body never scrolls
- * horizontally — the shadcn Table already wraps itself for this.
- */
+/** HireStella table. Wide tables scroll inside their own container; the page never scrolls sideways. */
 export function Table({ children, className }: { children: ReactNode; className?: string }) {
-  return <ShadTable className={cn('text-sm', className)}>{children}</ShadTable>;
+  return (
+    <div className="hs-table-wrap">
+      <table className={cn('hs-table hs-sd-table', className)}>{children}</table>
+    </div>
+  );
 }
 
 export function Th({ children, className }: { children?: ReactNode; className?: string }) {
-  return (
-    <TableHead
-      className={cn('h-auto border-b px-4 py-2.5 text-xs font-semibold whitespace-nowrap', className)}
-    >
-      {children}
-    </TableHead>
-  );
+  return <th className={cn('whitespace-nowrap', className)}>{children}</th>;
 }
 
 export function Td({
@@ -311,26 +255,23 @@ export function Td({
   colSpan?: number;
 }) {
   return (
-    <TableCell colSpan={colSpan} className={cn('px-4 py-2.5 align-middle', className)}>
+    <td colSpan={colSpan} className={className}>
       {children}
-    </TableCell>
+    </td>
   );
 }
 
 /* ------------------------------- Mock notice ------------------------------ */
 
 /**
- * Marks a surface whose external system is simulated.
- *
- * A deliberate honesty device: anyone demoing or reviewing can see at a glance
- * which parts are real, so nothing gets over-claimed to a client by accident.
- * Amber rather than red — this is information, not a failure.
+ * Marks a surface whose external system is simulated — an honesty device so nothing is
+ * over-claimed in a demo. Information, not a failure: a neutral HireStella notice.
  */
 export function MockNotice({ children }: { children: ReactNode }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-warn/30 bg-warn-soft px-3 py-2 text-xs leading-relaxed">
-      <span className="mt-px font-semibold text-warn">Simulated</span>
-      <span className="text-foreground/80">{children}</span>
+    <div className="hs-sd-mock" role="note">
+      <span className="hs-sd-mock__label">Simulated</span>
+      <span>{children}</span>
     </div>
   );
 }

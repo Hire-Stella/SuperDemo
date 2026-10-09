@@ -17,11 +17,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
-import {
-  DISPOSITION_LABELS,
-  type Disposition,
-  type ScreenPopPayload,
-} from '@superdemo/contracts';
+import { DISPOSITION_LABELS, type Disposition, type ScreenPopPayload } from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { useSession, useUser } from './providers';
 import { Avatar, Badge, Button, Select, Textarea, cn } from './composites';
@@ -166,19 +162,16 @@ export function Softphone() {
 
   /* ------------------------------- actions ------------------------------- */
 
-  const act = useCallback(
-    async (fn: () => Promise<unknown>, failMessage: string) => {
-      setBusy(true);
-      try {
-        await fn();
-      } catch (error) {
-        toast.error(`${failMessage}: ${(error as Error).message}`);
-      } finally {
-        setBusy(false);
-      }
-    },
-    [],
-  );
+  const act = useCallback(async (fn: () => Promise<unknown>, failMessage: string) => {
+    setBusy(true);
+    try {
+      await fn();
+    } catch (error) {
+      toast.error(`${failMessage}: ${(error as Error).message}`);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
 
   const answer = () =>
     act(async () => {
@@ -281,16 +274,12 @@ export function Softphone() {
             <div className="flex items-start gap-3 border-b border-border px-4 py-3">
               <Avatar name={pop?.contact?.name ?? 'Unknown'} size={38} />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold">
-                  {pop?.contact?.name ?? 'Unknown caller'}
-                </p>
+                <p className="truncate font-semibold">{pop?.contact?.name ?? 'Unknown caller'}</p>
                 <p className="tnum text-xs text-muted-foreground">{phone(pop?.fromNumber)}</p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {pop?.queueName && <Badge>{pop.queueName}</Badge>}
                   {pop?.contact?.courseInterest && (
-                    <Badge className="bg-brand-soft text-primary">
-                      {pop.contact.courseInterest}
-                    </Badge>
+                    <Badge className="text-foreground">{pop.contact.courseInterest}</Badge>
                   )}
                 </div>
               </div>
@@ -393,7 +382,13 @@ export function Softphone() {
             <div className="flex flex-wrap gap-2 px-4 py-3">
               {phase === 'ringing' && (
                 <>
-                  <Button variant="live" size="lg" className="flex-1" loading={busy} onClick={answer}>
+                  <Button
+                    variant="live"
+                    size="lg"
+                    className="flex-1"
+                    loading={busy}
+                    onClick={answer}
+                  >
                     <Phone className="size-4" aria-hidden /> Answer
                   </Button>
                   <Button variant="secondary" size="lg" loading={busy} onClick={reject}>
@@ -404,7 +399,13 @@ export function Softphone() {
 
               {phase === 'talking' && (
                 <>
-                  <Button variant="danger" size="lg" className="flex-1" loading={busy} onClick={hangup}>
+                  <Button
+                    variant="danger"
+                    size="lg"
+                    className="flex-1"
+                    loading={busy}
+                    onClick={hangup}
+                  >
                     <PhoneOff className="size-4" aria-hidden /> End call
                   </Button>
                   <Button variant="secondary" size="lg" loading={busy} onClick={toggleHold}>

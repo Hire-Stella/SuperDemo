@@ -45,7 +45,7 @@ The API has vitest configured, but no test files are committed yet. Other useful
 
 ```
 apps/api        NestJS 11. main.ts = HTTP + Socket.IO; worker.ts = outbox drainer only (same AppModule)
-apps/web        Next.js 15 App Router, React 19, shadcn/ui. (app)/ = dashboard, (site)/[slug] = public tenant pages
+apps/web        Next.js 15 App Router, React 19, @hire-stella/ui (HireStella design system). (app)/ = dashboard, (site)/[slug] = public tenant pages
 apps/backend    Separate Python voice agents (FIT, Lampatron) using RAG, Modal deploys. Not in the pnpm workspace; see apps/backend/LAMPATRON.md
 packages/contracts   zod DTOs, socket event types, provider interfaces, env schema, site/theme/brand enums. The single source of truth shared by api and web
 packages/db          Prisma schema, seeds, tenant-isolation extension, seed data (FIT courses, demo packs, scenarios)
@@ -74,7 +74,7 @@ External systems sit behind interfaces in `packages/contracts/src/providers.ts`.
 ### Web
 
 - `lib/api.ts` keeps the access token in memory only. Refresh uses an httpOnly cookie, and a 401 triggers a single shared refresh attempt. `lib/socket.ts` handles realtime events, whose types come from `contracts/src/events.ts`.
-- Theming uses shadcn CSS variables. Tenant palettes are in `contracts/src/themes.ts`, with optional tweakcn `themeTokens` overrides, applied by `components/tenant-theme.tsx`. State colours (amber warning, green live, purple AI) are deliberately not themeable.
+- UI is `@hire-stella/ui` (private, GitHub Packages; read `node_modules/@hire-stella/ui/AGENTS.md` before building screens). Pages import from `components/composites.tsx`, which are adapters over it; do not add shadcn or another component library. Theming: the shadcn CSS variables in `app/globals.css` are the source of truth (HireStella defaults); tenant palettes in `contracts/src/themes.ts` (+ optional tweakcn `themeTokens`) override them via `components/tenant-theme.tsx`, and a bridge points `--hs-*` at them. State follows the brand strictly: orange (`primary`/`warn`/`destructive`) = needs action, Mist (`ai`/`live`, `hs-sd-badge--handoff`) = handoff/AI-handled/healthy, neutral otherwise; no red/green/amber/purple, and one primary button per view.
 - Landing pages: `components/site/templates/registry.tsx` (`SiteRender`) tries the ported `@stella/template-runtime` library first, then falls back to the in-house templates (solaris, sentira, knotch, nudge). Site content is stored template-agnostically and converted at the seam (`library-adapter.ts`). The template packages must not learn about SuperDemo types. Layouts, palettes and treatments are defined in `contracts/src/sites.ts`. The hero colours are `color-mix` values derived from the tenant's `--primary`, never hard-coded.
 - Ported templates compile with `tsconfig.templates.json` (`noUncheckedIndexedAccess` off) so the upstream code stays untouched.
 - The platform name comes from `NEXT_PUBLIC_PLATFORM_NAME` via `apps/web/lib/platform.ts`.

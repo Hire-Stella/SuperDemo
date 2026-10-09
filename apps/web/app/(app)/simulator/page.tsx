@@ -4,13 +4,18 @@ import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Mic, MicOff, PhoneCall, PhoneOff, MessageCircle, Play, Sparkles } from 'lucide-react';
-import type {
-  BrowserCallTurnOutput,
-  ScenarioDto,
-  SimulateCallInput,
-} from '@superdemo/contracts';
+import type { BrowserCallTurnOutput, ScenarioDto, SimulateCallInput } from '@superdemo/contracts';
 import { api } from '@/lib/api';
-import { Badge, Button, Card, Input, MockNotice, Select, Spinner, cn } from '@/components/composites';
+import {
+  Badge,
+  Button,
+  Card,
+  Input,
+  MockNotice,
+  Select,
+  Spinner,
+  cn,
+} from '@/components/composites';
 import { ElevenLabsCall } from '@/components/elevenlabs-call';
 import { WhatsAppMock } from '@/components/whatsapp-mock';
 
@@ -126,9 +131,7 @@ export default function SimulatorPage() {
     utter.lang = 'en-GB';
     utter.rate = 1.05;
     // Prefer a British English voice to match the configured agent voice.
-    const voice = window.speechSynthesis
-      .getVoices()
-      .find((v) => v.lang === 'en-GB') ?? null;
+    const voice = window.speechSynthesis.getVoices().find((v) => v.lang === 'en-GB') ?? null;
     if (voice) utter.voice = voice;
     window.speechSynthesis.speak(utter);
   };
@@ -314,8 +317,8 @@ export default function SimulatorPage() {
             {supported && !callId && (
               <p className="text-sm text-muted-foreground">
                 Press <strong>Start call</strong> and speak. Try “I want to ask about the ABA
-                certification course”, then “how much does it cost?”, then “can I speak to
-                someone?” — the last one hands you to a real agent on the softphone.
+                certification course”, then “how much does it cost?”, then “can I speak to someone?”
+                — the last one hands you to a real agent on the softphone.
               </p>
             )}
 
@@ -334,7 +337,7 @@ export default function SimulatorPage() {
                     )}
                   </Badge>
                   {escalated && (
-                    <Badge className="bg-brand-soft text-primary">Transferred to an agent</Badge>
+                    <Badge className="hs-sd-badge--handoff">Transferred to an agent</Badge>
                   )}
                   <Button
                     size="sm"
@@ -358,9 +361,7 @@ export default function SimulatorPage() {
                     >
                       {t.text}
                       {t.latencyMs !== undefined && (
-                        <span className="mt-1 block text-[11px] opacity-60">
-                          {t.latencyMs}ms
-                        </span>
+                        <span className="mt-1 block text-[11px] opacity-60">{t.latencyMs}ms</span>
                       )}
                     </div>
                   ))}
@@ -434,7 +435,9 @@ export default function SimulatorPage() {
               </Button>
 
               <div className="rounded-lg border border-border p-2.5">
-                <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Available scenarios</p>
+                <p className="mb-1.5 text-xs font-semibold text-muted-foreground">
+                  Available scenarios
+                </p>
                 <ul className="space-y-1">
                   {scenarios.data?.map((s) => (
                     <li key={s.id} className="flex items-center justify-between gap-2 text-xs">
@@ -445,9 +448,7 @@ export default function SimulatorPage() {
                         {s.title}
                       </button>
                       <Badge
-                        className={
-                          s.escalates ? 'bg-brand-soft text-primary' : 'bg-ai-soft text-ai'
-                        }
+                        className={s.escalates ? 'hs-sd-badge--handoff' : 'bg-ai-soft text-ai'}
                       >
                         {s.escalates ? 'escalates' : 'AI only'}
                       </Badge>
@@ -468,6 +469,7 @@ export default function SimulatorPage() {
               <div className="flex flex-wrap gap-2">
                 {waScenarios.data?.map((s) => (
                   <Button
+                    variant="secondary"
                     key={s.id}
                     size="sm"
                     loading={simulateWa.isPending}

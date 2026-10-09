@@ -25,7 +25,9 @@ COPY apps/api/package.json apps/api/
 COPY apps/web/package.json apps/web/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/db/package.json packages/db/
-RUN pnpm install --frozen-lockfile
+# Only the API and the workspace packages it depends on. The web app's dependencies — including the private
+# @hire-stella/ui package — are never needed in this image, so the build needs no registry token.
+RUN pnpm install --frozen-lockfile --filter "@superdemo/api..."
 
 # ── build ────────────────────────────────────────────────────────────────────
 FROM base AS build

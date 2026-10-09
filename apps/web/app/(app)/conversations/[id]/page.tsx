@@ -29,14 +29,7 @@ import {
 import { api } from '@/lib/api';
 import { useSession, useUser } from '@/components/providers';
 import { NewBookingDialog } from '@/components/new-booking-dialog';
-import {
-  CHANNEL_LABEL,
-  dateTime,
-  duration,
-  ESCALATION_LABEL,
-  phone,
-  time,
-} from '@/lib/format';
+import { CHANNEL_LABEL, dateTime, duration, ESCALATION_LABEL, phone, time } from '@/lib/format';
 import {
   Avatar,
   Badge,
@@ -49,11 +42,7 @@ import {
   cn,
 } from '@/components/composites';
 
-export default function ConversationDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default function ConversationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { socket } = useSession();
   const user = useUser();
@@ -235,7 +224,7 @@ export default function ConversationDetailPage({
                   <Sparkles className="size-3" aria-hidden /> AI resolved
                 </Badge>
               ) : (
-                <Badge className="bg-brand-soft text-primary">
+                <Badge className="hs-sd-badge--handoff">
                   Escalated to {c.handledByName ?? 'an agent'}
                 </Badge>
               )}
@@ -328,10 +317,13 @@ export default function ConversationDetailPage({
           )}
 
           {c.recording && (
-            <Card title="Recording" subtitle="Click the timeline or any transcript line to jump to that moment">
+            <Card
+              title="Recording"
+              subtitle="Click the timeline or any transcript line to jump to that moment"
+            >
               <div className="flex items-center gap-3 p-4">
                 <Button
-                  variant="default"
+                  variant="secondary"
                   onClick={() => {
                     const el = audio.current;
                     if (!el) return;
@@ -371,7 +363,8 @@ export default function ConversationDetailPage({
                     }}
                     onPointerLeave={() => setHoverMs(null)}
                     onKeyDown={(e) => {
-                      const step = e.key === 'ArrowRight' ? 5000 : e.key === 'ArrowLeft' ? -5000 : 0;
+                      const step =
+                        e.key === 'ArrowRight' ? 5000 : e.key === 'ArrowLeft' ? -5000 : 0;
                       if (step) {
                         e.preventDefault();
                         scrubTo(positionMs + step);
@@ -381,50 +374,48 @@ export default function ConversationDetailPage({
                       }
                     }}
                   >
-                  <div className="relative h-2 overflow-hidden rounded-full bg-muted transition-[height] group-hover:h-2.5 group-focus-visible:ring-2 group-focus-visible:ring-ring">
-                    <div
-                      className="absolute inset-y-0 left-0 bg-primary"
-                      style={{
-                        width: `${Math.min(100, (positionMs / Math.max(1, c.recording.durationMs)) * 100)}%`,
-                      }}
-                    />
-                    {c.call?.escalatedAt && c.call.ringingAt && (
-                      <span
-                        className="absolute inset-y-0 w-0.5 bg-warn"
-                        title="AI handed off here"
+                    <div className="relative h-2 overflow-hidden rounded-full bg-muted transition-[height] group-hover:h-2.5 group-focus-visible:ring-2 group-focus-visible:ring-ring">
+                      <div
+                        className="absolute inset-y-0 left-0 bg-primary"
                         style={{
-                          left: `${Math.min(
-                            100,
-                            ((new Date(c.call.escalatedAt).getTime() -
-                              new Date(c.call.ringingAt).getTime()) /
-                              Math.max(1, c.recording.durationMs)) *
-                              100,
-                          )}%`,
+                          width: `${Math.min(100, (positionMs / Math.max(1, c.recording.durationMs)) * 100)}%`,
                         }}
                       />
-                    )}
-                  </div>
-                  {/* Playhead handle, outside the clipped bar so it can overhang. */}
-                  <span
-                    className="pointer-events-none absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-primary shadow"
-                    style={{
-                      left: `${Math.min(100, (positionMs / Math.max(1, c.recording.durationMs)) * 100)}%`,
-                    }}
-                  />
-                  {hoverMs !== null && (
+                      {c.call?.escalatedAt && c.call.ringingAt && (
+                        <span
+                          className="absolute inset-y-0 w-0.5 bg-warn"
+                          title="AI handed off here"
+                          style={{
+                            left: `${Math.min(
+                              100,
+                              ((new Date(c.call.escalatedAt).getTime() -
+                                new Date(c.call.ringingAt).getTime()) /
+                                Math.max(1, c.recording.durationMs)) *
+                                100,
+                            )}%`,
+                          }}
+                        />
+                      )}
+                    </div>
+                    {/* Playhead handle, outside the clipped bar so it can overhang. */}
                     <span
-                      className="tnum pointer-events-none absolute -top-5 -translate-x-1/2 rounded bg-foreground px-1.5 py-0.5 text-[10px] text-background"
-                      style={{ left: `${(hoverMs / Math.max(1, totalMs())) * 100}%` }}
-                    >
-                      {duration(hoverMs)}
-                    </span>
-                  )}
+                      className="pointer-events-none absolute top-1/2 size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-background bg-primary shadow"
+                      style={{
+                        left: `${Math.min(100, (positionMs / Math.max(1, c.recording.durationMs)) * 100)}%`,
+                      }}
+                    />
+                    {hoverMs !== null && (
+                      <span
+                        className="tnum pointer-events-none absolute -top-5 -translate-x-1/2 rounded bg-foreground px-1.5 py-0.5 text-[10px] text-background"
+                        style={{ left: `${(hoverMs / Math.max(1, totalMs())) * 100}%` }}
+                      >
+                        {duration(hoverMs)}
+                      </span>
+                    )}
                   </div>
                   <p className="tnum text-xs text-muted-foreground">
                     {duration(positionMs)} / {duration(c.recording.durationMs)}
-                    {c.call?.escalatedAt && (
-                      <span className="ml-2 text-warn">▏handoff</span>
-                    )}
+                    {c.call?.escalatedAt && <span className="ml-2 text-warn">▏handoff</span>}
                   </p>
                 </div>
                 <audio
@@ -442,6 +433,7 @@ export default function ConversationDetailPage({
             subtitle={`${c.messageCount} turn${c.messageCount === 1 ? '' : 's'}`}
             action={
               <Button
+                variant="secondary"
                 size="sm"
                 onClick={() =>
                   void api
@@ -474,7 +466,9 @@ export default function ConversationDetailPage({
                         isAi && 'bg-ai-soft',
                         m.role === 'HUMAN_AGENT' && 'bg-primary text-primary-foreground',
                         m.role === 'SYSTEM' && 'bg-muted text-muted-foreground italic',
-                        m.audioOffsetMs !== null && c.recording && 'cursor-pointer hover:opacity-80',
+                        m.audioOffsetMs !== null &&
+                          c.recording &&
+                          'cursor-pointer hover:opacity-80',
                       )}
                     >
                       <span className="mb-0.5 flex items-center gap-1.5 text-[11px] opacity-70">
@@ -502,7 +496,12 @@ export default function ConversationDetailPage({
                 }}
               >
                 {!c.handledByName && (
-                  <Button type="button" variant="default" loading={claim.isPending} onClick={() => claim.mutate()}>
+                  <Button
+                    type="button"
+                    variant="default"
+                    loading={claim.isPending}
+                    onClick={() => claim.mutate()}
+                  >
                     Take over
                   </Button>
                 )}
@@ -511,7 +510,12 @@ export default function ConversationDetailPage({
                   onChange={(e) => setReply(e.target.value)}
                   placeholder="Reply to the customer…"
                 />
-                <Button type="submit" variant="default" loading={sendReply.isPending} disabled={!reply.trim()}>
+                <Button
+                  type="submit"
+                  variant="default"
+                  loading={sendReply.isPending}
+                  disabled={!reply.trim()}
+                >
                   <Send className="size-4" aria-hidden />
                 </Button>
               </form>
@@ -542,9 +546,9 @@ export default function ConversationDetailPage({
                         className={cn(
                           'tnum text-lg font-semibold',
                           evalBand(c.callEval.score) === 'good'
-                            ? 'text-emerald-600'
+                            ? 'text-foreground'
                             : evalBand(c.callEval.score) === 'watch'
-                              ? 'text-amber-600'
+                              ? 'text-ai'
                               : 'text-destructive',
                         )}
                       >
@@ -670,7 +674,9 @@ export default function ConversationDetailPage({
 
               {c.call.participants && c.call.participants.length > 0 && (
                 <div className="border-t border-border p-4">
-                  <p className="mb-2 text-xs font-medium text-muted-foreground">Who was on the call</p>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    Who was on the call
+                  </p>
                   <ul className="space-y-1.5">
                     {c.call.participants.map((p) => (
                       <li key={p.id} className="flex items-center gap-2 text-xs">
@@ -686,7 +692,9 @@ export default function ConversationDetailPage({
                               ? 'AI assistant'
                               : (p.userName ?? 'Agent')}
                         </span>
-                        <span className="tnum ml-auto text-muted-foreground/70">{time(p.joinedAt)}</span>
+                        <span className="tnum ml-auto text-muted-foreground/70">
+                          {time(p.joinedAt)}
+                        </span>
                       </li>
                     ))}
                   </ul>
