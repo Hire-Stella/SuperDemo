@@ -40,7 +40,9 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/* ============================== enums ==================================== */
+/**
+ * ============================== enums ====================================
+ */
 
 enum Role {
   AGENT
@@ -190,7 +192,9 @@ enum NumberStatus {
   RELEASED
 }
 
-/* ============================ organisations =============================== */
+/**
+ * ============================ organisations ===============================
+ */
 
 /// A tenant — one contact centre. Everything a client's staff can see hangs off
 /// this row. Deactivated, never deleted: their calls and recordings stay
@@ -208,23 +212,23 @@ enum Industry {
 }
 
 model Organization {
-  id        String   @id @default(cuid())
-  name      String
-  industry  Industry @default(GENERIC)
+  id                String   @id @default(cuid())
+  name              String
+  industry          Industry @default(GENERIC)
   /// shadcn token overrides. `themePreset` names one of the built-in palettes;
   /// `themeTokens` holds a pasted tweakcn export and wins over it when present.
-  themePreset String @default("default")
-  themeTokens Json?
+  themePreset       String   @default("default")
+  themeTokens       Json?
   /// The centre's mark. Null is a supported state, not a missing value: a
   /// monogram is drawn from the name instead, so a tenant created with a name
   /// and nothing else still looks deliberate. See packages/contracts/src/brand.ts.
-  logoUrl   String?
+  logoUrl           String?
   /// One line under the name, on the landing page and in the app shell.
-  tagline   String?
+  tagline           String?
   /// The client's real website, if the operator supplied one at onboarding.
   /// Kept after enrichment so the page and agent can be regenerated when their
   /// site changes — the alternative is asking for the URL a second time.
-  websiteUrl String?
+  websiteUrl        String?
   /// Whether this centre uses the landing-page feature at all.
   ///
   /// Not the same question as `Site.isPublished`, which is "is the page live
@@ -235,7 +239,7 @@ model Organization {
   ///
   /// Defaults true because every centre that exists today has a page and a
   /// migration that silently took them offline would be the wrong surprise.
-  websiteEnabled Boolean @default(true)
+  websiteEnabled    Boolean  @default(true)
   /// Whether this centre keeps the call simulator.
   ///
   /// It is a demo and training surface — it invents a caller and walks a
@@ -244,7 +248,7 @@ model Organization {
   /// real traffic. Unlike the website there is no public surface behind it, so
   /// off means the section and its two shortcuts disappear and the endpoints
   /// refuse; nothing stops being reachable from outside.
-  simulatorEnabled Boolean @default(true)
+  simulatorEnabled  Boolean  @default(true)
   /// Whether this centre keeps the Demo calls page — three Dograh-backed
   /// dialer slots (inbound, outbound, info) an operator wires up and a
   /// tenant admin can ring or talk to in the browser.
@@ -255,14 +259,20 @@ model Organization {
   /// the page and its endpoints exist for this centre at all. Defaults
   /// true for the same reason as the other two: every centre seeded before
   /// this flag existed should not go dark on migration.
-  demoCallsEnabled Boolean @default(true)
+  demoCallsEnabled  Boolean  @default(true)
+  /// The Dograh organisation whose calls are imported into this centre, read
+  /// with DOGRAH_SUPERUSER_KEY. Null means no import.
+  dograhOrgId       Int?
+  /// Which of that organisation's workflows count as this centre's calls.
+  /// Empty means all of them.
+  dograhWorkflowIds Int[]    @default([])
   /// URL-safe handle, unique across the platform. Stable once issued — the
   /// superadmin can rename an org's display name without breaking anything.
-  slug      String   @unique
-  timezone  String   @default("Asia/Dubai")
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  slug              String   @unique
+  timezone          String   @default("Asia/Dubai")
+  isActive          Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   users    User[]
   settings Setting?
@@ -278,28 +288,28 @@ model Organization {
 /// switching layout must not lose anything anyone wrote. See
 /// packages/contracts/src/sites.ts for the content shape.
 model Site {
-  id          String  @id @default(cuid())
+  id              String   @id @default(cuid())
   /// Not defaulted like the other tenant models: a Site is only ever created
   /// alongside its org, by hand, the way Setting is.
-  orgId       String  @unique
-  template    String  @default("classic")
+  orgId           String   @unique
+  template        String   @default("classic")
   /// SiteStyle: surface, display face, corner radius, density. Orthogonal to
   /// `template` on purpose — 4 layouts × 108 treatments × 8 themes, none of
   /// which needs a template change. Null falls back to the vertical's default.
-  style       Json?
+  style           Json?
   /// Unpublishing serves a 404 rather than hiding sections — a draft landing
   /// page that is still reachable is worse than no landing page.
-  isPublished Boolean @default(true)
+  isPublished     Boolean  @default(true)
   /// SiteContent: hero, highlights, services, proof, faq, contact, order.
-  content     Json
+  content         Json
   metaTitle       String?
   metaDescription String?
   /// Where a captured lead is queued. Null means capture-only: the contact is
   /// created but nobody is dialled, which is the right default for a live client
   /// and the wrong one for a demo, so the editor makes it a visible choice.
   leadCampaignId  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   org   Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
   leads SiteLead[]
@@ -312,15 +322,15 @@ model Site {
 /// typed, from which page, when — and a contact that has been edited since no
 /// longer answers "what did they actually agree to".
 model SiteLead {
-  id        String  @id @default(cuid())
-  orgId     String  @default("")
+  id        String   @id @default(cuid())
+  orgId     String   @default("")
   siteId    String
   name      String
   phoneE164 String
   email     String?
   message   String?
   /// "hero" | "contact" — which form on the page produced it.
-  source    String  @default("contact")
+  source    String   @default("contact")
   /// The contact this became, so the dialler and the inbox can reach them.
   contactId String?
   /// Set when the lead was queued to a campaign rather than only captured.
@@ -347,25 +357,31 @@ model SiteLead {
 /// view and the agent's "what have I got free" do not depend on somebody
 /// else's API being up — see apps/api/src/calendar/calendar.provider.ts.
 model CalendarBooking {
-  id        String   @id @default(uuid())
-  orgId     String   @default("")
+  id          String   @id @default(uuid())
+  orgId       String   @default("")
   /// The contact this booking was made for, upserted by phone the same way a
   /// landing-page lead is. Not a relation, for the same reason SiteLead's is
   /// not: a contact deleted from the CRM side must not take its history with it.
-  contactId String?
-  name      String
-  phoneE164 String
-  email     String?
-  startsAt  DateTime
-  endsAt    DateTime
+  contactId   String?
+  name        String
+  phoneE164   String
+  email       String?
+  startsAt    DateTime
+  endsAt      DateTime
   /// BOOKED | CANCELLED. A cancelled booking is kept, not deleted — the week
   /// view shows it struck through and the slot becomes bookable again.
-  status    String   @default("BOOKED")
-  /// dashboard | website | voice — who made it.
-  source    String   @default("dashboard")
-  notes     String?
-  createdAt DateTime @default(now())
+  status      String   @default("BOOKED")
+  /// dashboard | website | voice | calcom — who made it. calcom means booked
+  /// directly on the centre's Cal.com page and pulled in by the sync.
+  source      String   @default("dashboard")
+  notes       String?
+  /// The Cal.com booking uid, when the centre's calendar is Cal.com. Null for
+  /// bookings held only here. Unique per centre so the sync and a booking we
+  /// just made cannot both insert the same appointment.
+  externalUid String?
+  createdAt   DateTime @default(now())
 
+  @@unique([orgId, externalUid])
   @@index([orgId, startsAt])
 }
 
@@ -376,20 +392,32 @@ enum EvalReviewer {
   HUMAN
 }
 
-/* ========================= people & presence ============================= */
+/**
+ * ========================= people & presence =============================
+ */
 
 model User {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   /// Null only for SUPERADMIN, which sits above every org.
   orgId        String?
-  email        String   @unique
+  email        String    @unique
   name         String
   passwordHash String
-  role         Role     @default(AGENT)
+  role         Role      @default(AGENT)
   location     Location
   timezone     String
   skills       Skill[]
   extension    String?
+  /// Sidebar sections this user may open, by href ("/", "/analytics"). Empty
+  /// means every section their role allows — the default, so existing users
+  /// are untouched. Anything not listed shows greyed out and cannot be
+  /// navigated to. A UI restriction only: the API does not consult it.
+  navAllowlist String[]  @default([])
+  /// A pared-down dashboard for a client demo: hides or disables controls
+  /// that don't belong in front of that client (Simulate a call, booking from
+  /// a call, the drivers behind a call, the assumed agent cost). Off for
+  /// everyone else, who see the app unchanged. UI-only, like navAllowlist.
+  simplifiedUi Boolean   @default(false)
   /// The handset a telecaller's own calls are bridged to, E.164.
   ///
   /// Null is the normal state: an agent who works in the browser softphone
@@ -397,13 +425,13 @@ model User {
   /// rings this number first and connects the customer once it answers — so a
   /// missing one is a clear refusal at dial time, not a silent no-op.
   phoneE164    String?
-  avatarColor  String   @default("#2563eb")
+  avatarColor  String    @default("#2563eb")
   /// Bitrix24 user id, so calls land on the right CRM user's timeline.
   bitrixUserId String?
-  isActive     Boolean  @default(true)
+  isActive     Boolean   @default(true)
   lastLoginAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   org              Organization?     @relation(fields: [orgId], references: [id])
   presence         AgentState?
@@ -414,6 +442,7 @@ model User {
   queues           QueueMembership[]
   messages         Message[]
   auditLogs        AuditLog[]
+  callEvals        CallEval[]
 
   /// Email stays globally unique: sign-in takes an address and nothing else, so
   /// two orgs sharing one would make the login ambiguous. Extensions are only
@@ -421,20 +450,19 @@ model User {
   @@unique([orgId, extension])
   @@index([role, isActive])
   @@index([orgId, role, isActive])
-  callEvals CallEval[]
 }
 
 model RefreshToken {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   userId    String
   /// SHA-256 of the token. Never store the token itself.
-  tokenHash String   @unique
+  tokenHash String    @unique
   /// Set when rotated. A second use of a revoked token means theft → revoke all.
   revokedAt DateTime?
   expiresAt DateTime
   userAgent String?
   ip        String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -460,16 +488,16 @@ model AgentState {
 
 /// Append-only. Every transition. Source of truth for occupancy & adherence.
 model AgentStateEvent {
-  id       BigInt      @id @default(autoincrement())
-  orgId    String      @default("")
-  userId   String
-  from     AgentStatus?
-  to       AgentStatus
-  at       DateTime    @default(now())
-  reason   String?
+  id     BigInt       @id @default(autoincrement())
+  orgId  String       @default("")
+  userId String
+  from   AgentStatus?
+  to     AgentStatus
+  at     DateTime     @default(now())
+  reason String?
   /// Duration spent in the *previous* state, denormalised so reports don't
   /// need window functions over the whole table.
-  prevMs   Int?
+  prevMs Int?
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -477,7 +505,9 @@ model AgentStateEvent {
   @@index([at])
 }
 
-/* ================================ contacts =============================== */
+/**
+ * ================================ contacts ===============================
+ */
 
 model Contact {
   id             String    @id @default(cuid())
@@ -497,7 +527,7 @@ model Contact {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  conversations Conversation[]
+  conversations   Conversation[]
   campaignTargets CampaignTarget[]
 
   /// The same caller may exist in two centres — a shared number is only a
@@ -507,7 +537,9 @@ model Contact {
   @@index([name])
 }
 
-/* ============================== conversations ============================ */
+/**
+ * ============================== conversations ============================
+ */
 
 model Conversation {
   id          String             @id @default(cuid())
@@ -529,12 +561,13 @@ model Conversation {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
 
-  contact   Contact?  @relation(fields: [contactId], references: [id])
-  queue     Queue?    @relation(fields: [queueId], references: [id])
-  handledBy User?     @relation(fields: [handledById], references: [id])
+  contact   Contact?   @relation(fields: [contactId], references: [id])
+  queue     Queue?     @relation(fields: [queueId], references: [id])
+  handledBy User?      @relation(fields: [handledById], references: [id])
   call      Call?
   messages  Message[]
   aiSession AiSession?
+  callEval  CallEval?
 
   @@index([channel, startedAt(sort: Desc)])
   @@index([status, channel])
@@ -543,7 +576,6 @@ model Conversation {
   @@index([queueId, startedAt(sort: Desc)])
   @@index([orgId, startedAt(sort: Desc)])
   @@index([orgId, status, channel])
-  callEval  CallEval?
 }
 
 model Call {
@@ -619,18 +651,18 @@ model CallParticipant {
 
 /// Unified turn record — an AI voice turn and a WhatsApp message share a shape.
 model Message {
-  id             String      @id @default(cuid())
-  orgId          String      @default("")
-  conversationId String
-  role           MessageRole
-  text           String
+  id                String      @id @default(cuid())
+  orgId             String      @default("")
+  conversationId    String
+  role              MessageRole
+  text              String
   /// Set for voice turns; aligns the transcript to the waveform playhead.
-  audioOffsetMs  Int?
-  confidence     Float?
-  authorId       String?
+  audioOffsetMs     Int?
+  confidence        Float?
+  authorId          String?
   /// Provider id for outbound chat, so delivery receipts can be matched.
-  providerMessageId String? @unique
-  createdAt      DateTime    @default(now())
+  providerMessageId String?     @unique
+  createdAt         DateTime    @default(now())
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   author       User?        @relation(fields: [authorId], references: [id])
@@ -638,7 +670,9 @@ model Message {
   @@index([conversationId, createdAt])
 }
 
-/* ============================== media & AI =============================== */
+/**
+ * ============================== media & AI ===============================
+ */
 
 model Recording {
   id         String    @id @default(cuid())
@@ -689,22 +723,22 @@ model CallEval {
   score Int
 
   /// Was what it said actually right?
-  accuracy Int
+  accuracy   Int
   /// Did it stay inside what it is allowed to say — no invented prices, no
   /// promises the centre has not made? The dimension this product exists for.
-  policy Int
+  policy     Int
   /// Did it hand over at the right moment: not clinging to a call it could not
   /// finish, not escalating one it could have.
   escalation Int
   /// Did it sound like this centre.
-  tone Int
+  tone       Int
 
   /// One sentence a supervisor can read. Not a transcript summary — a verdict.
-  note       String?
-  reviewer   EvalReviewer @default(AUTO)
+  note         String?
+  reviewer     EvalReviewer @default(AUTO)
   reviewedById String?
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   reviewedBy   User?        @relation(fields: [reviewedById], references: [id])
@@ -732,6 +766,10 @@ model AiSession {
   courseOfInterest String?
   sentiment        Float?
   summary          String?
+  /// Structured fields an external voice workflow (Dograh) extracted on the
+  /// call — its `gathered_context` minus bookkeeping keys. Shape varies by
+  /// workflow; read by /analytics/insights.
+  gathered         Json?
   avgLatencyMs     Int?
   costUsd          Decimal?          @db.Decimal(10, 6)
   inputTokens      Int               @default(0)
@@ -747,17 +785,17 @@ model AiSession {
 }
 
 model AiAgent {
-  id           String  @id @default(cuid())
-  orgId        String  @default("")
-  name         String
-  greeting     String
-  systemPrompt String
-  voice        String  @default("en-GB")
-  language     String  @default("en")
+  id              String   @id @default(cuid())
+  orgId           String   @default("")
+  name            String
+  greeting        String
+  systemPrompt    String
+  voice           String   @default("en-GB")
+  language        String   @default("en")
   /// EscalationRules, validated by zod on write.
   escalationRules Json
   defaultQueueId  String?
-  isActive        Boolean @default(true)
+  isActive        Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -782,11 +820,11 @@ model KnowledgeDoc {
 }
 
 model KnowledgeChunk {
-  id      String @id @default(cuid())
-  orgId   String @default("")
-  docId   String
-  ordinal Int
-  content String
+  id        String   @id @default(cuid())
+  orgId     String   @default("")
+  docId     String
+  ordinal   Int
+  content   String
   /// Bag-of-words vector over a fixed vocabulary. Float[] not pgvector — see
   /// the header note. Cosine is computed in-process.
   embedding Float[]
@@ -799,7 +837,9 @@ model KnowledgeChunk {
   @@index([docId])
 }
 
-/* ================================ routing ================================ */
+/**
+ * ================================ routing ================================
+ */
 
 model Queue {
   id            String          @id @default(cuid())
@@ -835,7 +875,9 @@ model QueueMembership {
   @@index([userId])
 }
 
-/* ============================== outbound ================================= */
+/**
+ * ============================== outbound =================================
+ */
 
 /// An outbound calling campaign: who to call, what the AI opens with, and the
 /// pacing that keeps it defensible.
@@ -845,41 +887,41 @@ model QueueMembership {
 /// certificate is ready" list can run all day at low concurrency, while a
 /// time-sensitive reminder wants a tighter window and more lines.
 model Campaign {
-  id        String         @id @default(cuid())
-  orgId     String         @default("")
-  name      String
-  status    CampaignStatus @default(DRAFT)
+  id     String         @id @default(cuid())
+  orgId  String         @default("")
+  name   String
+  status CampaignStatus @default(DRAFT)
 
   /// What the assistant says first. The AI agent supplies the rest of its
   /// behaviour; only the opener is campaign-specific.
-  opener    String
+  opener       String
   /// Why this centre is allowed to call these people. Free text, required, and
   /// recorded on every call — under UAE marketing rules "we had the number" is
   /// not a basis, and a dialer that does not make you write it down invites
   /// exactly that.
   consentBasis String
 
-  aiAgentId      String
+  aiAgentId    String
   /// Where an escalated outbound call goes.
-  queueId        String?
+  queueId      String?
   /// The DID to present. Must belong to this centre.
-  fromNumberId   String?
+  fromNumberId String?
 
   /// Simultaneous live calls this campaign may hold.
-  maxConcurrent  Int @default(2)
+  maxConcurrent   Int   @default(2)
   /// Local-time window, inclusive start, exclusive end, in the org's timezone.
-  windowStartHour Int @default(9)
-  windowEndHour   Int @default(18)
+  windowStartHour Int   @default(9)
+  windowEndHour   Int   @default(18)
   /// 1 = Monday … 7 = Sunday. Empty means every day.
-  daysOfWeek     Int[]
+  daysOfWeek      Int[]
 
-  maxAttempts        Int @default(2)
-  retryAfterMinutes  Int @default(120)
+  maxAttempts       Int @default(2)
+  retryAfterMinutes Int @default(120)
 
   startedAt   DateTime?
   completedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   targets CampaignTarget[]
 
@@ -901,8 +943,8 @@ model CampaignTarget {
   /// The conversation the successful attempt produced.
   conversationId String?
   lastError      String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   campaign Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   contact  Contact  @relation(fields: [contactId], references: [id])
@@ -914,29 +956,31 @@ model CampaignTarget {
   @@index([orgId, status])
 }
 
-/* =========================== number inventory ============================ */
+/**
+ * =========================== number inventory ============================
+ */
 
 /// Mocked DID stock in v1 — demonstrates virtual numbers replacing SIM cards.
 /// Real provisioning needs a TDRA-licensed UAE carrier.
 model PhoneNumber {
-  id              String       @id @default(cuid())
-  orgId           String       @default("")
+  id               String       @id @default(cuid())
+  orgId            String       @default("")
   /// Globally unique: a real DID is assignable to exactly one centre, and two
   /// orgs claiming the same number would make inbound routing ambiguous.
-  e164            String       @unique
-  label           String?
-  country         String       @default("AE")
-  region          String?
-  provider        String       @default("mock")
-  monthlyCostUsd  Decimal      @db.Decimal(8, 2) @default(0)
-  status          NumberStatus @default(AVAILABLE)
-  inboundQueueId  String?
-  aiAgentId       String?
-  recordingEnabled Boolean     @default(true)
-  purchasedAt     DateTime?
-  releasedAt      DateTime?
-  createdAt       DateTime     @default(now())
-  updatedAt       DateTime     @updatedAt
+  e164             String       @unique
+  label            String?
+  country          String       @default("AE")
+  region           String?
+  provider         String       @default("mock")
+  monthlyCostUsd   Decimal      @default(0) @db.Decimal(8, 2)
+  status           NumberStatus @default(AVAILABLE)
+  inboundQueueId   String?
+  aiAgentId        String?
+  recordingEnabled Boolean      @default(true)
+  purchasedAt      DateTime?
+  releasedAt       DateTime?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
 
   inboundQueue Queue?   @relation(fields: [inboundQueueId], references: [id])
   aiAgent      AiAgent? @relation(fields: [aiAgentId], references: [id])
@@ -944,23 +988,25 @@ model PhoneNumber {
   @@index([status])
 }
 
-/* ========================= integration plumbing ========================== */
+/**
+ * ========================= integration plumbing ==========================
+ */
 
 /// Transactional outbox. Domain writes and event publication commit together,
 /// then the worker drains. No dual-write bugs, no lost CRM pushes.
 model OutboxEvent {
-  id          BigInt    @id @default(autoincrement())
-  orgId       String    @default("")
-  aggregate   String
-  aggregateId String
-  type        String
-  payload     Json
-  publishedAt DateTime?
-  attempts    Int       @default(0)
-  lastError   String?
+  id            BigInt    @id @default(autoincrement())
+  orgId         String    @default("")
+  aggregate     String
+  aggregateId   String
+  type          String
+  payload       Json
+  publishedAt   DateTime?
+  attempts      Int       @default(0)
+  lastError     String?
   /// Exponential backoff target; the drainer skips rows until this passes.
-  nextAttemptAt DateTime @default(now())
-  createdAt   DateTime  @default(now())
+  nextAttemptAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
 
   @@index([publishedAt, nextAttemptAt])
   @@index([aggregate, aggregateId])
@@ -997,7 +1043,9 @@ model ProcessedWebhook {
   @@index([source, processedAt])
 }
 
-/* =============================== analytics =============================== */
+/**
+ * =============================== analytics ===============================
+ */
 
 /// Pre-aggregated so /analytics never scans Call. Rolled up incrementally on
 /// call completion and reconciled nightly.
@@ -1049,64 +1097,70 @@ model AuditLog {
 /// is otherwise unchanged, so an admin's settings page still edits exactly the
 /// knobs it always did — just their own centre's.
 model Setting {
-  id                    String   @id @default(cuid())
-  orgId                 String   @unique
-  instituteName         String   @default("FIT Institute")
-  instituteTimezone     String   @default("Asia/Dubai")
-  recordingConsentText  String   @default("This call may be recorded for quality and training purposes.")
-  recordingConsentOn    Boolean  @default(true)
+  id                     String  @id @default(cuid())
+  orgId                  String  @unique
+  instituteName          String  @default("FIT Institute")
+  instituteTimezone      String  @default("Asia/Dubai")
+  recordingConsentText   String  @default("This call may be recorded for quality and training purposes.")
+  recordingConsentOn     Boolean @default(true)
   recordingRetentionDays Int     @default(365)
-  wrapupSeconds         Int      @default(20)
-  agentRingTimeoutSec   Int      @default(20)
+  wrapupSeconds          Int     @default(20)
+  agentRingTimeoutSec    Int     @default(20)
   /// Used for the cost-saving figure on the analytics page.
-  agentHourlyCostUsd    Decimal  @db.Decimal(8, 2) @default(12.00)
-  bitrixPortalUrl       String?
+  agentHourlyCostUsd     Decimal @default(12.00) @db.Decimal(8, 2)
+  bitrixPortalUrl        String?
 
   /// Per-centre CRM. Empty means "inherit the deployment's CRM_DRIVER", which is
   /// how the seeded tenant keeps working without being reconfigured.
-  crmProvider           String   @default("")
+  crmProvider   String    @default("")
   /// Non-secret fields for whichever provider is selected (Zoho region and
   /// client id, the webhook host). Shown on the settings page and used for
   /// deep links. Shapeless on purpose: five providers with different fields
   /// would otherwise mean five sets of mostly-null columns.
-  crmPublic             Json?
+  crmPublic     Json?
   /// The provider's secrets as one AES-256-GCM blob — see
   /// apps/api/src/shared/secret-box.ts. A leaked row must not be a working
   /// credential, and adding a sixth provider must not need a migration.
-  crmSecretsEnc         String?
-  crmUpdatedAt          DateTime?
+  crmSecretsEnc String?
+  crmUpdatedAt  DateTime?
 
   /// Dograh (self-hosted voice agents) behind this centre's landing page.
   /// Null means not connected, and the page falls back to a plain `tel:` link.
   /// Deliberately not a TELEPHONY_DRIVER: see packages/contracts/src/dograh.ts.
-  dograhBaseUrl         String?
+  dograhBaseUrl    String?
   /// DograhPublic: workflow id and name, the minted embed token, the domains
   /// Dograh will honour it on, and which of the two call paths the page offers.
   /// The embed token lives here rather than in the encrypted blob because it is
   /// rendered into public HTML — Dograh gates it on domain, not on secrecy.
-  dograhPublic          Json?
+  dograhPublic     Json?
   /// The Dograh API key as one AES-256-GCM blob — see shared/secret-box.ts.
   /// This one *is* a bearer credential for the client's whole voice platform.
   /// Null means inherit DOGRAH_API_KEY, the way an unset crmProvider inherits
   /// CRM_DRIVER.
-  dograhSecretsEnc      String?
-  dograhUpdatedAt       DateTime?
+  dograhSecretsEnc String?
+  dograhUpdatedAt  DateTime?
   /// DograhDialers: the three demo-call slots — inbound, outbound, info — each
   /// naming a workflow on this centre's Dograh. Separate from `dograhPublic`
   /// because that object is the *landing page's* one agent, rendered into
   /// public HTML; these are internal testing targets and never leave the
   /// dashboard. Null means none configured, which is the normal state.
-  dograhDialers         Json?
+  dograhDialers    Json?
 
   /// CalendarConfig: provider, slot length, working days and hours — see
   /// packages/contracts/src/calendar.ts. Null means the defaults (mock
   /// provider, Mon–Sat 09:00–18:00, 30-minute slots) in the org's timezone.
-  calendarConfig        Json?
+  calendarConfig   Json?
   /// Bearer for the voice agent's calendar tools: the agent's HTTP tool calls
   /// /public/calendar/:token/… with no session, so this *is* the credential.
   /// Random and unguessable, minted on first use by CalendarService.ensureToken,
   /// and unique so the public route can find the centre from it alone.
-  calendarToken         String?  @unique
+  calendarToken    String? @unique
+  /// CalcomPublic: the connected account, the event type bookings are made
+  /// against, the webhook we registered and the last sync — see
+  /// packages/contracts/src/calendar.ts. Null means Cal.com is not connected.
+  calcomPublic     Json?
+  /// The Cal.com API key as one AES-256-GCM blob — see shared/secret-box.ts.
+  calcomSecretsEnc String?
 
   /// Website-to-centre enrichment: scrape the client's site, then generate the
   /// landing-page copy and the Dograh agent brief from what it says.
@@ -1117,15 +1171,15 @@ model Setting {
   /// The centre is created and usable before any of it runs, so an operator
   /// needs to see which stage it reached and why it stopped.
   /// none | queued | running | ready | failed
-  enrichStatus          String   @default("none")
+  enrichStatus    String    @default("none")
   /// The URL this enrichment actually read, which may differ from the org's
   /// current websiteUrl once somebody edits it.
-  enrichSourceUrl       String?
+  enrichSourceUrl String?
   /// The last failure, shown to the operator verbatim. Never a stack trace.
-  enrichError           String?
-  enrichedAt            DateTime?
+  enrichError     String?
+  enrichedAt      DateTime?
 
-  updatedAt             DateTime @updatedAt
+  updatedAt DateTime @updatedAt
 
   org Organization @relation(fields: [orgId], references: [id], onDelete: Cascade)
 }

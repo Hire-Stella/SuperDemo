@@ -34,6 +34,14 @@ const RecordingQuery = z.object({
  * Every access is written to the audit log, because call recordings of
  * prospective students are exactly the data a client will be asked about.
  */
+const MIME_BY_EXT: Record<string, string> = {
+  webm: 'audio/webm',
+  mp3: 'audio/mpeg',
+  wav: 'audio/wav',
+  ogg: 'audio/ogg',
+  m4a: 'audio/mp4',
+};
+
 @Controller('media')
 export class MediaController {
   constructor(
@@ -127,6 +135,10 @@ export class MediaController {
       })
       .catch(() => undefined);
 
+    // From the extension rather than a constant: browser recordings are webm,
+    // ElevenLabs' are mp3 and Dograh's wav, and a mislabelled file may not play.
+    const contentType = MIME_BY_EXT[query.key.split('.').pop() ?? ''] ?? 'audio/webm';
+
     const range = req.headers.range;
     if (range) {
       const match = /bytes=(\d*)-(\d*)/.exec(range);
@@ -138,7 +150,7 @@ export class MediaController {
         'Content-Range': `bytes ${start}-${end}/${buffer.length}`,
         'Accept-Ranges': 'bytes',
         'Content-Length': String(slice.length),
-        'Content-Type': 'audio/webm',
+        'Content-Type': contentType,
         'Cache-Control': 'private, max-age=300',
       });
       res.end(slice);
@@ -146,7 +158,7 @@ export class MediaController {
     }
 
     res.set({
-      'Content-Type': 'audio/webm',
+      'Content-Type': contentType,
       'Content-Length': String(buffer.length),
       'Accept-Ranges': 'bytes',
       'Cache-Control': 'private, max-age=300',

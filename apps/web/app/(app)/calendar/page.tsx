@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
+  CalendarCheck,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -15,13 +16,11 @@ import {
   X,
 } from 'lucide-react';
 import {
-  type AvailabilityOutput,
   type BookingRow,
   type BookingSource,
   type CalendarConfig,
   type CalendarConfigView,
-  DEFAULT_DIALLING_COUNTRY,
-  DIALLING_COUNTRIES,
+  type CalcomStatus,
   WEEKDAY_LABELS,
   WEEKDAY_ORDER,
   addDaysIso,
@@ -32,6 +31,8 @@ import {
 import { api, qs } from '@/lib/api';
 import { phone as formatPhone } from '@/lib/format';
 import { useSession } from '@/components/providers';
+import { NewBookingDialog, clockOf } from '@/components/new-booking-dialog';
+import { CalcomCard } from '@/components/calcom-card';
 import {
   Badge,
   Button,
@@ -43,17 +44,8 @@ import {
   MockNotice,
   Select,
   Spinner,
-  Textarea,
   cn,
 } from '@/components/composites';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 
 /**
  * The centre's appointment book.
@@ -78,7 +70,17 @@ const SOURCE_STYLE: Record<BookingSource, { label: string; className: string; ic
       className: 'bg-muted text-muted-foreground',
       icon: LayoutDashboard,
     },
+    calcom: { label: 'Cal.com', className: 'bg-live-soft text-live', icon: CalendarCheck },
   };
+
+/**
+ * With Cal.com connected, its availability decides which days and hours are
+ * bookable, so the page stops second-guessing it with the built-in hours: every
+ * day is open and the slot list is whatever Cal.com offers.
+ */
+function openAllHours(cfg: CalendarConfig): CalendarConfig {
+  return { ...cfg, workingDays: [0, 1, 2, 3, 4, 5, 6], openTime: '00:00', closeTime: '23:59' };
+}
 
 const SLOT_LENGTHS = [15, 20, 30, 45, 60, 90, 120] as const;
 
@@ -89,10 +91,15 @@ export default function CalendarPage() {
   // A platform operator reads but cannot write — the API refuses their writes
   // anyway, so offering the buttons would only offer a 403.
   const canWrite = user?.role === 'ADMIN' || user?.role === 'SUPERVISOR';
+  const canManage = user?.role === 'ADMIN';
 
   const config = useQuery({
     queryKey: ['calendar', 'config'],
     queryFn: () => api.get<CalendarConfigView>('/calendar/config'),
+  });
+  const calcom = useQuery({
+    queryKey: ['calendar', 'calcom'],
+    queryFn: () => api.get<CalcomStatus>('/calendar/calcom'),
   });
   const tz = config.data?.timezone ?? 'Asia/Dubai';
   const today = zonedParts(new Date(), tz).date;
@@ -114,6 +121,8 @@ export default function CalendarPage() {
     queryKey: ['calendar', 'bookings', range.from, range.to],
     queryFn: () => api.get<BookingRow[]>(`/calendar/bookings${qs(range)}`),
     enabled: Boolean(config.data),
+    // Bookings made on the Cal.com page arrive through the sync; keep the week fresh.
+    refetchInterval: calcom.data?.connected ? 30_000 : false,
   });
 
   const [creating, setCreating] = useState(false);
@@ -142,7 +151,8 @@ export default function CalendarPage() {
   if (config.isError) {
     return <p className="p-6 text-sm text-destructive">{(config.error as Error).message}</p>;
   }
-  const cfg = config.data!.config;
+  const connected = calcom.data?.connected === true;
+  const cfg = connected ? openAllHours(config.data!.config) : config.data!.config;
 
   return (
     <div className="mx-auto max-w-[1400px] px-4 py-5 sm:px-6">
@@ -163,12 +173,14 @@ export default function CalendarPage() {
         )}
       </header>
 
-      <div className="mb-4">
-        <MockNotice>
-          Bookings are held in this platform&rsquo;s own calendar — no Cal.com or Google calendar is
-          connected. Slots, clashes and opening hours all behave as they will once one is.
-        </MockNotice>
-      </div>
+      {calcom.data && !connected && (
+        <div className="mb-4">
+          <MockNotice>
+            Bookings are held in this platform&rsquo;s own calendar — no Cal.com calendar is
+            connected. Slots, clashes and opening hours all behave as they will once one is.
+          </MockNotice>
+        </div>
+      )}
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Metric label="Booked this week" value={stats.booked} />
@@ -192,7 +204,11 @@ export default function CalendarPage() {
 
       <Card
         title={weekTitle(days[0]!, days[6]!)}
-        subtitle={`${cfg.openTime}–${cfg.closeTime} · ${cfg.slotMinutes}-minute slots`}
+        subtitle={
+          connected
+            ? `Cal.com · ${calcom.data?.eventType?.title} · ${calcom.data?.eventType?.lengthMinutes}-minute appointments`
+            : `${cfg.openTime}–${cfg.closeTime} · ${cfg.slotMinutes}-minute slots`
+        }
         action={
           <div className="flex items-center gap-1">
             <Button
@@ -252,8 +268,10 @@ export default function CalendarPage() {
       </Card>
 
       {canWrite && (
-        <div className="mt-4 max-w-2xl">
-          <HoursCard view={config.data!} />
+        <div className="mt-4 grid max-w-5xl items-start gap-4 lg:grid-cols-2">
+          {calcom.data && <CalcomCard status={calcom.data} canManage={canManage} />}
+          {/* Cal.com's own availability replaces these hours while it is connected. */}
+          {!connected && <HoursCard view={config.data!} />}
         </div>
       )}
 
@@ -442,221 +460,6 @@ function BookingCard({
   );
 }
 
-/* =============================== new booking ============================== */
-
-function NewBookingDialog({
-  open,
-  onOpenChange,
-  tz,
-  today,
-  config,
-  onBooked,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  tz: string;
-  today: string;
-  config: CalendarConfig;
-  onBooked: (startsAt: string) => void;
-}) {
-  const qc = useQueryClient();
-  const [date, setDate] = useState(() => nextWorkingDay(today, config, tz));
-  const [slot, setSlot] = useState('');
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [country, setCountry] = useState(DEFAULT_DIALLING_COUNTRY);
-  const [email, setEmail] = useState('');
-  const [notes, setNotes] = useState('');
-
-  // Fresh form each time it opens: a half-typed booking from ten minutes ago
-  // reappearing under a different caller's name is a mistake waiting to happen.
-  useEffect(() => {
-    if (!open) return;
-    setDate(nextWorkingDay(today, config, tz));
-    setSlot('');
-    setName('');
-    setPhone('');
-    setEmail('');
-    setNotes('');
-  }, [open, today, config, tz]);
-
-  const availability = useQuery({
-    queryKey: ['calendar', 'availability', date],
-    queryFn: () => api.get<AvailabilityOutput>(`/calendar/availability${qs({ date })}`),
-    enabled: open && /^\d{4}-\d{2}-\d{2}$/.test(date),
-  });
-  const slots = availability.data?.slots ?? [];
-
-  // Pick the first free time whenever the list changes and the old pick is gone.
-  useEffect(() => {
-    if (slots.length === 0) setSlot('');
-    else if (!slots.some((s) => s.startsAt === slot)) setSlot(slots[0]!.startsAt);
-  }, [slots, slot]);
-
-  const create = useMutation({
-    mutationFn: () =>
-      api.post<BookingRow>('/calendar/bookings', {
-        name,
-        phone,
-        country,
-        email: email || undefined,
-        startsAt: slot,
-        notes: notes || undefined,
-      }),
-    onSuccess: (row) => {
-      toast.success(
-        `Booked ${row.name} for ${dayLabel(row.startsAt, tz)} at ${clockOf(row.startsAt, tz)}`,
-      );
-      void qc.invalidateQueries({ queryKey: ['calendar'] });
-      onBooked(String(row.startsAt));
-      onOpenChange(false);
-    },
-    onError: (e) => {
-      toast.error((e as Error).message);
-      // Most likely someone else took it a moment ago — show what is left.
-      void availability.refetch();
-    },
-  });
-
-  const closed = !config.workingDays.includes(weekdayOfIso(date || today));
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>New booking</DialogTitle>
-          <DialogDescription>
-            Times are shown in {tz}, the centre&rsquo;s own timezone.
-          </DialogDescription>
-        </DialogHeader>
-
-        <form
-          className="grid gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            create.mutate();
-          }}
-        >
-          <div className="grid grid-cols-2 gap-2">
-            <div className="grid gap-1.5">
-              <Label htmlFor="bk-date">Date</Label>
-              <Input
-                id="bk-date"
-                type="date"
-                min={today}
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                required
-              />
-            </div>
-            <div className="grid gap-1.5">
-              <Label htmlFor="bk-slot">Time</Label>
-              <Select
-                id="bk-slot"
-                value={slot}
-                onChange={(e) => setSlot(e.target.value)}
-                disabled={availability.isFetching || slots.length === 0}
-                required
-              >
-                {availability.isFetching ? (
-                  <option value="">Loading…</option>
-                ) : slots.length === 0 ? (
-                  <option value="">{closed ? 'Closed' : 'Fully booked'}</option>
-                ) : (
-                  slots.map((s) => (
-                    <option key={s.startsAt} value={s.startsAt}>
-                      {s.label}
-                    </option>
-                  ))
-                )}
-              </Select>
-            </div>
-          </div>
-          {!availability.isFetching && slots.length === 0 && date && (
-            <p className="-mt-1 text-[11px] text-muted-foreground">
-              {closed
-                ? `The centre is closed on ${FULL_DAY[weekdayOfIso(date)]}s.`
-                : 'No free times left on this day — try another.'}
-            </p>
-          )}
-
-          <div className="grid gap-1.5">
-            <Label htmlFor="bk-name">Name</Label>
-            <Input
-              id="bk-name"
-              autoComplete="off"
-              placeholder="Who is coming in"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-              minLength={2}
-            />
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label htmlFor="bk-phone">Phone</Label>
-            <div className="grid grid-cols-[7rem_1fr] gap-2">
-              <Select
-                aria-label="Country"
-                value={country}
-                onChange={(e) => setCountry(e.target.value)}
-              >
-                {DIALLING_COUNTRIES.map((c) => (
-                  <option key={`${c.code}-${c.dial}`} value={c.code}>
-                    {c.flag} +{c.dial}
-                  </option>
-                ))}
-              </Select>
-              <Input
-                id="bk-phone"
-                inputMode="tel"
-                placeholder="50 123 4567"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label htmlFor="bk-email">
-              Email <span className="font-normal text-muted-foreground">(optional)</span>
-            </Label>
-            <Input
-              id="bk-email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </div>
-
-          <div className="grid gap-1.5">
-            <Label htmlFor="bk-notes">
-              Notes <span className="font-normal text-muted-foreground">(optional)</span>
-            </Label>
-            <Textarea
-              id="bk-notes"
-              rows={2}
-              placeholder="What it is about"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-            />
-          </div>
-
-          <DialogFooter className="mt-1">
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Close
-            </Button>
-            <Button type="submit" disabled={!slot || !name || !phone || create.isPending}>
-              {create.isPending ? 'Booking…' : 'Book'}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 /* ================================== hours ================================= */
 
 /**
@@ -797,32 +600,6 @@ function HoursCard({ view }: { view: CalendarConfigView }) {
 
 function mondayOf(date: string): string {
   return addDaysIso(date, -((weekdayOfIso(date) + 6) % 7));
-}
-
-/**
- * Today if the centre is open and has time left, else the next open day — so
- * the form never opens on a day whose only answer is "nothing left".
- */
-function nextWorkingDay(today: string, config: CalendarConfig, tz: string): string {
-  const pastClosing = zonedParts(new Date(), tz).time >= config.closeTime;
-  for (let i = pastClosing ? 1 : 0; i < 8; i += 1) {
-    const d = addDaysIso(today, i);
-    if (config.workingDays.includes(weekdayOfIso(d))) return d;
-  }
-  return today;
-}
-
-function clockOf(at: Date | string, tz: string): string {
-  return zonedParts(new Date(at), tz).time;
-}
-
-function dayLabel(at: Date | string, tz: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    timeZone: tz,
-  }).format(new Date(at));
 }
 
 /** "12 – 18 October 2026", or "28 September – 4 October 2026" across months. */

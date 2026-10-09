@@ -1,12 +1,18 @@
-import { Controller, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
+import { Controller, Delete, Get, HttpCode, Param, Post, Put, Query } from '@nestjs/common';
 import {
   type AvailabilityOutput,
   type BookingRow,
   CalendarConfig,
   type CalendarConfigView,
+  CalcomConnectInput,
+  CalcomLookupInput,
+  type CalcomLookupOutput,
+  type CalcomStatus,
   CreateBookingInput,
 } from '@superdemo/contracts';
 import { CalendarService } from './calendar.service';
+import { CalcomService } from './calcom/calcom.service';
+import { TenantContext } from '../tenancy/tenant-context.service';
 import { Roles } from '../auth/guards';
 import { ZodBody } from '../shared/zod.pipe';
 
@@ -25,7 +31,11 @@ import { ZodBody } from '../shared/zod.pipe';
  */
 @Controller('calendar')
 export class CalendarController {
-  constructor(private readonly calendar: CalendarService) {}
+  constructor(
+    private readonly calendar: CalendarService,
+    private readonly calcom: CalcomService,
+    private readonly tenants: TenantContext,
+  ) {}
 
   @Roles('ADMIN', 'SUPERVISOR', 'AGENT')
   @Get('bookings')
@@ -62,5 +72,44 @@ export class CalendarController {
   @Put('config')
   updateConfig(@ZodBody(CalendarConfig) body: CalendarConfig): Promise<CalendarConfigView> {
     return this.calendar.updateConfig(body);
+  }
+
+  /*
+   * Cal.com. Connecting hands this centre's bookings to an outside account,
+   * so it is ADMIN only — the same line as the CRM credentials.
+   */
+
+  @Roles('ADMIN', 'SUPERVISOR', 'AGENT')
+  @Get('calcom')
+  calcomStatus(): Promise<CalcomStatus> {
+    return this.calcom.status(this.tenants.requireOrgId());
+  }
+
+  @Roles('ADMIN')
+  @Post('calcom/lookup')
+  @HttpCode(200)
+  calcomLookup(@ZodBody(CalcomLookupInput) body: CalcomLookupInput): Promise<CalcomLookupOutput> {
+    return this.calcom.lookup(this.tenants.requireOrgId(), body);
+  }
+
+  @Roles('ADMIN')
+  @Put('calcom')
+  calcomConnect(@ZodBody(CalcomConnectInput) body: CalcomConnectInput): Promise<CalcomStatus> {
+    return this.calcom.connect(this.tenants.requireOrgId(), body);
+  }
+
+  @Roles('ADMIN')
+  @Delete('calcom')
+  calcomDisconnect(): Promise<CalcomStatus> {
+    return this.calcom.disconnect(this.tenants.requireOrgId());
+  }
+
+  @Roles('ADMIN', 'SUPERVISOR')
+  @Post('calcom/sync')
+  @HttpCode(200)
+  async calcomSync(): Promise<CalcomStatus> {
+    const orgId = this.tenants.requireOrgId();
+    await this.calcom.syncOrg(orgId).catch(() => undefined);
+    return this.calcom.status(orgId);
   }
 }
