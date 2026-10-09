@@ -13,21 +13,10 @@ import {
   UserCheck,
   Users,
 } from 'lucide-react';
-import type {
-  ActiveCallRow,
-  AgentSummary,
-  LiveOpsSnapshot,
-  QueueDto,
-} from '@superdemo/contracts';
+import type { ActiveCallRow, AgentSummary, LiveOpsSnapshot, QueueDto } from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { useSession, useUser } from '@/components/providers';
-import {
-  AGENT_STATUS_STYLE,
-  CALL_STATE_STYLE,
-  duration,
-  pct,
-  phone,
-} from '@/lib/format';
+import { AGENT_STATUS_STYLE, CALL_STATE_STYLE, duration, pct, phone } from '@/lib/format';
 import {
   Avatar,
   Badge,
@@ -120,8 +109,13 @@ export default function LiveOpsPage() {
             Live operations
           </h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
-            Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'},{' '}
-            {user.name.split(' ')[0]}. Everything happening right now, across all channels.
+            Good{' '}
+            {new Date().getHours() < 12
+              ? 'morning'
+              : new Date().getHours() < 18
+                ? 'afternoon'
+                : 'evening'}
+            , {user.name.split(' ')[0]}. Everything happening right now, across all channels.
           </p>
         </div>
         {/* Both simulator shortcuts follow the centre's own switch: a button
@@ -161,11 +155,7 @@ export default function LiveOpsPage() {
         <Metric
           label="Waiting"
           value={s?.waitingInQueue ?? '—'}
-          hint={
-            s?.longestWaitMs
-              ? `longest ${duration(s.longestWaitMs)}`
-              : 'nobody in a queue'
-          }
+          hint={s?.longestWaitMs ? `longest ${duration(s.longestWaitMs)}` : 'nobody in a queue'}
           tone={slaBreaching ? 'danger' : 'default'}
           icon={slaBreaching ? <AlertTriangle className="size-4" /> : <Timer className="size-4" />}
         />
@@ -199,9 +189,7 @@ export default function LiveOpsPage() {
           label="Answered within SLA"
           value={pct(s?.today.answeredWithinSlaPct, 1)}
           hint="escalated calls picked up in time"
-          tone={
-            s && s.today.answeredWithinSlaPct < 80 && s.today.calls > 0 ? 'warn' : 'live'
-          }
+          tone={s && s.today.answeredWithinSlaPct < 80 && s.today.calls > 0 ? 'warn' : 'live'}
         />
         <Metric
           label="Avg handle time"
@@ -234,7 +222,9 @@ export default function LiveOpsPage() {
                 (user.role === 'ADMIN' || user.role === 'SUPERVISOR') &&
                 user.orgSimulatorEnabled !== false ? (
                   <Link href="/simulator">
-                    <Button size="sm">Simulate one</Button>
+                    <Button variant="secondary" size="sm">
+                      Simulate one
+                    </Button>
                   </Link>
                 ) : undefined
               }

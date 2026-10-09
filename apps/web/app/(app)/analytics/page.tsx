@@ -3,19 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import { BarList, LineChart } from '@hire-stella/ui';
 import { BarChart3, Download, PiggyBank, ShieldCheck } from 'lucide-react';
 import {
   dispositionLabel,
@@ -27,7 +15,18 @@ import {
 import { api, qs } from '@/lib/api';
 import { useUser } from '@/components/providers';
 import { dateRange, ESCALATION_LABEL, money, pct, seconds } from '@/lib/format';
-import { Badge, Button, Card, Metric, Select, Spinner, Table, Td, Th } from '@/components/composites';
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  Metric,
+  Select,
+  Spinner,
+  Table,
+  Td,
+  Th,
+} from '@/components/composites';
 
 /*
  * Chart palette — read from the theme, not hardcoded.
@@ -39,15 +38,6 @@ import { Badge, Button, Card, Metric, Select, Spinner, Table, Td, Th } from '@/c
  * Series meanings are kept consistent with the rest of the app: brand red for
  * the headline series, purple for AI, green for healthy, amber/red for problems.
  */
-const C = {
-  brand: 'var(--chart-1)',
-  ai: 'var(--chart-2)',
-  live: 'var(--chart-3)',
-  warn: 'var(--chart-4)',
-  danger: 'var(--destructive)',
-  grid: 'var(--border)',
-  muted: 'var(--muted-foreground)',
-};
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -94,10 +84,20 @@ export default function AnalyticsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button onClick={() => void api.download(`/reports/analytics.csv${qs(range)}`).catch(() => undefined)}>
+          <Button
+            variant="secondary"
+            onClick={() =>
+              void api.download(`/reports/analytics.csv${qs(range)}`).catch(() => undefined)
+            }
+          >
             <Download className="size-4" aria-hidden /> Report CSV
           </Button>
-          <Button onClick={() => void api.download(`/reports/agents.csv${qs(range)}`).catch(() => undefined)}>
+          <Button
+            variant="secondary"
+            onClick={() =>
+              void api.download(`/reports/agents.csv${qs(range)}`).catch(() => undefined)
+            }
+          >
             <Download className="size-4" aria-hidden /> Agents CSV
           </Button>
           <Select className="w-auto" value={days} onChange={(e) => setDays(e.target.value)}>
@@ -117,11 +117,7 @@ export default function AnalyticsPage() {
           hint={`${t.aiContained.toLocaleString()} resolved without an agent`}
           tone="ai"
         />
-        <Metric
-          label="Escalated"
-          value={t.escalated.toLocaleString()}
-          hint="reached a human"
-        />
+        <Metric label="Escalated" value={t.escalated.toLocaleString()} hint="reached a human" />
         <Metric
           label="Abandonment"
           value={pct(t.abandonmentPct, 1)}
@@ -133,10 +129,7 @@ export default function AnalyticsPage() {
           value={pct(t.answeredWithinSlaPct, 1)}
           tone={t.answeredWithinSlaPct < 80 ? 'warn' : 'live'}
         />
-        <Metric
-          label="WhatsApp threads"
-          value={t.whatsappConversations.toLocaleString()}
-        />
+        <Metric label="WhatsApp threads" value={t.whatsappConversations.toLocaleString()} />
       </div>
 
       {/* the commercial argument */}
@@ -150,7 +143,11 @@ export default function AnalyticsPage() {
         subtitle="Contained calls consumed no agent time, valued at the average handle time of calls that did reach an agent"
       >
         <div className="grid grid-cols-2 gap-3 p-4 lg:grid-cols-4">
-          <Metric label="Calls contained" value={d.savings.containedCalls.toLocaleString()} tone="ai" />
+          <Metric
+            label="Calls contained"
+            value={d.savings.containedCalls.toLocaleString()}
+            tone="ai"
+          />
           <Metric label="Agent hours saved" value={d.savings.agentHoursSaved.toLocaleString()} />
           <Metric
             label="Estimated saving"
@@ -167,55 +164,18 @@ export default function AnalyticsPage() {
 
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         {/* volume over time */}
-        <Card title="Volume and containment over time">
-          <div className="h-72 p-3">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={d.daily} margin={{ top: 6, right: 8, bottom: 0, left: -18 }}>
-                <CartesianGrid stroke={C.grid} vertical={false} />
-                <XAxis
-                  dataKey="day"
-                  tick={{ fontSize: 11, fill: C.muted }}
-                  tickFormatter={(v: string) => v.slice(5)}
-                  stroke={C.grid}
-                />
-                <YAxis tick={{ fontSize: 11, fill: C.muted }} stroke={C.grid} />
-                <Tooltip
-                  contentStyle={{
-                    fontSize: 12,
-                    borderRadius: 8,
-                    border: `1px solid ${C.grid}`,
-                    background: 'var(--popover)',
-                    color: 'var(--popover-foreground)',
-                  }}
-                />
-                <Legend wrapperStyle={{ fontSize: 11 }} />
-                <Line
-                  type="monotone"
-                  dataKey="calls"
-                  name="All calls"
-                  stroke={C.brand}
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="aiContained"
-                  name="AI resolved"
-                  stroke={C.ai}
-                  strokeWidth={2}
-                  dot={false}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="abandoned"
-                  name="Abandoned"
-                  stroke={C.warn}
-                  strokeWidth={1.5}
-                  strokeDasharray="4 3"
-                  dot={false}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+        <Card>
+          <div className="p-4">
+            <LineChart
+              title="Volume and containment over time"
+              height={260}
+              categories={d.daily.map((x) => x.day.slice(5))}
+              series={[
+                { key: 'calls', label: 'All calls', values: d.daily.map((x) => x.calls) },
+                { key: 'ai', label: 'AI resolved', values: d.daily.map((x) => x.aiContained) },
+                { key: 'abandoned', label: 'Abandoned', values: d.daily.map((x) => x.abandoned) },
+              ]}
+            />
           </div>
         </Card>
 
@@ -224,53 +184,32 @@ export default function AnalyticsPage() {
           title="Why the AI handed off"
           subtitle="The most actionable chart here — each reason implies a different fix"
         >
-          <div className="h-72 p-3">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={d.escalationReasons.map((r) => ({
-                  reason: ESCALATION_LABEL[r.reason],
-                  count: r.count,
-                }))}
-                layout="vertical"
-                margin={{ top: 6, right: 16, bottom: 0, left: 58 }}
-              >
-                <CartesianGrid stroke={C.grid} horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 11, fill: C.muted }} stroke={C.grid} />
-                <YAxis
-                  type="category"
-                  dataKey="reason"
-                  tick={{ fontSize: 10, fill: C.muted }}
-                  width={120}
-                  stroke={C.grid}
-                />
-                <Tooltip
-                  contentStyle={{
-                    fontSize: 12,
-                    borderRadius: 8,
-                    border: `1px solid ${C.grid}`,
-                    background: 'var(--popover)',
-                    color: 'var(--popover-foreground)',
-                  }}
-                />
-                <Bar dataKey="count" name="Calls" radius={[0, 4, 4, 0]}>
-                  {d.escalationReasons.map((r) => (
-                    <Cell
-                      key={r.reason}
-                      fill={
-                        r.reason === 'CALLER_REQUESTED' || r.reason === 'HUMAN_ONLY_INTENT'
-                          ? C.brand
-                          : C.warn
-                      }
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="p-4">
+            {d.escalationReasons.length === 0 ? (
+              <EmptyState
+                title="No handoffs in this period"
+                hint="When the AI routes a call to a person, the reason shows up here."
+              />
+            ) : (
+              <BarList
+                items={d.escalationReasons.map((r) => {
+                  // A person was meant to take these — the handoff worked as designed (Mist).
+                  // Everything else usually means a knowledge-base gap someone can fix (orange).
+                  const asDesigned =
+                    r.reason === 'CALLER_REQUESTED' || r.reason === 'HUMAN_ONLY_INTENT';
+                  return {
+                    label: ESCALATION_LABEL[r.reason],
+                    value: r.count,
+                    tone: asDesigned ? 'handoff' : 'signal',
+                    tag: asDesigned ? 'As designed' : 'Fixable',
+                  };
+                })}
+              />
+            )}
           </div>
-          <p className="border-t border-border px-4 py-2 text-xs leading-relaxed text-muted-foreground">
-            Red reasons are working as designed — the caller asked for a person, or the topic is
-            configured human-only. Amber reasons are fixable: they usually mean a gap in the
-            knowledge base.
+          <p className="border-t border-border px-4 py-2.5 text-xs leading-relaxed text-muted-foreground">
+            “As designed” handoffs are working: the caller asked for a person, or the topic is
+            configured human-only. “Fixable” ones usually mean a gap in the knowledge base.
           </p>
         </Card>
       </div>
@@ -308,7 +247,7 @@ export default function AnalyticsPage() {
                             background:
                               calls === 0
                                 ? 'var(--muted)'
-                                : `color-mix(in oklch, ${C.brand} ${Math.round(18 + intensity * 82)}%, transparent)`,
+                                : `color-mix(in oklch, var(--chart-1) ${Math.round(18 + intensity * 82)}%, transparent)`,
                           }}
                           title={`${label} ${hour}:00 — ${calls} call${calls === 1 ? '' : 's'}`}
                         />
@@ -368,7 +307,10 @@ export default function AnalyticsPage() {
                   ).map(([k, n, colour]) => (
                     <div
                       key={k}
-                      style={{ width: `${(n / Math.max(1, evals.data!.scored)) * 100}%`, background: colour }}
+                      style={{
+                        width: `${(n / Math.max(1, evals.data!.scored)) * 100}%`,
+                        background: colour,
+                      }}
                       title={`${n} ${k}`}
                     />
                   ))}
@@ -388,7 +330,9 @@ export default function AnalyticsPage() {
                   .sort((a, b) => a.avg - b.avg)
                   .map((dim) => (
                     <li key={dim.key} className="flex items-center gap-3">
-                      <span className="w-20 shrink-0 text-xs text-muted-foreground">{dim.label}</span>
+                      <span className="w-20 shrink-0 text-xs text-muted-foreground">
+                        {dim.label}
+                      </span>
                       <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
                         <div
                           className="h-full rounded-full"
@@ -420,22 +364,18 @@ export default function AnalyticsPage() {
             </div>
 
             <div className="space-y-4">
-              <div className="h-44">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={evals.data.trend}>
-                    <CartesianGrid stroke={C.grid} strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="day" tick={{ fontSize: 11, fill: C.muted }} tickLine={false} />
-                    {/* Anchored at 50, not 0: the interesting range is the top
-                        half, and a 0-100 axis flattens every movement in it. */}
-                    <YAxis domain={[50, 100]} tick={{ fontSize: 11, fill: C.muted }} width={28} tickLine={false} />
-                    <Tooltip
-                      contentStyle={{ fontSize: 12, borderRadius: 8, border: `1px solid ${C.grid}` }}
-                      formatter={(v: number) => [v, 'avg score']}
-                    />
-                    <Line type="monotone" dataKey="avg" stroke={C.ai} strokeWidth={2} dot={false} />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+              {/* Anchored at 50, not 0: the interesting range is the top half, and a 0-100 axis
+                  flattens every movement in it. */}
+              <LineChart
+                title="Average evaluation score"
+                height={180}
+                yMin={50}
+                area
+                categories={evals.data.trend.map((x) => x.day.slice(5))}
+                series={[
+                  { key: 'avg', label: 'Avg score', values: evals.data.trend.map((x) => x.avg) },
+                ]}
+              />
 
               <div>
                 <p className="mb-1.5 text-xs font-medium text-muted-foreground">
@@ -452,7 +392,7 @@ export default function AnalyticsPage() {
                           className={
                             evalBand(w.score) === 'poor'
                               ? 'bg-destructive/10 text-destructive'
-                              : 'bg-amber-500/10 text-amber-600'
+                              : 'bg-ai-soft text-ai'
                           }
                         >
                           {w.score}
@@ -473,8 +413,8 @@ export default function AnalyticsPage() {
 
       <div className="mt-4 grid gap-4 xl:grid-cols-3">
         {/* per queue */}
-  
-      <Card className="xl:col-span-2" title="By queue">
+
+        <Card className="xl:col-span-2" title="By queue">
           <Table>
             <thead>
               <tr>
@@ -531,13 +471,15 @@ export default function AnalyticsPage() {
       <div className="mt-4 grid gap-4 xl:grid-cols-2">
         <Card title={interestLabel(user.orgIndustry).title} subtitle="Where the demand actually is">
           {d.topCourses.length === 0 ? (
-            <p className="p-4 text-sm text-muted-foreground">{interestLabel(user.orgIndustry).empty}</p>
+            <p className="p-4 text-sm text-muted-foreground">
+              {interestLabel(user.orgIndustry).empty}
+            </p>
           ) : (
             <ul className="divide-y divide-border">
               {d.topCourses.map((c) => (
                 <li key={c.course} className="flex items-center justify-between gap-3 px-4 py-2.5">
                   <span className="truncate text-sm">{c.course}</span>
-                  <Badge className="bg-brand-soft text-primary">{c.enquiries}</Badge>
+                  <Badge className="text-foreground">{c.enquiries}</Badge>
                 </li>
               ))}
             </ul>
@@ -546,7 +488,9 @@ export default function AnalyticsPage() {
 
         <Card title="Call outcomes" subtitle="Agent-recorded dispositions">
           {d.dispositions.length === 0 ? (
-            <p className="p-4 text-sm text-muted-foreground">No dispositions recorded in this range.</p>
+            <p className="p-4 text-sm text-muted-foreground">
+              No dispositions recorded in this range.
+            </p>
           ) : (
             <ul className="divide-y divide-border">
               {d.dispositions
@@ -556,7 +500,9 @@ export default function AnalyticsPage() {
                     key={x.disposition}
                     className="flex items-center justify-between gap-3 px-4 py-2.5"
                   >
-                    <span className="truncate text-sm">{dispositionLabel(user.orgIndustry, x.disposition)}</span>
+                    <span className="truncate text-sm">
+                      {dispositionLabel(user.orgIndustry, x.disposition)}
+                    </span>
                     <Badge>{x.count}</Badge>
                   </li>
                 ))}

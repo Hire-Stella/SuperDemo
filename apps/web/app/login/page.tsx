@@ -2,7 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Headphones, ArrowRight, PhoneIncoming, Inbox, BarChart3 } from 'lucide-react';
+import { ArrowRight, PhoneIncoming, Inbox, BarChart3 } from 'lucide-react';
+import { Eyebrow, Rail, SignalTriangle } from '@hire-stella/ui';
+import { PlatformMark } from '@/components/platform-mark';
 import { homeFor, useSession } from '@/components/providers';
 import { Button, Input, Spinner } from '@/components/composites';
 import { PLATFORM_NAME, PLATFORM_TAGLINE } from '@/lib/platform';
@@ -63,7 +65,7 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
+    <main className="hs-app grid min-h-dvh lg:grid-cols-[1.05fr_1fr]">
       {/*
         The brand half, and deliberately dark in both themes.
 
@@ -73,54 +75,34 @@ export default function LoginPage() {
         their browser happens to prefer. The form half still follows the theme,
         which is the half they interact with.
       */}
-      <section className="relative hidden overflow-hidden bg-[#0b1020] p-10 text-white lg:flex lg:flex-col lg:justify-between">
-        {/* Two soft lights and a dot grid — texture without a background image
-            to ship, and nothing that competes with the copy for attention. */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-70"
-          style={{
-            backgroundImage:
-              'radial-gradient(60rem 40rem at 15% -10%, rgba(225,29,72,0.28), transparent 60%),' +
-              'radial-gradient(45rem 35rem at 110% 110%, rgba(56,189,248,0.16), transparent 60%)',
-          }}
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 opacity-[0.18]"
-          style={{
-            backgroundImage: 'radial-gradient(rgba(255,255,255,0.7) 1px, transparent 1px)',
-            backgroundSize: '26px 26px',
-          }}
-        />
+      <section
+        data-hs-theme="dark"
+        className="hs-hero-base hs-grain relative hidden overflow-hidden p-10 text-white lg:flex lg:flex-col lg:justify-between"
+      >
+        {/* HireStella's hero atmosphere (two blooms over near-black) plus one Rail — the
+            brand's incomplete frame — instead of a stock texture. */}
+        <Rail width={14} className="pointer-events-none absolute top-0 right-16 h-72" />
 
-        <div className="relative flex items-center gap-2.5">
-          <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Headphones className="size-5" aria-hidden />
-          </span>
-          <div>
-            <p className="font-semibold leading-tight">{PLATFORM_NAME}</p>
-            <p className="text-xs text-white/60">{PLATFORM_TAGLINE}</p>
-          </div>
+        <div className="relative">
+          <PlatformMark onDark />
         </div>
 
         <div className="relative max-w-md">
-          <h2 className="text-[2rem] font-semibold leading-[1.15] tracking-tight">
-            A contact centre that answers
-            <br />
-            before anyone picks up.
+          <Eyebrow marker tone="muted">
+            {PLATFORM_TAGLINE}
+          </Eyebrow>
+          <h2 className="mt-4 text-[2.6rem] leading-[1.04] font-bold tracking-[-0.032em] text-balance">
+            A contact centre that answers before anyone picks up.
           </h2>
-          <ul className="mt-8 space-y-5">
+          <ul className="mt-9 space-y-5">
             {PROOF.map(({ icon: Icon, title, body }) => (
               <li key={title} className="flex gap-3.5">
-                <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10 ring-1 ring-inset ring-white/15">
-                  <Icon className="size-4" aria-hidden />
+                <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05]">
+                  <Icon className="size-[18px]" strokeWidth={1.5} aria-hidden />
                 </span>
                 <span>
-                  <span className="block text-sm font-medium">{title}</span>
-                  {/* A measure, not the panel's full width: at 28rem these
-                      wrapped with a two-word orphan on the second line. */}
-                  <span className="mt-0.5 block max-w-[38ch] text-[13px] leading-relaxed text-white/60">
+                  <span className="block text-sm font-semibold">{title}</span>
+                  <span className="mt-0.5 block max-w-[38ch] text-[13px] leading-relaxed text-[var(--hs-text-muted)]">
                     {body}
                   </span>
                 </span>
@@ -129,8 +111,8 @@ export default function LoginPage() {
           </ul>
         </div>
 
-        <p className="relative text-[11px] text-white/40">
-          © {new Date().getFullYear()} {PLATFORM_NAME}
+        <p className="relative flex items-center gap-2 text-[11px] tracking-[0.08em] text-[var(--hs-text-subtle)] uppercase">
+          <SignalTriangle size={8} /> © {new Date().getFullYear()} {PLATFORM_NAME}
         </p>
       </section>
 
@@ -139,21 +121,15 @@ export default function LoginPage() {
         <div className="flex items-center justify-between lg:justify-end">
           {/* The mark rides along on narrow screens, where the brand panel is
               gone and the page would otherwise open on an unlabelled form. */}
-          <div className="flex items-center gap-2.5 lg:hidden">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Headphones className="size-5" aria-hidden />
-            </span>
-            <div>
-              <p className="text-sm font-semibold leading-tight">{PLATFORM_NAME}</p>
-              <p className="text-[11px] text-muted-foreground">{PLATFORM_TAGLINE}</p>
-            </div>
+          <div className="lg:hidden">
+            <PlatformMark />
           </div>
           <ThemeToggle />
         </div>
 
         <div className="flex flex-1 items-center justify-center">
           <div className="w-full max-w-sm py-10">
-            <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
+            <h1 className="text-[1.75rem] leading-tight font-bold tracking-[-0.025em]">Sign in</h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               Use the account your operator set up for this centre.
             </p>

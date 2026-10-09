@@ -25,14 +25,7 @@ import {
 } from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { useSession, useUser } from '@/components/providers';
-import {
-  CHANNEL_LABEL,
-  dateTime,
-  duration,
-  ESCALATION_LABEL,
-  phone,
-  time,
-} from '@/lib/format';
+import { CHANNEL_LABEL, dateTime, duration, ESCALATION_LABEL, phone, time } from '@/lib/format';
 import {
   Avatar,
   Badge,
@@ -45,11 +38,7 @@ import {
   cn,
 } from '@/components/composites';
 
-export default function ConversationDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
+export default function ConversationDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const { socket } = useSession();
   const user = useUser();
@@ -193,7 +182,7 @@ export default function ConversationDetailPage({
                   <Sparkles className="size-3" aria-hidden /> AI resolved
                 </Badge>
               ) : (
-                <Badge className="bg-brand-soft text-primary">
+                <Badge className="hs-sd-badge--handoff">
                   Escalated to {c.handledByName ?? 'an agent'}
                 </Badge>
               )}
@@ -261,7 +250,7 @@ export default function ConversationDetailPage({
             <Card title="Recording" subtitle="Click any transcript line to jump to that moment">
               <div className="flex items-center gap-3 p-4">
                 <Button
-                  variant="default"
+                  variant="secondary"
                   onClick={() => {
                     const el = audio.current;
                     if (!el) return;
@@ -306,9 +295,7 @@ export default function ConversationDetailPage({
                   </div>
                   <p className="tnum mt-1 text-xs text-muted-foreground">
                     {duration(positionMs)} / {duration(c.recording.durationMs)}
-                    {c.call?.escalatedAt && (
-                      <span className="ml-2 text-warn">▏handoff</span>
-                    )}
+                    {c.call?.escalatedAt && <span className="ml-2 text-warn">▏handoff</span>}
                   </p>
                 </div>
                 <audio
@@ -326,6 +313,7 @@ export default function ConversationDetailPage({
             subtitle={`${c.messageCount} turn${c.messageCount === 1 ? '' : 's'}`}
             action={
               <Button
+                variant="secondary"
                 size="sm"
                 onClick={() =>
                   void api
@@ -358,7 +346,9 @@ export default function ConversationDetailPage({
                         isAi && 'bg-ai-soft',
                         m.role === 'HUMAN_AGENT' && 'bg-primary text-primary-foreground',
                         m.role === 'SYSTEM' && 'bg-muted text-muted-foreground italic',
-                        m.audioOffsetMs !== null && c.recording && 'cursor-pointer hover:opacity-80',
+                        m.audioOffsetMs !== null &&
+                          c.recording &&
+                          'cursor-pointer hover:opacity-80',
                       )}
                     >
                       <span className="mb-0.5 flex items-center gap-1.5 text-[11px] opacity-70">
@@ -386,7 +376,12 @@ export default function ConversationDetailPage({
                 }}
               >
                 {!c.handledByName && (
-                  <Button type="button" variant="default" loading={claim.isPending} onClick={() => claim.mutate()}>
+                  <Button
+                    type="button"
+                    variant="default"
+                    loading={claim.isPending}
+                    onClick={() => claim.mutate()}
+                  >
                     Take over
                   </Button>
                 )}
@@ -395,7 +390,12 @@ export default function ConversationDetailPage({
                   onChange={(e) => setReply(e.target.value)}
                   placeholder="Reply to the customer…"
                 />
-                <Button type="submit" variant="default" loading={sendReply.isPending} disabled={!reply.trim()}>
+                <Button
+                  type="submit"
+                  variant="default"
+                  loading={sendReply.isPending}
+                  disabled={!reply.trim()}
+                >
                   <Send className="size-4" aria-hidden />
                 </Button>
               </form>
@@ -426,9 +426,9 @@ export default function ConversationDetailPage({
                         className={cn(
                           'tnum text-lg font-semibold',
                           evalBand(c.callEval.score) === 'good'
-                            ? 'text-emerald-600'
+                            ? 'text-foreground'
                             : evalBand(c.callEval.score) === 'watch'
-                              ? 'text-amber-600'
+                              ? 'text-ai'
                               : 'text-destructive',
                         )}
                       >
@@ -551,7 +551,9 @@ export default function ConversationDetailPage({
 
               {c.call.participants && c.call.participants.length > 0 && (
                 <div className="border-t border-border p-4">
-                  <p className="mb-2 text-xs font-medium text-muted-foreground">Who was on the call</p>
+                  <p className="mb-2 text-xs font-medium text-muted-foreground">
+                    Who was on the call
+                  </p>
                   <ul className="space-y-1.5">
                     {c.call.participants.map((p) => (
                       <li key={p.id} className="flex items-center gap-2 text-xs">
@@ -567,7 +569,9 @@ export default function ConversationDetailPage({
                               ? 'AI assistant'
                               : (p.userName ?? 'Agent')}
                         </span>
-                        <span className="tnum ml-auto text-muted-foreground/70">{time(p.joinedAt)}</span>
+                        <span className="tnum ml-auto text-muted-foreground/70">
+                          {time(p.joinedAt)}
+                        </span>
                       </li>
                     ))}
                   </ul>

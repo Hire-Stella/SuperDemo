@@ -1,49 +1,46 @@
-"use client"
+'use client';
 
-import { useTheme } from "next-themes"
-import { Toaster as Sonner, type ToasterProps } from "sonner"
-import { CircleCheckIcon, InfoIcon, TriangleAlertIcon, OctagonXIcon, Loader2Icon } from "lucide-react"
+import { useTheme } from 'next-themes';
+import { Toaster as Sonner, type ToasterProps } from 'sonner';
+import { AlertCircle, ArrowRightLeft, Check } from 'lucide-react';
+import { Loader, SignalTriangle } from '@hire-stella/ui';
 
+/*
+ * Sonner (the app's `toast()` API) dressed as @hire-stella/ui toasts. Strict brand: success and
+ * info are neutral, warnings and errors carry the orange signal plus an icon — never red.
+ */
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme()
+  const { resolvedTheme = 'dark' } = useTheme();
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={resolvedTheme as ToasterProps['theme']}
       className="toaster group"
       icons={{
-        success: (
-          <CircleCheckIcon className="size-4" />
-        ),
-        info: (
-          <InfoIcon className="size-4" />
-        ),
-        warning: (
-          <TriangleAlertIcon className="size-4" />
-        ),
-        error: (
-          <OctagonXIcon className="size-4" />
-        ),
-        loading: (
-          <Loader2Icon className="size-4 animate-spin" />
-        ),
+        success: <Check className="size-4" strokeWidth={1.75} />,
+        info: <ArrowRightLeft className="size-4" strokeWidth={1.5} />,
+        warning: <SignalTriangle size={10} />,
+        error: <AlertCircle className="size-4 text-primary" strokeWidth={1.5} />,
+        loading: <Loader size="sm" label="Working" />,
       }}
       style={
         {
-          "--normal-bg": "var(--popover)",
-          "--normal-text": "var(--popover-foreground)",
-          "--normal-border": "var(--border)",
-          "--border-radius": "var(--radius)",
+          '--normal-bg': 'var(--popover)',
+          '--normal-text': 'var(--popover-foreground)',
+          '--normal-border': 'var(--border)',
+          '--border-radius': '14px',
         } as React.CSSProperties
       }
       toastOptions={{
         classNames: {
-          toast: "cn-toast",
+          toast: 'hs-sd-toast',
+          title: 'hs-sd-toast__title',
+          description: 'hs-sd-toast__desc',
         },
       }}
       {...props}
     />
-  )
-}
+  );
+};
 
-export { Toaster }
+export { Toaster };

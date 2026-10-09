@@ -69,11 +69,16 @@ import {
  * much as the time is: it is how a centre sees the agent doing real work.
  */
 
-const SOURCE_STYLE: Record<BookingSource, { label: string; className: string; icon: typeof Mic }> = {
-  voice: { label: 'Voice agent', className: 'bg-ai-soft text-ai', icon: Mic },
-  website: { label: 'Website', className: 'bg-brand-soft text-primary', icon: Globe },
-  dashboard: { label: 'Dashboard', className: 'bg-muted text-muted-foreground', icon: LayoutDashboard },
-};
+const SOURCE_STYLE: Record<BookingSource, { label: string; className: string; icon: typeof Mic }> =
+  {
+    voice: { label: 'Voice agent', className: 'bg-ai-soft text-ai', icon: Mic },
+    website: { label: 'Website', className: 'text-foreground', icon: Globe },
+    dashboard: {
+      label: 'Dashboard',
+      className: 'bg-muted text-muted-foreground',
+      icon: LayoutDashboard,
+    },
+  };
 
 const SLOT_LENGTHS = [15, 20, 30, 45, 60, 90, 120] as const;
 
@@ -160,16 +165,29 @@ export default function CalendarPage() {
 
       <div className="mb-4">
         <MockNotice>
-          Bookings are held in this platform&rsquo;s own calendar — no Cal.com or Google calendar
-          is connected. Slots, clashes and opening hours all behave as they will once one is.
+          Bookings are held in this platform&rsquo;s own calendar — no Cal.com or Google calendar is
+          connected. Slots, clashes and opening hours all behave as they will once one is.
         </MockNotice>
       </div>
 
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Metric label="Booked this week" value={stats.booked} tone="brand" />
-        <Metric label="By the voice agent" value={stats.voice} tone="ai" icon={<Mic className="size-4" />} />
-        <Metric label="From the website" value={stats.website} icon={<Globe className="size-4" />} />
-        <Metric label="Cancelled" value={stats.cancelled} tone={stats.cancelled ? 'warn' : 'default'} />
+        <Metric label="Booked this week" value={stats.booked} />
+        <Metric
+          label="By the voice agent"
+          value={stats.voice}
+          tone="ai"
+          icon={<Mic className="size-4" />}
+        />
+        <Metric
+          label="From the website"
+          value={stats.website}
+          icon={<Globe className="size-4" />}
+        />
+        <Metric
+          label="Cancelled"
+          value={stats.cancelled}
+          tone={stats.cancelled ? 'warn' : 'default'}
+        />
       </div>
 
       <Card
@@ -320,7 +338,15 @@ function DayColumn({
   );
 }
 
-function BookingCard({ booking, tz, canWrite }: { booking: BookingRow; tz: string; canWrite: boolean }) {
+function BookingCard({
+  booking,
+  tz,
+  canWrite,
+}: {
+  booking: BookingRow;
+  tz: string;
+  canWrite: boolean;
+}) {
   const qc = useQueryClient();
   const [confirming, setConfirming] = useState(false);
   const cancelled = booking.status === 'CANCELLED';
@@ -346,7 +372,10 @@ function BookingCard({ booking, tz, canWrite }: { booking: BookingRow; tz: strin
     >
       <div className="flex items-center justify-between gap-2">
         <span
-          className={cn('tnum font-semibold whitespace-nowrap text-foreground', cancelled && 'line-through')}
+          className={cn(
+            'tnum font-semibold whitespace-nowrap text-foreground',
+            cancelled && 'line-through',
+          )}
         >
           {clockOf(booking.startsAt, tz)}–{clockOf(booking.endsAt, tz)}
         </span>
@@ -363,7 +392,10 @@ function BookingCard({ booking, tz, canWrite }: { booking: BookingRow; tz: strin
           </span>
         )}
       </div>
-      <p className={cn('mt-1 truncate text-sm font-medium', cancelled && 'line-through')} title={booking.name}>
+      <p
+        className={cn('mt-1 truncate text-sm font-medium', cancelled && 'line-through')}
+        title={booking.name}
+      >
         {booking.name}
       </p>
       <a
@@ -472,7 +504,9 @@ function NewBookingDialog({
         notes: notes || undefined,
       }),
     onSuccess: (row) => {
-      toast.success(`Booked ${row.name} for ${dayLabel(row.startsAt, tz)} at ${clockOf(row.startsAt, tz)}`);
+      toast.success(
+        `Booked ${row.name} for ${dayLabel(row.startsAt, tz)} at ${clockOf(row.startsAt, tz)}`,
+      );
       void qc.invalidateQueries({ queryKey: ['calendar'] });
       onBooked(String(row.startsAt));
       onOpenChange(false);
@@ -491,7 +525,9 @@ function NewBookingDialog({
       <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>New booking</DialogTitle>
-          <DialogDescription>Times are shown in {tz}, the centre&rsquo;s own timezone.</DialogDescription>
+          <DialogDescription>
+            Times are shown in {tz}, the centre&rsquo;s own timezone.
+          </DialogDescription>
         </DialogHeader>
 
         <form
@@ -792,7 +828,9 @@ function dayLabel(at: Date | string, tz: string): string {
 /** "12 – 18 October 2026", or "28 September – 4 October 2026" across months. */
 function weekTitle(first: string, last: string): string {
   const fmt = (d: string, opts: Intl.DateTimeFormatOptions) =>
-    new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: 'UTC' }).format(new Date(`${d}T12:00:00Z`));
+    new Intl.DateTimeFormat('en-GB', { ...opts, timeZone: 'UTC' }).format(
+      new Date(`${d}T12:00:00Z`),
+    );
   const sameMonth = first.slice(0, 7) === last.slice(0, 7);
   return sameMonth
     ? `${Number(first.slice(8))} – ${fmt(last, { day: 'numeric', month: 'long', year: 'numeric' })}`

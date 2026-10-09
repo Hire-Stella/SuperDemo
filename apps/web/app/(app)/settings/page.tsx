@@ -249,17 +249,15 @@ export default function SettingsPage() {
               onChange={(e) => setWebsiteEnabled.mutate(e.target.checked)}
             />
             <span>
-              <span className="font-medium">
-                {websiteOn ? 'Website is on' : 'Website is off'}
-              </span>
+              <span className="font-medium">{websiteOn ? 'Website is on' : 'Website is off'}</span>
               <span className="mt-0.5 block max-w-prose text-[11px] leading-relaxed text-muted-foreground">
                 {websiteOn ? (
                   <>
                     Your page is served at{' '}
                     <code className="font-mono">/{settings.data?.slug ?? ''}</code>, and the Website
                     section in the sidebar is where you edit it. Turn this off if you already have a
-                    website — the public page stops resolving and the section disappears, but nothing
-                    you have written is deleted.
+                    website — the public page stops resolving and the section disappears, but
+                    nothing you have written is deleted.
                   </>
                 ) : (
                   <>
@@ -349,8 +347,8 @@ export default function SettingsPage() {
                   </>
                 ) : (
                   <>
-                    The Demo calls section is hidden and its endpoints refuse. Turning this back
-                    on does not clear any agent already wired to a slot.
+                    The Demo calls section is hidden and its endpoints refuse. Turning this back on
+                    does not clear any agent already wired to a slot.
                   </>
                 )}
               </span>
@@ -414,19 +412,21 @@ export default function SettingsPage() {
         subtitle="Which parts of the platform are real and which are simulated, at a glance"
       >
         <div className="flex flex-wrap gap-2 p-4">
-          {settings.data
-            ? Object.entries(settings.data.drivers).map(([k, v]) => {
-                const mocked = ['simulated', 'mock', 'mock-whatsapp', 'scripted'].includes(v);
-                return (
-                  <Badge
-                    key={k}
-                    className={mocked ? 'bg-warn-soft text-warn' : 'bg-live-soft text-live'}
-                  >
-                    {k}: {v}
-                  </Badge>
-                );
-              })
-            : <Spinner />}
+          {settings.data ? (
+            Object.entries(settings.data.drivers).map(([k, v]) => {
+              const mocked = ['simulated', 'mock', 'mock-whatsapp', 'scripted'].includes(v);
+              return (
+                <Badge
+                  key={k}
+                  className={mocked ? 'bg-warn-soft text-warn' : 'bg-live-soft text-live'}
+                >
+                  {k}: {v}
+                </Badge>
+              );
+            })
+          ) : (
+            <Spinner />
+          )}
         </div>
         <p className="border-t border-border px-4 py-2 text-xs leading-relaxed text-muted-foreground">
           Amber = simulated external system, green = real. Every one of these is an env var away
@@ -443,7 +443,7 @@ export default function SettingsPage() {
           title="Phone numbers"
           subtitle="Virtual numbers replace physical SIMs for remote agents"
           action={
-            <Button size="sm" onClick={() => setShowCatalogue((s) => !s)}>
+            <Button variant="secondary" size="sm" onClick={() => setShowCatalogue((s) => !s)}>
               <ShoppingCart className="size-3.5" aria-hidden />
               {showCatalogue ? 'Hide catalogue' : 'Buy a number'}
             </Button>
@@ -476,9 +476,7 @@ export default function SettingsPage() {
                       <Select
                         className="h-8 text-xs"
                         value={n.inboundQueueId ?? ''}
-                        onChange={(e) =>
-                          routeNumber.mutate({ id: n.id, queueId: e.target.value })
-                        }
+                        onChange={(e) => routeNumber.mutate({ id: n.id, queueId: e.target.value })}
                       >
                         <option value="">Unrouted</option>
                         {queues.data?.map((q) => (
@@ -530,6 +528,7 @@ export default function SettingsPage() {
                         </p>
                       </div>
                       <Button
+                        variant="secondary"
                         size="sm"
                         loading={purchase.isPending}
                         onClick={() => purchase.mutate(a.e164)}
@@ -588,14 +587,17 @@ export default function SettingsPage() {
         title={
           <span className="flex items-center gap-1.5">
             <PlugZap className="size-4" aria-hidden />
-            {crm.data?.config
-              ? CRM_DRIVER_LABELS[crm.data.config.provider]
-              : 'CRM integration'}
+            {crm.data?.config ? CRM_DRIVER_LABELS[crm.data.config.provider] : 'CRM integration'}
           </span>
         }
         subtitle="Calls, recordings and AI transcripts land on the lead's timeline"
         action={
-          <Button size="sm" loading={testCrm.isPending} onClick={() => testCrm.mutate()}>
+          <Button
+            variant="secondary"
+            size="sm"
+            loading={testCrm.isPending}
+            onClick={() => testCrm.mutate()}
+          >
             <RefreshCw className="size-3.5" aria-hidden /> Test connection
           </Button>
         }
@@ -638,7 +640,9 @@ export default function SettingsPage() {
             <CrmConfigPanel config={crm.data.config} />
 
             <div className="border-t border-border">
-              <p className="px-4 py-2 text-xs font-semibold text-muted-foreground">Recent sync activity</p>
+              <p className="px-4 py-2 text-xs font-semibold text-muted-foreground">
+                Recent sync activity
+              </p>
               {syncLog.isLoading ? (
                 <SkeletonRows rows={5} cols={4} />
               ) : (
