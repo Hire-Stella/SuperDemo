@@ -13,7 +13,6 @@ import {
   Eye,
   FlaskConical,
   Globe,
-  Headphones,
   Inbox,
   LogOut,
   PhoneCall,
@@ -27,7 +26,9 @@ import { AGENT_STATUS_STYLE } from '@/lib/format';
 import type { AgentStatus, AgentSummary, OrgSummary } from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { useSession } from '@/components/providers';
+import { SignalTriangle } from '@hire-stella/ui';
 import { PLATFORM_NAME } from '@/lib/platform';
+import { PlatformMark } from '@/components/platform-mark';
 import { TenantTheme } from '@/components/tenant-theme';
 import { TenantLogo } from '@/components/tenant-logo';
 import { Softphone } from '@/components/softphone';
@@ -43,9 +44,24 @@ import { Avatar, Select, Spinner, cn } from '@/components/composites';
  */
 const NAV = [
   { href: '/superadmin', label: 'Contact centres', icon: Building2, roles: ['SUPERADMIN'] },
-  { href: '/', label: 'Live ops', icon: Activity, roles: ['ADMIN', 'SUPERVISOR', 'AGENT', 'SUPERADMIN'] },
-  { href: '/conversations', label: 'Inbox', icon: Inbox, roles: ['ADMIN', 'SUPERVISOR', 'AGENT', 'SUPERADMIN'] },
-  { href: '/analytics', label: 'Analytics', icon: BarChart3, roles: ['ADMIN', 'SUPERVISOR', 'SUPERADMIN'] },
+  {
+    href: '/',
+    label: 'Live ops',
+    icon: Activity,
+    roles: ['ADMIN', 'SUPERVISOR', 'AGENT', 'SUPERADMIN'],
+  },
+  {
+    href: '/conversations',
+    label: 'Inbox',
+    icon: Inbox,
+    roles: ['ADMIN', 'SUPERVISOR', 'AGENT', 'SUPERADMIN'],
+  },
+  {
+    href: '/analytics',
+    label: 'Analytics',
+    icon: BarChart3,
+    roles: ['ADMIN', 'SUPERVISOR', 'SUPERADMIN'],
+  },
   { href: '/agents', label: 'Agents', icon: Users, roles: ['ADMIN', 'SUPERVISOR', 'SUPERADMIN'] },
   { href: '/ai-agent', label: 'AI assistant', icon: Sparkles, roles: ['ADMIN', 'SUPERVISOR'] },
   { href: '/knowledge', label: 'Knowledge', icon: BookOpen, roles: ['ADMIN', 'SUPERVISOR'] },
@@ -53,13 +69,28 @@ const NAV = [
   // Everyone on the floor reads it — an agent taking a call needs to know who
   // is coming in as much as anyone. Booking and the hours are guarded on the
   // page and by the API, not by hiding the section.
-  { href: '/calendar', label: 'Calendar', icon: CalendarDays, roles: ['ADMIN', 'SUPERVISOR', 'AGENT', 'SUPERADMIN'] },
+  {
+    href: '/calendar',
+    label: 'Calendar',
+    icon: CalendarDays,
+    roles: ['ADMIN', 'SUPERVISOR', 'AGENT', 'SUPERADMIN'],
+  },
   // Agents get this one: a telecaller is an agent, and manual dialling is the
   // only outbound action that is theirs rather than an admin's.
-  { href: '/telecaller', label: 'Manual dial', icon: PhoneCall, roles: ['ADMIN', 'SUPERVISOR', 'AGENT'] },
+  {
+    href: '/telecaller',
+    label: 'Manual dial',
+    icon: PhoneCall,
+    roles: ['ADMIN', 'SUPERVISOR', 'AGENT'],
+  },
   // Three Dograh agents on one page. Not an agent's concern — it rings real
   // handsets on the client's carrier account, which is a supervisor's call.
-  { href: '/demo-calls', label: 'Demo calls', icon: PhoneForwarded, roles: ['ADMIN', 'SUPERVISOR'] },
+  {
+    href: '/demo-calls',
+    label: 'Demo calls',
+    icon: PhoneForwarded,
+    roles: ['ADMIN', 'SUPERVISOR'],
+  },
   { href: '/simulator', label: 'Simulator', icon: FlaskConical, roles: ['ADMIN', 'SUPERVISOR'] },
   // The centre's public landing page. Not an agent's concern, and not a
   // read-only surface either — it is configuration, so an operator is excluded
@@ -200,7 +231,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     // h-dvh + overflow-hidden, not min-h-dvh: the shell is exactly the viewport
     // and only <main> scrolls. With min-h-dvh a long page grew the flex row, so
     // the sidebar scrolled away with the content and nav was lost.
-    <div className="flex h-dvh overflow-hidden">
+    <div className="hs-app flex h-dvh overflow-hidden">
       {/* A tenant's brand follows whoever's data is on screen: their own for
           staff, the viewed centre's for an operator, the platform's otherwise. */}
       <TenantTheme
@@ -208,7 +239,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         tokens={isOperator ? (insideCentre ? viewedOrg?.themeTokens : null) : user.orgThemeTokens}
       />
       {/* sidebar — pinned; never scrolls with the page */}
-      <aside className="hidden h-dvh w-56 shrink-0 flex-col overflow-hidden border-r border-border bg-card md:flex">
+      <aside className="hidden h-dvh w-60 shrink-0 flex-col overflow-hidden border-r border-[var(--sidebar-border)] bg-sidebar md:flex">
         {/*
           The centre's own identity, not the platform's.
 
@@ -222,12 +253,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           {brand ? (
             <TenantLogo name={brand.name} logoUrl={brand.logoUrl} size={32} />
           ) : (
-            <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-              <Headphones className="size-4" aria-hidden />
-            </span>
+            <PlatformMark variant="symbol" width={30} />
           )}
           <div className="min-w-0">
-            <p className="truncate text-sm font-semibold">{brand?.name ?? PLATFORM_NAME}</p>
+            <p className="truncate font-[family-name:var(--hs-font-display)] text-[15px] font-semibold tracking-[-0.015em]">
+              {brand?.name ?? PLATFORM_NAME}
+            </p>
             {/* Whose data you are looking at, which for an operator is nobody's
                 until they enter a centre. */}
             <p className="truncate text-[11px] text-muted-foreground">
@@ -266,14 +297,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 // centre — so the click that navigates is the click that drops
                 // its scope and cached data.
                 onClick={href === '/superadmin' && insideCentre ? leaveCentre : undefined}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition',
+                  'flex min-h-10 items-center gap-3 rounded-xl border px-3 text-[13.5px] font-medium transition-colors',
                   active
-                    ? 'bg-brand-soft font-medium text-primary'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    ? 'border-[var(--hs-border-selected)] bg-[var(--hs-glass-strong)] text-foreground [&>svg]:text-primary'
+                    : 'border-transparent text-muted-foreground hover:bg-[var(--hs-glass)] hover:text-foreground',
                 )}
               >
-                <Icon className="size-4 shrink-0" aria-hidden />
+                <Icon className="size-[18px] shrink-0" strokeWidth={1.5} aria-hidden />
                 {label}
               </Link>
             );
@@ -314,9 +346,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <Select
               value={myStatus}
-              disabled={
-                setPresence.isPending || myStatus === 'ON_CALL' || myStatus === 'WRAPUP'
-              }
+              disabled={setPresence.isPending || myStatus === 'ON_CALL' || myStatus === 'WRAPUP'}
               onChange={(e) => setPresence.mutate(e.target.value as AgentStatus)}
               className="h-8 text-xs"
               aria-label="Set my availability"
@@ -329,7 +359,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               )}
             </Select>
             {(myStatus === 'ON_CALL' || myStatus === 'WRAPUP') && (
-              <p className="mt-1 text-[11px] text-muted-foreground/70">Finish the call to change status.</p>
+              <p className="mt-1 text-[11px] text-muted-foreground/70">
+                Finish the call to change status.
+              </p>
             )}
           </div>
 
@@ -337,31 +369,34 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               tenant's. Quiet on purpose: the centre's staff should think of this
               as their tool, and the operator already knows whose it is. */}
           {brand && (
-            <p className="mt-3 text-[10px] tracking-wide text-muted-foreground/60">
-              Powered by {PLATFORM_NAME}
+            <p className="mt-3 flex items-center gap-1.5 text-[10px] font-semibold tracking-[0.1em] text-muted-foreground/70 uppercase">
+              <SignalTriangle size={8} tone="inactive" /> Powered by {PLATFORM_NAME}
             </p>
           )}
         </div>
       </aside>
 
       {/* mobile nav */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-border bg-card py-1.5 md:hidden">
-        {nav.filter((n) => !isDisabled(n.href)).slice(0, 5).map(({ href, label, icon: Icon }) => {
-          const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                'flex flex-col items-center gap-0.5 px-2 py-1 text-[10px]',
-                active ? 'text-primary' : 'text-muted-foreground',
-              )}
-            >
-              <Icon className="size-4" aria-hidden />
-              {label}
-            </Link>
-          );
-        })}
+      <nav className="fixed inset-x-0 bottom-0 z-40 flex justify-around border-t border-border bg-sidebar/95 py-1 backdrop-blur md:hidden">
+        {nav
+          .filter((n) => !isDisabled(n.href))
+          .slice(0, 5)
+          .map(({ href, label, icon: Icon }) => {
+            const active = href === '/' ? pathname === '/' : pathname.startsWith(href);
+            return (
+              <Link
+                key={href}
+                href={href}
+                className={cn(
+                  'flex min-h-11 min-w-11 flex-col items-center justify-center gap-0.5 px-2 py-1 text-[10px] font-medium',
+                  active ? 'text-foreground [&>svg]:text-primary' : 'text-muted-foreground',
+                )}
+              >
+                <Icon className="size-4" aria-hidden />
+                {label}
+              </Link>
+            );
+          })}
       </nav>
 
       {/* the only scroll container */}
@@ -369,12 +404,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* Sticky, not a one-off toast: an operator reading a client's live
             board should never be in any doubt about whose data is on screen. */}
         {insideCentre && (
-          <div className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-xs backdrop-blur">
-            <span className="flex min-w-0 items-center gap-2 text-amber-900 dark:text-amber-200">
+          <div className="sticky top-0 z-30 flex items-center justify-between gap-3 border-b border-dashed border-[var(--hs-handoff)] bg-[color-mix(in_srgb,var(--background)_82%,var(--hs-mist))] px-4 py-2 text-xs backdrop-blur">
+            <span className="flex min-w-0 items-center gap-2 text-foreground">
               <Eye className="size-3.5 shrink-0" aria-hidden />
               <span className="truncate">
-                Viewing <strong className="font-semibold">{viewedOrg?.name ?? 'a client centre'}</strong>{' '}
-                as a platform operator — read-only.
+                Viewing{' '}
+                <strong className="font-semibold">{viewedOrg?.name ?? 'a client centre'}</strong> as
+                a platform operator — read-only.
               </span>
             </span>
             <button
@@ -382,7 +418,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 leaveCentre();
                 router.push('/superadmin');
               }}
-              className="shrink-0 rounded-md border border-amber-500/40 px-2 py-1 font-medium text-amber-900 transition hover:bg-amber-500/20 dark:text-amber-100"
+              className="hs-btn hs-btn--secondary hs-sd-btn hs-sd-btn--xs shrink-0"
             >
               Leave
             </button>

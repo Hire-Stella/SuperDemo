@@ -1,5 +1,8 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
+/* HireStella UI: components, tokens and the Tailwind theme (bg-hs-*, text-hs-*, rounded-hs-*). */
+@import '@hire-stella/ui/styles.css' layer(components);
+@import '@hire-stella/ui/tailwind.css';
 
 /*
  * The ported landing templates.
@@ -67,151 +70,163 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * The platform's default theme — red and white.
+ * The platform's default theme — HireStella (Brand Book v1.0, via @hire-stella/ui).
  *
  * ┌──────────────────────────────────────────────────────────────────────────┐
- * │ THE BRAND RED IS ONE TOKEN: --brand-red / --brand-red-dark below.        │
- * │ Swap those two values and the whole deployment follows. A tenant with no │
- * │ theme of its own inherits this.                                          │
+ * │ SOURCE OF TRUTH: the shadcn tokens below. Tenant themes                  │
+ * │ (packages/contracts/src/themes.ts) override these same properties, and   │
+ * │ the bridge at the end points HireStella's --hs-* tokens at them, so both │
+ * │ the Tailwind utilities and the @hire-stella/ui components follow a       │
+ * │ tenant's brand.                                                          │
  * └──────────────────────────────────────────────────────────────────────────┘
  *
- * A red brand in an operations dashboard creates one genuine design problem:
- * red is also the universal "something is wrong" colour. If primary buttons and
- * critical alerts are both red, neither reads. So:
- *
- *   · Brand red  → identity and primary actions (logo, primary button, active nav)
- *   · Amber      → warnings (queue waiting, SLA at risk, simulated driver)
- *   · Deep red   → critical only (abandoned call, failed sync), always with an icon
- *   · Green      → healthy / live / agent available
- *   · Purple     → AI-handled, so "the AI did this" never competes with brand red
- *
- * That leaves state legible while the app still looks unmistakably branded.
- * Every state colour is paired with an icon or text label, so nothing depends on
- * hue alone — roughly one man in twelve cannot rely on red/green.
-
- * TENANT THEMES: the tokens below that carry brand identity are derived from
- * --primary with color-mix rather than from --brand-red directly. That is what
- * lets a per-tenant theme (packages/contracts/src/themes.ts) override --primary
- * and have the active nav pill, charts and sidebar follow it. Hardcoding the red
- * hue here left a pink nav item on a navy tenant.
+ * State follows the brand book strictly — there is no red, green, amber or purple:
+ *   · Orange (--primary) → the one thing that needs action: primary button, active item,
+ *     warnings and critical states (always with an icon and a label).
+ *   · Mist               → human handoff and "AI handled": a transfer, never an error.
+ *   · Neutral            → everything else, including healthy / live.
+ * Orange stays scarce (3–6% of a screen); every state carries an icon or text, never colour alone.
  */
 
 :root {
-  /* ── the two values to change ────────────────────────────────────────── */
-  --brand-red: oklch(0.53 0.204 26);
-  --brand-red-dark: oklch(0.7 0.185 26);
+  --radius: 14px;
 
-  --radius: 0.625rem;
-
-  /* ── shadcn tokens ──────────────────────────────────────────────────── */
-  --background: oklch(0.995 0.002 20);
-  --foreground: oklch(0.19 0.012 25);
-
-  --card: oklch(1 0 0);
+  /* ── shadcn tokens · light (Cloud) ──────────────────────────────────── */
+  --background: #f5f5f9;
+  --foreground: #111827;
+  --card: #ffffff;
   --card-foreground: var(--foreground);
-  --popover: oklch(1 0 0);
+  --popover: #ffffff;
   --popover-foreground: var(--foreground);
+  --primary: #ff6200;
+  --primary-foreground: #0b0e1d;
+  --secondary: #eceef5;
+  --secondary-foreground: #111827;
+  --muted: #eceef5;
+  --muted-foreground: #565c6e;
+  --accent: #eceef5;
+  --accent-foreground: #111827;
+  --destructive: var(--primary);
+  --destructive-foreground: var(--primary-foreground);
+  --border: rgba(17, 24, 39, 0.1);
+  --input: rgba(17, 24, 39, 0.14);
+  --ring: #1e2761;
 
-  --primary: var(--brand-red);
-  --primary-foreground: oklch(0.99 0 0);
+  /* ── state (strict brand) ───────────────────────────────────────────── */
+  --ai: #1e2761;
+  --ai-soft: rgba(199, 201, 232, 0.45);
+  --live: #1e2761;
+  --live-soft: rgba(199, 201, 232, 0.35);
+  --warn: var(--primary);
+  --warn-soft: color-mix(in srgb, var(--primary) 9%, var(--background));
+  --brand-soft: color-mix(in srgb, var(--primary) 8%, var(--background));
 
-  --secondary: oklch(0.972 0.006 25);
-  --secondary-foreground: oklch(0.28 0.02 25);
-
-  --muted: oklch(0.968 0.005 25);
-  --muted-foreground: oklch(0.5 0.015 25);
-
-  --accent: oklch(0.955 0.02 25);
-  --accent-foreground: var(--primary);
-
-  /* Deeper and browner than the brand red so "destructive" never reads as
-     "primary". Paired with an icon everywhere it appears. */
-  --destructive: oklch(0.47 0.17 20);
-  --destructive-foreground: oklch(0.99 0 0);
-
-  --border: oklch(0.912 0.008 25);
-  --input: oklch(0.912 0.008 25);
-  --ring: var(--primary);
-
-  /* ── semantic state ─────────────────────────────────────────────────── */
-  --ai: oklch(0.55 0.155 292);
-  --ai-soft: oklch(0.965 0.022 292);
-  --live: oklch(0.55 0.135 152);
-  --live-soft: oklch(0.962 0.032 152);
-  --warn: oklch(0.63 0.145 65);
-  --warn-soft: oklch(0.965 0.04 75);
-  --brand-soft: color-mix(in oklch, var(--primary) 9%, var(--background));
-
-  /* ── charts: brand-led, then the semantic hues ──────────────────────── */
-  --chart-1: var(--primary);
-  --chart-2: var(--ai);
-  --chart-3: var(--live);
-  --chart-4: var(--warn);
-  --chart-5: oklch(0.55 0.09 250);
+  /* ── charts: brand neutral first, then the validated colour-blind-safe palette ── */
+  --chart-1: #1e2761;
+  --chart-2: #2a78d6;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
 
   /* ── sidebar ────────────────────────────────────────────────────────── */
-  --sidebar: oklch(1 0 0);
+  --sidebar: #ffffff;
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: color-mix(in oklch, var(--primary) 9%, var(--background));
-  --sidebar-accent-foreground: var(--primary);
-  --sidebar-border: oklch(0.912 0.008 25);
-  --sidebar-ring: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: #eceef5;
+  --sidebar-accent-foreground: #111827;
+  --sidebar-border: rgba(17, 24, 39, 0.08);
+  --sidebar-ring: var(--ring);
 }
 
 .dark {
-  --background: oklch(0.165 0.008 25);
-  --foreground: oklch(0.965 0.004 25);
-
-  --card: oklch(0.205 0.009 25);
+  /* ── shadcn tokens · dark (HireStella near-black) ───────────────────── */
+  --background: #090c1a;
+  --foreground: #f5f5f9;
+  --card: #0f1328;
   --card-foreground: var(--foreground);
-  --popover: oklch(0.205 0.009 25);
+  --popover: #151a33;
   --popover-foreground: var(--foreground);
+  --primary: #ff6200;
+  --primary-foreground: #0b0e1d;
+  --secondary: #151a33;
+  --secondary-foreground: #f5f5f9;
+  --muted: #151a33;
+  --muted-foreground: #b6b9d8;
+  --accent: #1b2140;
+  --accent-foreground: #f5f5f9;
+  --destructive: var(--primary);
+  --destructive-foreground: var(--primary-foreground);
+  --border: rgba(255, 255, 255, 0.08);
+  --input: rgba(255, 255, 255, 0.12);
+  --ring: #c7c9e8;
 
-  /* Lifted in lightness so the red still reads as red on a dark ground
-     rather than collapsing to brown. */
-  --primary: var(--brand-red-dark);
-  --primary-foreground: oklch(0.16 0.01 25);
+  --ai: #c7c9e8;
+  --ai-soft: rgba(199, 201, 232, 0.1);
+  --live: #c7c9e8;
+  --live-soft: rgba(199, 201, 232, 0.08);
+  --warn: var(--primary);
+  --warn-soft: color-mix(in srgb, var(--primary) 14%, var(--background));
+  --brand-soft: color-mix(in srgb, var(--primary) 12%, var(--background));
 
-  --secondary: oklch(0.262 0.011 25);
-  --secondary-foreground: oklch(0.965 0.004 25);
+  --chart-1: #8f93c4;
+  --chart-2: #3987e5;
+  --chart-3: #199e70;
+  --chart-4: #c98500;
+  --chart-5: #d55181;
 
-  --muted: oklch(0.262 0.011 25);
-  --muted-foreground: oklch(0.7 0.012 25);
-
-  --accent: oklch(0.3 0.045 25);
-  --accent-foreground: oklch(0.9 0.06 26);
-
-  --destructive: oklch(0.62 0.19 22);
-  --destructive-foreground: oklch(0.99 0 0);
-
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
-  --ring: var(--primary);
-
-  --ai: oklch(0.74 0.14 292);
-  --ai-soft: oklch(0.3 0.05 292);
-  --live: oklch(0.73 0.15 152);
-  --live-soft: oklch(0.29 0.05 152);
-  --warn: oklch(0.79 0.14 72);
-  --warn-soft: oklch(0.31 0.05 72);
-  --brand-soft: color-mix(in oklch, var(--primary) 22%, var(--background));
-
-  --chart-1: var(--primary);
-  --chart-2: var(--ai);
-  --chart-3: var(--live);
-  --chart-4: var(--warn);
-  --chart-5: oklch(0.7 0.1 250);
-
-  --sidebar: oklch(0.19 0.009 25);
+  --sidebar: #06080f;
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: oklch(0.16 0.01 25);
-  --sidebar-accent: oklch(0.3 0.045 25);
-  --sidebar-accent-foreground: oklch(0.9 0.06 26);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: #151a33;
+  --sidebar-accent-foreground: #f5f5f9;
+  --sidebar-border: rgba(255, 255, 255, 0.07);
+  --sidebar-ring: var(--ring);
+}
+
+/*
+ * Bridge: HireStella's semantic tokens read the shadcn tokens above, so a tenant theme recolours
+ * @hire-stella/ui components exactly as it recolours the Tailwind utilities. Declared after the
+ * library's own token blocks with equal specificity, so these win.
+ */
+:root,
+.dark,
+[data-hs-theme] {
+  --hs-font-display: var(--font-hs-display), 'Poppins', system-ui, sans-serif;
+  --hs-font-body: var(--font-hs-body), 'Montserrat', system-ui, sans-serif;
+  --hs-bg: var(--background);
+  --hs-bg-deep: var(--sidebar);
+  --hs-surface: var(--card);
+  --hs-surface-2: var(--popover);
+  --hs-surface-3: var(--accent);
+  --hs-text: var(--foreground);
+  --hs-text-muted: var(--muted-foreground);
+  --hs-text-subtle: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
+  --hs-border: var(--border);
+  --hs-border-hover: color-mix(in srgb, var(--foreground) 18%, transparent);
+  --hs-orange: var(--primary);
+  --hs-signal: var(--primary);
+  --hs-on-signal: var(--primary-foreground);
+  --hs-orange-hover: color-mix(in oklch, var(--primary) 86%, white);
+  --hs-orange-press: color-mix(in oklch, var(--primary) 86%, black);
+  --hs-border-selected: color-mix(in srgb, var(--primary) 45%, transparent);
+  --hs-signal-soft: color-mix(in srgb, var(--primary) 10%, transparent);
+  --hs-signal-glow:
+    0 0 0 1px color-mix(in srgb, var(--primary) 55%, transparent),
+    0 0 16px color-mix(in srgb, var(--primary) 28%, transparent);
+  --hs-focus-ring: 0 0 0 2px var(--background), 0 0 0 4px var(--ring);
+  --hs-chart-neutral: var(--chart-1);
+  --hs-series-1: var(--chart-2);
+  --hs-series-2: var(--chart-3);
+  --hs-series-3: var(--chart-4);
+  --hs-series-4: var(--chart-5);
+}
+:root:not(.dark) {
+  --hs-signal-text: var(--foreground);
+}
+.dark {
+  --hs-signal-text: var(--primary);
 }
 
 @theme inline {
@@ -291,13 +306,28 @@
   }
 }
 
+/*
+ * HireStella type for the dashboard and sign-in (scoped by .hs-app, so tenant landing pages keep their own
+ * faces): Montserrat explains, Poppins speaks. Headings tighten as they grow.
+ */
+.hs-app {
+  font-family: var(--hs-font-body);
+}
+.hs-app :is(h1, h2, h3, h4) {
+  font-family: var(--hs-font-display);
+  letter-spacing: -0.02em;
+}
+.hs-app h1 {
+  letter-spacing: -0.025em;
+}
+
 /* Tabular figures wherever numbers change in place, so metric tiles and call
    timers don't jitter as digits update. */
 .tnum {
   font-variant-numeric: tabular-nums;
 }
 
-/* A live call is the one thing on screen that must catch the eye. */
+/* A live call is the one thing on screen that must catch the eye — the orange signal, pulsing calmly. */
 @keyframes pulse-ring {
   0%,
   100% {
@@ -327,4 +357,303 @@
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+@layer components {
+  /* ═══════════════ SuperDemo adapters over @hire-stella/ui (hs-sd-*) ═══════════════
+   Dense operations-console sizes on the HireStella design language. */
+
+  /* Buttons */
+  .hs-sd-btn {
+    gap: 6px;
+    font-size: 13px;
+    border-radius: 11px;
+    min-height: 0;
+  }
+  .hs-sd-btn--xs {
+    --_h: 26px;
+    padding: 0 9px;
+    font-size: 12px;
+    border-radius: 8px;
+    gap: 4px;
+  }
+  .hs-sd-btn--sm {
+    --_h: 30px;
+    padding: 0 11px;
+    font-size: 12.5px;
+    border-radius: 9px;
+    gap: 5px;
+  }
+  .hs-sd-btn--md {
+    --_h: 34px;
+    padding: 0 13px;
+  }
+  .hs-sd-btn--lg {
+    --_h: 42px;
+    padding: 0 18px;
+    font-size: 14px;
+    border-radius: 13px;
+  }
+  .hs-sd-btn--icon {
+    padding: 0;
+    width: var(--_h);
+  }
+  .hs-sd-btn--ghost {
+    background: transparent;
+    color: var(--hs-text-muted);
+    border-color: transparent;
+  }
+  .hs-sd-btn--ghost:hover:not(:disabled),
+  .hs-sd-btn--ghost[aria-expanded='true'] {
+    background: var(--hs-glass-strong);
+    color: var(--hs-text);
+  }
+  .hs-sd-btn--signal-text {
+    color: var(--hs-signal-text);
+  }
+  .hs-sd-btn--link {
+    height: auto;
+    min-height: 0;
+    padding: 0;
+  }
+  .hs-sd-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  @media (pointer: coarse) {
+    .hs-sd-btn {
+      position: relative;
+    }
+    .hs-sd-btn::after {
+      content: '';
+      position: absolute;
+      inset: -6px;
+    }
+  }
+
+  /* Card */
+  .hs-sd-card {
+    overflow: hidden;
+    border-radius: var(--hs-radius-card);
+    background: var(--card);
+    color: var(--card-foreground);
+    border: 1px solid var(--border);
+    box-shadow: var(--hs-highlight);
+  }
+  .hs-sd-card__head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 14px 18px 12px;
+    border-bottom: 1px solid var(--border);
+  }
+  .hs-sd-card__title {
+    margin: 0;
+    font-family: var(--hs-font-body) !important;
+    font-size: 11px;
+    line-height: 1.45;
+    font-weight: 600;
+    letter-spacing: 0.1em !important;
+    text-transform: uppercase;
+    color: var(--foreground);
+  }
+  .hs-sd-card__subtitle {
+    margin: 3px 0 0;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: var(--muted-foreground);
+  }
+
+  /* Metric (stat tile) */
+  .hs-sd-metric {
+    background: var(--card);
+    padding: 14px 16px;
+    border-radius: 16px;
+  }
+  .hs-sd-metric .hs-stat__body {
+    width: 100%;
+  }
+  .hs-sd-metric .hs-stat__value {
+    font-size: 26px;
+  }
+  .hs-sd-metric .hs-stat__caption {
+    font-size: 12px;
+    color: var(--hs-text-subtle);
+  }
+  .hs-sd-metric__icon {
+    color: var(--hs-text-subtle);
+    display: inline-flex;
+  }
+  .hs-sd-metric__icon svg {
+    width: 16px;
+    height: 16px;
+    stroke-width: 1.5;
+  }
+  .hs-stat--emphasis .hs-sd-metric__icon {
+    color: var(--hs-signal);
+  }
+
+  /* Badge / status chip */
+  /* Handoff: Mist, dashed — a transfer, never an error. */
+  .hs-sd-badge--handoff {
+    border-style: dashed !important;
+    border-color: var(--hs-handoff) !important;
+    background: var(--hs-handoff-soft) !important;
+    color: var(--hs-handoff-text) !important;
+  }
+  .hs-sd-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 22px;
+    padding: 0 9px;
+    border-radius: 999px;
+    white-space: nowrap;
+    font-size: 11.5px;
+    font-weight: 600;
+    line-height: 1;
+    background: var(--hs-glass-strong);
+    color: var(--muted-foreground);
+    border: 1px solid var(--border);
+  }
+
+  /* Inputs */
+  .hs-sd-input {
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 12px;
+    border: 1px solid var(--input);
+    background: color-mix(in srgb, var(--card) 70%, transparent);
+    color: var(--foreground);
+    font: 400 14px/1.4 var(--hs-font-body);
+    outline: none;
+    transition:
+      border-color var(--hs-dur-hover) var(--hs-ease),
+      box-shadow var(--hs-dur-hover) var(--hs-ease);
+  }
+  .hs-sd-input::placeholder {
+    color: var(--hs-text-subtle);
+  }
+  .hs-sd-input:hover:not(:disabled) {
+    border-color: var(--hs-border-hover);
+  }
+  .hs-sd-input:focus-visible {
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 22%, transparent);
+  }
+  .hs-sd-input:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  .hs-sd-input[aria-invalid='true'] {
+    border-color: var(--hs-border-selected);
+  }
+  .hs-sd-textarea {
+    height: auto;
+    min-height: 84px;
+    padding: 10px 12px;
+    line-height: 1.6;
+    resize: vertical;
+  }
+  .hs-sd-select {
+    height: 36px;
+    width: 100%;
+    padding: 0 34px 0 12px;
+    border-radius: 12px;
+    border: 1px solid var(--input);
+    cursor: pointer;
+    background: color-mix(in srgb, var(--card) 70%, transparent)
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23999cb8' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+      no-repeat right 10px center;
+    color: var(--foreground);
+    font: 500 13.5px/1 var(--hs-font-body);
+    appearance: none;
+    outline: none;
+  }
+  .hs-sd-select:focus-visible {
+    border-color: var(--ring);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 22%, transparent);
+  }
+  .hs-sd-select option {
+    color: #111827;
+    background: #ffffff;
+  }
+
+  /* Tables inside cards: flush edges */
+  .hs-sd-card .hs-sd-table th:first-child,
+  .hs-sd-card .hs-sd-table td:first-child {
+    padding-left: 18px;
+  }
+  .hs-sd-card .hs-sd-table th:last-child,
+  .hs-sd-card .hs-sd-table td:last-child {
+    padding-right: 18px;
+  }
+  .hs-sd-table tbody tr {
+    transition: background-color var(--hs-dur-micro) var(--hs-ease);
+  }
+  .hs-sd-table tbody tr:hover {
+    background: var(--hs-glass);
+  }
+
+  /* Empty state inside cards: no double border */
+  .hs-sd-empty {
+    border: 0 !important;
+    padding: 40px 24px;
+  }
+
+  /* Simulated notice — information, not a failure */
+  .hs-sd-mock {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 12px;
+    border: 1px dashed var(--hs-border-hover);
+    background: var(--hs-glass);
+    font-size: 12.5px;
+    line-height: 1.55;
+    color: var(--muted-foreground);
+  }
+  .hs-sd-mock__label {
+    flex: none;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--foreground);
+    padding-top: 2px;
+  }
+
+  /* Toasts (sonner) */
+  .hs-sd-toast {
+    font-family: var(--hs-font-body) !important;
+    box-shadow: var(--hs-shadow-pop) !important;
+    border-radius: 14px !important;
+  }
+  .hs-sd-toast__title {
+    font-weight: 600 !important;
+    font-size: 14px !important;
+  }
+  .hs-sd-toast__desc {
+    color: var(--muted-foreground) !important;
+    font-size: 13px !important;
+  }
+
+  /* Dialog */
+  .hs-sd-dialog {
+    padding: 26px;
+    border-radius: var(--hs-radius-hero);
+    background: var(--popover);
+    color: var(--popover-foreground);
+    box-shadow: var(--hs-shadow-pop), var(--hs-highlight);
+    font-family: var(--hs-font-body);
+  }
+  @media (max-width: 600px) {
+    .hs-sd-dialog {
+      padding: 20px;
+    }
+  }
 }

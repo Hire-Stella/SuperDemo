@@ -24,3 +24,8 @@ allowBuilds:
   # Analytics phone-home. Declined.
   "@scarf/scarf": false
   "@embedded-postgres/windows-x64": true
+
+# Our own first-party design system (private, GitHub Packages): its releases are trusted and should land
+# the day they ship, so the minimum-release-age supply-chain gate does not apply to it.
+minimumReleaseAgeExclude:
+  - '@hire-stella/ui'

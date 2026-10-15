@@ -1,0 +1,19 @@
+# Opens a PR whenever a new @hire-stella/ui (HireStella design system) is released.
+# Needs a Dependabot secret HIRESTELLA_PACKAGES_TOKEN: a GitHub token with read:packages.
+version: 2
+registries:
+  hire-stella:
+    type: npm-registry
+    url: https://npm.pkg.github.com
+    token: ${{ secrets.HIRESTELLA_PACKAGES_TOKEN }}
+updates:
+  - package-ecosystem: npm
+    directory: /apps/web
+    registries: [hire-stella]
+    schedule:
+      interval: daily
+    allow:
+      - dependency-name: '@hire-stella/ui'
+    labels: [design-system]
+    commit-message:
+      prefix: 'chore(ui)'

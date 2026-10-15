@@ -114,7 +114,7 @@ export function WebsiteGenerator() {
                 : e.status === 'failed'
                   ? 'bg-destructive'
                   : busy
-                    ? 'bg-amber-500'
+                    ? 'bg-primary pulse'
                     : 'bg-muted-foreground'
             }
           >
@@ -157,8 +157,9 @@ export function WebsiteGenerator() {
             disabled={busy}
           />
           <span>
-            Replace the copy on this page. Off by default, so retrying after a failure cannot quietly
-            overwrite wording someone has edited by hand — the voice agent is rebuilt either way.
+            Replace the copy on this page. Off by default, so retrying after a failure cannot
+            quietly overwrite wording someone has edited by hand — the voice agent is rebuilt either
+            way.
           </span>
         </label>
 
@@ -179,8 +180,11 @@ export function WebsiteGenerator() {
           <p className="flex items-start gap-2 text-xs leading-relaxed text-muted-foreground">
             <Globe className="mt-0.5 size-4 shrink-0" aria-hidden />
             <span>
-              Voice agent: <strong className="text-foreground">{e.workflowName ?? `#${e.workflowId}`}</strong>
-              {e.hasEmbedToken ? ' — live on this page as “Talk to Stella”.' : ' — not yet on the page.'}
+              Voice agent:{' '}
+              <strong className="text-foreground">{e.workflowName ?? `#${e.workflowId}`}</strong>
+              {e.hasEmbedToken
+                ? ' — live on this page as “Talk to Stella”.'
+                : ' — not yet on the page.'}
             </span>
           </p>
         ) : null}
@@ -235,10 +239,10 @@ export function WebsiteGenerator() {
           <p className="rounded-lg bg-muted px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
             {canCall ? (
               <>
-                This rings a real telephone on the client&rsquo;s own carrier account and their agent
-                answers it — so use a number you are allowed to ring. Three calls a minute. It does
-                not go through the dialler, so there is no campaign, pacing or opt-out list in front
-                of it: the number you type is the number that rings.
+                This rings a real telephone on the client&rsquo;s own carrier account and their
+                agent answers it — so use a number you are allowed to ring. Three calls a minute. It
+                does not go through the dialler, so there is no campaign, pacing or opt-out list in
+                front of it: the number you type is the number that rings.
               </>
             ) : (
               <>

@@ -156,3 +156,25 @@ missing variable.
 - **No CI.** Nothing builds or tests on push; `.github/workflows` does not exist.
 - **Recordings go to local disk** unless `STORAGE_DRIVER=r2` is configured, and a container's disk does not survive a deploy.
 - **The UAE caller ID question is unresolved** — a Twilio US number will present as `+1` to a Dubai customer. A local presentation number needs TDRA approval; see NOT-IMPLEMENTED.md.
+
+---
+
+## Private UI package (`@hire-stella/ui`)
+
+The web app's design system is `@hire-stella/ui`, a **private** package on GitHub Packages
+(`Hire-Stella` org). Anything that installs the web app's dependencies needs a GitHub token with
+`read:packages`. The registry mapping is in the repo's `.npmrc`; the token never is — pnpm refuses to
+expand environment variables in a committed `.npmrc`.
+
+| Where | How |
+|---|---|
+| **Your machine** | `pnpm config set //npm.pkg.github.com/:_authToken <token>` (once; stored in your user config) |
+| **Vercel** (web) | Add an environment variable `NPM_RC` with the value `//npm.pkg.github.com/:_authToken=<token>`. Vercel writes it to the build's user `.npmrc` |
+| **API Docker image** | Nothing — the image installs only `@superdemo/api...`, which does not depend on the UI package |
+| **GitHub Actions** | `pnpm config set //npm.pkg.github.com/:_authToken ${{ secrets.HIRESTELLA_PACKAGES_TOKEN }}` before `pnpm install` |
+
+Create the token at GitHub → Settings → Developer settings → Personal access tokens (classic) with only
+`read:packages`, from an account in the `Hire-Stella` org.
+
+**Updates:** new versions of `@hire-stella/ui` arrive as Dependabot PRs (see `.github/dependabot.yml`);
+review the Storybook changelog, merge, deploy.

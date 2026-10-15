@@ -170,8 +170,7 @@ export default function TelecallerPage() {
       phoneE164?: string;
       note?: string;
       softphone?: boolean;
-    }) =>
-      api.post<ManualCallResult>('/calls/manual', body),
+    }) => api.post<ManualCallResult>('/calls/manual', body),
     onSuccess: (res) => {
       setLive(res);
       setStartedAt(Date.now());
@@ -526,7 +525,7 @@ export default function TelecallerPage() {
                           className={cn(
                             'ml-2 font-medium',
                             phone.state === 'ready' || phone.state === 'on-call'
-                              ? 'text-emerald-600'
+                              ? 'text-live'
                               : phone.state === 'error'
                                 ? 'text-destructive'
                                 : 'text-muted-foreground',

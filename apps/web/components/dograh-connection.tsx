@@ -42,8 +42,7 @@ export function DograhConnection({ orgId }: { orgId: string }) {
   const queryClient = useQueryClient();
   const conn = useQuery({
     queryKey: ['dograh', orgId],
-    queryFn: async () =>
-      (await api.get<{ connection: DograhConnectionView }>(base)).connection,
+    queryFn: async () => (await api.get<{ connection: DograhConnectionView }>(base)).connection,
   });
 
   const [baseUrl, setBaseUrl] = useState<string | null>(null);
@@ -166,7 +165,9 @@ export function DograhConnection({ orgId }: { orgId: string }) {
               id="dograh-key"
               type="password"
               autoComplete="off"
-              placeholder={c.hasApiKey ? 'Leave blank to keep the stored key' : 'Paste a Dograh API key'}
+              placeholder={
+                c.hasApiKey ? 'Leave blank to keep the stored key' : 'Paste a Dograh API key'
+              }
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               className="mt-1.5"
@@ -184,9 +185,7 @@ export function DograhConnection({ orgId }: { orgId: string }) {
 
         <div className="flex flex-wrap items-center gap-2">
           <Button
-            onClick={() =>
-              save.mutate({ baseUrl: host, apiKey: apiKey.trim() || undefined })
-            }
+            onClick={() => save.mutate({ baseUrl: host, apiKey: apiKey.trim() || undefined })}
             disabled={!host || save.isPending}
           >
             {save.isPending ? 'Saving…' : 'Save connection'}
@@ -310,7 +309,7 @@ export function DograhConnection({ orgId }: { orgId: string }) {
               ) : null}
             </div>
             {c.snippetHostWarning ? (
-              <p className="flex items-start gap-2 rounded-lg bg-amber-500/10 px-3 py-2.5 text-xs leading-relaxed text-amber-700 dark:text-amber-400">
+              <p className="flex items-start gap-2 rounded-xl border border-dashed border-[var(--hs-border-hover)] bg-[var(--hs-glass)] px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
                 <TriangleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
                 <span>
                   Your Dograh is handing out <code>{c.snippetHostWarning}</code> as its widget
@@ -325,15 +324,15 @@ export function DograhConnection({ orgId }: { orgId: string }) {
               {c.hasEmbedToken ? (
                 <>
                   The page carries {c.hasChatToken ? 'two tokens' : 'a token'} Dograh will only
-                  honour on the domains above, so copying{' '}
-                  {c.hasChatToken ? 'them' : 'it'} out of the HTML does not let anyone else spend
-                  your voice minutes. Re-issue if this page moves to a new domain.
+                  honour on the domains above, so copying {c.hasChatToken ? 'them' : 'it'} out of
+                  the HTML does not let anyone else spend your voice minutes. Re-issue if this page
+                  moves to a new domain.
                 </>
               ) : (
                 <>
                   Connecting mints a token for this workflow, locked to the domains this page is
-                  served from. Until then the page keeps its plain phone link and nothing changes for
-                  a visitor.
+                  served from. Until then the page keeps its plain phone link and nothing changes
+                  for a visitor.
                 </>
               )}
             </p>

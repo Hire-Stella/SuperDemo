@@ -24,7 +24,11 @@ export function pct(value: number | null | undefined, digits = 0): string {
 
 export function money(usd: number | null | undefined): string {
   if (usd === null || usd === undefined) return '—';
-  return usd.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  return usd.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  });
 }
 
 /**
@@ -88,24 +92,34 @@ export function initials(name: string | null | undefined): string {
 /* ------------------------------ state styling ------------------------------ */
 
 export const CALL_STATE_STYLE: Record<CallState, { label: string; className: string }> = {
-  RINGING: { label: 'Ringing', className: 'bg-warn-soft text-warn' },
+  // HireStella brand semantics: orange only where a person must act now; Mist for AI-handled
+  // work and for escalation (a handoff to a person is a transfer, not a failure); neutral otherwise.
+  RINGING: { label: 'Ringing', className: 'bg-muted text-muted-foreground' },
   AI_HANDLING: { label: 'AI handling', className: 'bg-ai-soft text-ai' },
-  ESCALATING: { label: 'Escalating', className: 'bg-warn-soft text-warn' },
-  QUEUED: { label: 'In queue', className: 'bg-warn-soft text-warn' },
-  AGENT_RINGING: { label: 'Ringing agent', className: 'bg-warn-soft text-warn' },
+  ESCALATING: { label: 'Escalating', className: 'hs-sd-badge--handoff' },
+  QUEUED: {
+    label: 'In queue',
+    className: 'bg-warn-soft text-warn border-[var(--hs-border-selected)]',
+  },
+  AGENT_RINGING: {
+    label: 'Ringing agent',
+    className: 'bg-warn-soft text-warn border-[var(--hs-border-selected)]',
+  },
   AGENT_TALKING: { label: 'With agent', className: 'bg-live-soft text-live' },
   WRAPUP: { label: 'Wrap-up', className: 'bg-muted text-muted-foreground' },
   COMPLETED: { label: 'Completed', className: 'bg-muted text-muted-foreground' },
 };
 
-export const AGENT_STATUS_STYLE: Record<AgentStatus, { label: string; dot: string; text: string }> = {
-  AVAILABLE: { label: 'Available', dot: 'bg-live', text: 'text-live' },
-  ON_CALL: { label: 'On a call', dot: 'bg-primary', text: 'text-primary' },
-  WRAPUP: { label: 'Wrap-up', dot: 'bg-ai', text: 'text-ai' },
-  BUSY: { label: 'Busy', dot: 'bg-warn', text: 'text-warn' },
-  BREAK: { label: 'On break', dot: 'bg-warn', text: 'text-warn' },
-  OFFLINE: { label: 'Offline', dot: 'bg-muted-foreground/50', text: 'text-muted-foreground/70' },
-};
+export const AGENT_STATUS_STYLE: Record<AgentStatus, { label: string; dot: string; text: string }> =
+  {
+    AVAILABLE: { label: 'Available', dot: 'bg-live', text: 'text-live' },
+    ON_CALL: { label: 'On a call', dot: 'bg-primary', text: 'text-primary' },
+    WRAPUP: { label: 'Wrap-up', dot: 'bg-ai', text: 'text-ai' },
+    // Brand: orange only for the live call; breaks and busy are calm, neutral states.
+    BUSY: { label: 'Busy', dot: 'bg-muted-foreground', text: 'text-muted-foreground' },
+    BREAK: { label: 'On break', dot: 'bg-muted-foreground', text: 'text-muted-foreground' },
+    OFFLINE: { label: 'Offline', dot: 'bg-muted-foreground/50', text: 'text-muted-foreground/70' },
+  };
 
 export const CHANNEL_LABEL: Record<Channel, string> = {
   VOICE: 'Voice',

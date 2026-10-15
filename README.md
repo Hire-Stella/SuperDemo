@@ -372,27 +372,24 @@ execute it when a supervisor opens the file.
 
 ## Theming
 
-The dashboard is built on **shadcn/ui** — components are owned source under
-`apps/web/components/ui/`, so they're edited directly rather than configured
-around. App-level compounds (metric tiles, the panel-style card, the simulated
-notice) live in `apps/web/components/composites.tsx`.
+The dashboard is built on **[@hire-stella/ui](https://github.com/Hire-Stella/hirestella-ui)**, the
+HireStella design system (Brand Book v1.0): near-black and Cloud surfaces, Stella Orange as the single
+action colour, Poppins headings and Montserrat body. `apps/web/components/composites.tsx` (Card, Metric,
+Badge, Table, EmptyState…) and the few remaining `components/ui/*` primitives are thin adapters over it,
+so pages keep their old imports.
 
-**The FIT red is two CSS variables.** In `apps/web/app/globals.css`:
+**The shadcn CSS variables in `apps/web/app/globals.css` are still the source of truth.** Their defaults
+are the HireStella values, tenant themes (`packages/contracts/src/themes.ts`) override the same
+properties, and a bridge points the library's `--hs-*` tokens at them — so a tenant's brand recolours
+both the Tailwind utilities and the HireStella components.
 
-```css
---fit-red:      oklch(0.53 0.204 26);  /* light mode */
---fit-red-dark: oklch(0.7  0.185 26);  /* dark mode — lifted so it stays red */
-```
+**State follows the brand book strictly — there is no red, green, amber or purple.** Orange marks the one
+thing that needs action (a queued caller, an agent's phone ringing, a poor quality score, warnings and
+failures — always with an icon or label). Mist marks human handoff and AI-handled work: a transfer,
+never an error. Everything else, including healthy and live, is neutral. One primary (orange) button
+per view; utility actions are secondary.
 
-Change those and the whole app follows — buttons, active nav, charts, heatmap.
-The current values are a chosen institutional red, **not** FIT's official brand
-hex; if they send their brand guide, that's the only edit needed.
-
-A red brand in an ops dashboard has one genuine conflict: red is also the
-universal "something is wrong" colour. The palette resolves it deliberately —
-brand red for identity and primary actions, **amber** for warnings, a deeper
-red for critical only, green for healthy, purple for AI-handled. Every state
-also carries an icon or label, so nothing depends on hue alone.
+The 25 tenant landing-page templates are untouched — they keep their own scoped palettes and faces.
 
 There's a three-way theme toggle (light / dark / system) in the sidebar footer
 and on the login page. Agents work night shifts, so dark mode is a requirement
