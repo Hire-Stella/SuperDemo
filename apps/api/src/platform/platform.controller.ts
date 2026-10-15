@@ -120,6 +120,8 @@ export class PlatformController {
           numbers: sum(numbers, org.id),
         },
         lastLoginAt: lastLogins.find((l) => l.orgId === org.id)?._max.lastLoginAt ?? null,
+        dograhOrgId: org.dograhOrgId,
+        dograhWorkflowIds: org.dograhWorkflowIds,
       }));
     });
   }

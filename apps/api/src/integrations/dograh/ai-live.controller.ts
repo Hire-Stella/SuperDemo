@@ -31,9 +31,9 @@ export class AiLiveController {
     const orgId = this.tenants.requireOrgId();
     const org = await this.prisma.organization.findUnique({
       where: { id: orgId },
-      select: { dograhOrgId: true, timezone: true },
+      select: { dograhOrgId: true, dograhWorkflowIds: true, timezone: true },
     });
-    if (!org?.dograhOrgId) {
+    if (!org || (!org.dograhOrgId && !org.dograhWorkflowIds.length)) {
       return {
         enabled: false,
         live: [],

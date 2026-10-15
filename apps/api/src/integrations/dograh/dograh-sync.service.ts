@@ -41,6 +41,18 @@ interface DograhRun {
 }
 
 /** Bookkeeping Dograh writes into gathered_context; not worth showing anyone. */
+/**
+ * One query's worth of runs: a single workflow, or every workflow of a Dograh
+ * organisation when the centre names none.
+ */
+type RunScope = { workflowId: number } | { dograhOrgId: number };
+
+/** Centres with something to import: a Dograh organisation, workflows, or both. */
+const MAPPED = {
+  isActive: true,
+  OR: [{ dograhOrgId: { not: null } }, { dograhWorkflowIds: { isEmpty: false } }],
+} satisfies Prisma.OrganizationWhereInput;
+
 const INTERNAL_KEYS = new Set([
   'extracted_variables',
   'nodes_visited',
@@ -54,9 +66,12 @@ const INTERNAL_KEYS = new Set([
 ]);
 
 /**
- * Imports calls handled by Dograh into the centre each Dograh organisation is
- * mapped to (`Organization.dograhOrgId`), so they appear in the Inbox and in
- * Analytics like any call this platform answered itself.
+ * Imports calls handled by Dograh into the centre they are mapped to, so they
+ * appear in the Inbox and in Analytics like any call this platform answered
+ * itself. A centre names its workflows (`Organization.dograhWorkflowIds`),
+ * which are fetched by id wherever on Dograh they live, so moving a workflow
+ * to another Dograh organisation does not break the import. Only a centre that
+ * names none falls back to every workflow of `Organization.dograhOrgId`.
  *
  * Polling rather than a webhook because the superuser API is read-only and
  * spans every Dograh organisation: one key, no per-centre setup on Dograh's
@@ -99,13 +114,13 @@ export class DograhSyncService implements OnApplicationBootstrap {
       // Unscoped on purpose: the import serves every mapped centre, and each
       // one is then processed inside its own tenant context.
       const orgs = await this.prisma.organization.findMany({
-        where: { dograhOrgId: { not: null }, isActive: true },
+        where: MAPPED,
         select: { id: true, name: true, dograhOrgId: true, dograhWorkflowIds: true },
       });
       for (const org of orgs) {
         try {
           const imported = await this.tenants.runAs(org.id, null, () =>
-            this.syncOrg(org.id, org.dograhOrgId!, org.dograhWorkflowIds),
+            this.syncOrg(org.id, scopesFor(org)),
           );
           if (imported) this.log.log(`imported ${imported} Dograh call(s) into ${org.name}`);
         } catch (error) {
@@ -124,7 +139,7 @@ export class DograhSyncService implements OnApplicationBootstrap {
 
   /**
    * Calls in progress, for Live ops. Only the last LIVE_MAX_AGE_MS of runs are
-   * asked for, so this stays one small request per mapped centre. When a run
+   * asked for, so this stays one small request per mapped workflow. When a run
    * that was live drops out, it has just finished: the import runs at once
    * rather than up to a minute later, so it reaches the recent-calls feed and
    * the Inbox within seconds of the caller hanging up.
@@ -136,7 +151,7 @@ export class DograhSyncService implements OnApplicationBootstrap {
     let finished = false;
     try {
       const orgs = await this.prisma.organization.findMany({
-        where: { dograhOrgId: { not: null }, isActive: true },
+        where: MAPPED,
         select: { id: true, dograhOrgId: true, dograhWorkflowIds: true },
       });
       const mapped = new Set(orgs.map((o) => o.id));
@@ -144,20 +159,13 @@ export class DograhSyncService implements OnApplicationBootstrap {
 
       for (const org of orgs) {
         try {
-          const now = Date.now();
-          const { runs } = await this.fetchPage(
-            org.dograhOrgId!,
-            1,
-            new Date(now - LIVE_MAX_AGE_MS),
-          );
+          const since = new Date(Date.now() - LIVE_MAX_AGE_MS);
+          const runs: DograhRun[] = [];
+          for (const scope of scopesFor(org)) {
+            runs.push(...(await this.fetchPage(scope, 1, since)).runs);
+          }
           const calls: AiLiveCall[] = runs
-            .filter(
-              (r) =>
-                !r.is_completed &&
-                r.mode !== 'textchat' &&
-                (org.dograhWorkflowIds.length === 0 ||
-                  org.dograhWorkflowIds.includes(r.workflow_id)),
-            )
+            .filter((r) => !r.is_completed && r.mode !== 'textchat')
             .map((r) => {
               const initial = r.initial_context ?? {};
               const nodes = r.gathered_context?.nodes_visited;
@@ -185,11 +193,7 @@ export class DograhSyncService implements OnApplicationBootstrap {
     if (finished) void this.tick();
   }
 
-  private async syncOrg(
-    orgId: string,
-    dograhOrgId: number,
-    workflowIds: number[],
-  ): Promise<number> {
+  private async syncOrg(orgId: string, scopes: RunScope[]): Promise<number> {
     const latest = await this.prisma.call.findFirst({
       where: { driver: 'dograh' },
       orderBy: { ringingAt: 'desc' },
@@ -205,25 +209,28 @@ export class DograhSyncService implements OnApplicationBootstrap {
     if (!aiAgent) throw new Error('centre has no AI agent to attribute Dograh calls to');
 
     let imported = 0;
-    for (let page = 1; ; page++) {
-      const { runs, totalPages } = await this.fetchPage(dograhOrgId, page, from);
-      for (const run of runs) {
-        if (!run.is_completed || run.mode === 'textchat') continue;
-        if (workflowIds.length > 0 && !workflowIds.includes(run.workflow_id)) continue;
-        if (await this.importRun(orgId, aiAgent.id, run)) imported++;
+    for (const scope of scopes) {
+      for (let page = 1; ; page++) {
+        const { runs, totalPages } = await this.fetchPage(scope, page, from);
+        for (const run of runs) {
+          if (!run.is_completed || run.mode === 'textchat') continue;
+          if (await this.importRun(orgId, aiAgent.id, run)) imported++;
+        }
+        if (page >= totalPages) break;
       }
-      if (page >= totalPages) break;
     }
     return imported;
   }
 
   private async fetchPage(
-    dograhOrgId: number,
+    scope: RunScope,
     page: number,
     from: Date | null,
   ): Promise<{ runs: DograhRun[]; totalPages: number }> {
     const filters: unknown[] = [
-      { attribute: 'organizationId', type: 'number', value: { value: dograhOrgId } },
+      'workflowId' in scope
+        ? { attribute: 'workflowId', type: 'number', value: { value: scope.workflowId } }
+        : { attribute: 'organizationId', type: 'number', value: { value: scope.dograhOrgId } },
     ];
     if (from) {
       filters.push({
@@ -446,6 +453,12 @@ export class DograhSyncService implements OnApplicationBootstrap {
     if (!file.ok) throw new Error(`download ${file.status} for ${key}`);
     return Buffer.from(await file.arrayBuffer());
   }
+}
+
+function scopesFor(org: { dograhOrgId: number | null; dograhWorkflowIds: number[] }): RunScope[] {
+  if (org.dograhWorkflowIds.length)
+    return org.dograhWorkflowIds.map((workflowId) => ({ workflowId }));
+  return org.dograhOrgId ? [{ dograhOrgId: org.dograhOrgId }] : [];
 }
 
 function str(v: unknown): string | null {

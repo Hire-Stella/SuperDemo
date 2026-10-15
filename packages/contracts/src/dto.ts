@@ -155,6 +155,9 @@ export const OrgSummary = z.object({
   }),
   /** Null until someone signs in. Lets the operator spot a dormant centre. */
   lastLoginAt: z.coerce.date().nullable(),
+  /** Where Dograh calls are imported from — see DograhSyncService. */
+  dograhOrgId: z.number().int().nullable(),
+  dograhWorkflowIds: z.array(z.number().int()),
 });
 export type OrgSummary = z.infer<typeof OrgSummary>;
 
@@ -268,7 +271,11 @@ export const UpdateOrgInput = z.object({
   demoCallsEnabled: z.boolean().optional(),
   /** Dograh organisation to import calls from. Null stops the import. */
   dograhOrgId: z.number().int().positive().nullable().optional(),
-  /** Restrict the import to these workflows. Empty means all of them. */
+  /**
+   * Import these workflows' calls, wherever on Dograh they live — a workflow
+   * moved to another Dograh organisation keeps importing. Empty means every
+   * workflow of `dograhOrgId`.
+   */
   dograhWorkflowIds: z.array(z.number().int().positive()).optional(),
 });
 export type UpdateOrgInput = z.infer<typeof UpdateOrgInput>;
@@ -1285,7 +1292,7 @@ export type TestCrmConnectionOutput = z.infer<typeof TestCrmConnectionOutput>;
 
 /**
  * Live ops for a centre whose calls are answered by its voice workflow
- * (`Organization.dograhOrgId` set). `enabled: false` means "show the standard
+ * (`Organization.dograhOrgId` or `dograhWorkflowIds` set). `enabled: false` means "show the standard
  * board" — the centre has human queues instead.
  */
 export const AiLiveCall = z.object({
