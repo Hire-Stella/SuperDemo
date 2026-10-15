@@ -15,6 +15,13 @@ ENV PNPM_HOME=/pnpm PATH=$PNPM_HOME:$PATH
 RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
+# pnpm 11 verifies every lockfile entry against its registry's metadata before
+# it installs — and before it runs any script, via its own install — filter or
+# not. The web-only @hire-stella/ui lives on GitHub Packages, which answers 401
+# without a token, so this image trusts the committed lockfile instead. Tarballs
+# are still checked against its integrity hashes, and the registry check runs on
+# every developer install, which has the token.
+ENV pnpm_config_trust_lockfile=true
 
 # ── deps ─────────────────────────────────────────────────────────────────────
 FROM base AS deps
@@ -26,7 +33,8 @@ COPY apps/web/package.json apps/web/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/db/package.json packages/db/
 # Only the API and the workspace packages it depends on. The web app's dependencies — including the private
-# @hire-stella/ui package — are never needed in this image, so the build needs no registry token.
+# @hire-stella/ui package — are never needed in this image, so the build needs no registry token
+# (see pnpm_config_trust_lockfile above).
 RUN pnpm install --frozen-lockfile --filter "@superdemo/api..."
 
 # ── build ────────────────────────────────────────────────────────────────────
