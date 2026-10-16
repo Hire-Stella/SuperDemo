@@ -672,6 +672,9 @@ export class DograhClient {
    * re-running enrichment or pressing "enable booking" twice does not leave a
    * pile of identical tools in the operator's Dograh. The URL carries the
    * centre's calendar token, so "same URL" also means "same centre".
+   *
+   * A reused tool is brought up to date — description and parameters — so an
+   * improvement to how a tool is described reaches agents built before it.
    */
   async ensureHttpTool(tool: {
     name: string;
@@ -681,10 +684,34 @@ export class DograhClient {
     parameters: { name: string; type: 'string' | 'number'; description: string; required: boolean }[];
     timeoutMs?: number;
   }): Promise<string> {
+    const definition = {
+      schema_version: 1,
+      type: 'http_api',
+      config: {
+        method: tool.method,
+        url: tool.url,
+        parameters: tool.parameters,
+        timeout_ms: tool.timeoutMs ?? 8000,
+      },
+    };
     const existing = await this.call<unknown>('/tools/').catch(() => []);
     for (const t of Array.isArray(existing) ? existing : []) {
-      const o = t as { tool_uuid?: string; name?: string; definition?: { config?: { url?: string } } };
+      const o = t as {
+        tool_uuid?: string;
+        name?: string;
+        description?: string;
+        definition?: { config?: { url?: string; parameters?: unknown } };
+      };
       if (o.tool_uuid && o.name === tool.name && o.definition?.config?.url === tool.url) {
+        const stale =
+          o.description !== tool.description ||
+          JSON.stringify(o.definition?.config?.parameters) !== JSON.stringify(tool.parameters);
+        if (stale) {
+          await this.call(`/tools/${o.tool_uuid}`, {
+            method: 'PUT',
+            body: { description: tool.description, definition },
+          });
+        }
         return o.tool_uuid;
       }
     }
@@ -695,16 +722,7 @@ export class DograhClient {
         description: tool.description,
         category: 'http_api',
         icon: 'calendar',
-        definition: {
-          schema_version: 1,
-          type: 'http_api',
-          config: {
-            method: tool.method,
-            url: tool.url,
-            parameters: tool.parameters,
-            timeout_ms: tool.timeoutMs ?? 8000,
-          },
-        },
+        definition,
       },
     });
     return created.tool_uuid;
@@ -719,8 +737,9 @@ export class DograhClient {
    * the current node does not hold is a tool the agent cannot see. The how-to
    * goes on the global node because every other node inherits it.
    *
-   * Idempotent: a uuid already present is not added twice, and a prompt
-   * already carrying the marker heading is not appended to again.
+   * Idempotent: a uuid already present is not added twice. The instructions
+   * always sit last on the global node under the marker heading, so a newer
+   * version replaces everything from the marker on rather than stacking up.
    */
   async attachTools(
     workflowId: number,
@@ -745,13 +764,14 @@ export class DograhClient {
           nodesTouched++;
         }
       }
-      if (
-        n.type === 'globalNode' &&
-        typeof n.data.prompt === 'string' &&
-        !n.data.prompt.includes(globalInstructions.marker)
-      ) {
-        n.data.prompt = `${n.data.prompt}\n\n${globalInstructions.marker}\n\n${globalInstructions.text}`;
-        nodesTouched++;
+      if (n.type === 'globalNode' && typeof n.data.prompt === 'string') {
+        const at = n.data.prompt.indexOf(globalInstructions.marker);
+        const before = (at >= 0 ? n.data.prompt.slice(0, at) : n.data.prompt).trimEnd();
+        const next = `${before}\n\n${globalInstructions.marker}\n\n${globalInstructions.text}`;
+        if (next !== n.data.prompt) {
+          n.data.prompt = next;
+          nodesTouched++;
+        }
       }
     }
     if (nodesTouched === 0) return { nodesTouched };

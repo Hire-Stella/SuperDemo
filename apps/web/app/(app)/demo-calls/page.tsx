@@ -61,11 +61,7 @@ export default function DemoCallsPage() {
         </h1>
         <p className="mt-0.5 text-sm text-muted-foreground">
           Ring one of this centre&rsquo;s agents, or talk to it in the browser. Which agent
-          answers each slot is set in{' '}
-          <Link href="/settings" className="underline underline-offset-2">
-            Settings
-          </Link>
-          .
+          answers each slot is set by your platform operator.
         </p>
       </header>
 
@@ -245,7 +241,7 @@ function DialerCard({
 
         {/*
           Which agent answers, read-only.
-          Configuration lives in Settings: these cards sit in front of a client
+          Configuration is the operator's (superadmin Voice panel): these cards sit in front of a client
           while somebody presses the call button, and a dropdown one misclick
           away from it is the wrong place to keep the wiring.
         */}
@@ -326,11 +322,8 @@ function DialerCard({
 
         {!dialer.ready && (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            {dialer.blockedReason ?? 'This dialer is switched off.'}{' '}
-            <Link href="/settings" className="underline underline-offset-2">
-              Set it up in Settings
-            </Link>
-            .
+            {dialer.blockedReason ?? 'This dialer is switched off.'} Ask your platform operator
+            to set it up.
           </p>
         )}
 

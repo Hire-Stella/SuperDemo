@@ -20,6 +20,7 @@ import {
   type VoiceBookInput,
   type VoiceBookOutput,
   addDaysIso,
+  weekdayOfIso,
   composeE164,
   countryByCode,
   isPlausibleNumber,
@@ -219,7 +220,14 @@ export class CalendarService {
       const provider = await this.providerFor(org.id);
       const { timezone } = await readCalendarSettings(this.prisma, org.id);
       const today = zonedParts(new Date(), timezone).date;
-      const asked = date && ISO_DATE.test(date.trim()) ? date.trim() : null;
+      // The caller's own words are accepted — "tomorrow", "next Tuesday" —
+      // because the agent has no clock to turn them into a date with.
+      const resolved = date ? resolveSpokenDate(date, today) : null;
+      // A day already gone is the agent guessing without a clock, not the
+      // caller asking — answering "nothing free on 15 May 2025" only confuses
+      // them, so it is treated as no date at all.
+      const asked = resolved && resolved >= today ? resolved : null;
+      const todayLabel = `${spokenDay(zonedTimeToUtc(today, '12:00', timezone), timezone)} ${today.slice(0, 4)}`;
 
       let found: AvailabilityOutput | null = null;
       if (asked) {
@@ -241,6 +249,7 @@ export class CalendarService {
           timezone,
           slots: [],
           speech: `I'm sorry, I have nothing free in the next ${LOOKAHEAD_DAYS} days. I can take your details and have someone call you back.`,
+          today: todayLabel,
         };
       }
 
@@ -261,6 +270,7 @@ export class CalendarService {
         timezone,
         slots,
         speech: `${lead}${joinSpoken(offered)} free${more}.`,
+        today: todayLabel,
       };
     });
   }
@@ -461,6 +471,57 @@ function requireDate(date: string | undefined): string {
   return d;
 }
 
+const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const MONTHS = [
+  'january', 'february', 'march', 'april', 'may', 'june',
+  'july', 'august', 'september', 'october', 'november', 'december',
+];
+
+/**
+ * A day as a caller says it, as YYYY-MM-DD, relative to the centre's today.
+ *
+ * Covers what an agent actually passes through: an ISO date, "today",
+ * "tomorrow", "day after tomorrow", a weekday ("Tuesday", "next Tuesday" —
+ * both the next one after today), and "17 October" / "October 17th". A day
+ * and month already past this year means next year. Anything else is null,
+ * which voiceAvailability treats as "the next day with openings".
+ */
+export function resolveSpokenDate(raw: string, today: string): string | null {
+  const s = raw.trim().toLowerCase().replace(/[,.]/g, ' ').replace(/\s+/g, ' ');
+  if (!s) return null;
+  if (ISO_DATE.test(s)) return s;
+  if (s === 'today' || s === 'now') return today;
+  if (/^(the )?day after tomorrow$/.test(s)) return addDaysIso(today, 2);
+  if (s === 'tomorrow') return addDaysIso(today, 1);
+
+  const wd = WEEKDAYS.findIndex((d) => s.endsWith(d) || s.endsWith(d.slice(0, 3)));
+  if (wd >= 0 && /^((next|this|on|coming) )*\w+$/.test(s)) {
+    const delta = ((wd - weekdayOfIso(today) + 7) % 7) || 7;
+    return addDaysIso(today, delta);
+  }
+
+  // "17 October", "17th of October", "October 17", "October 17th".
+  const dayFirst = /^(\d{1,2})(?:st|nd|rd|th)? (?:of )?([a-z]+)$/.exec(s);
+  const monthFirst = /^([a-z]+) (\d{1,2})(?:st|nd|rd|th)?$/.exec(s);
+  const parts = dayFirst
+    ? { day: dayFirst[1]!, month: dayFirst[2]! }
+    : monthFirst
+      ? { day: monthFirst[2]!, month: monthFirst[1]! }
+      : null;
+  if (parts) {
+    const day = Number(parts.day);
+    const month = MONTHS.findIndex((x) => x.startsWith(parts.month.slice(0, 3)));
+    if (month >= 0 && day >= 1 && day <= 31) {
+      let year = Number(today.slice(0, 4));
+      const iso = (y: number) =>
+        `${y}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      if (iso(year) < today) year += 1;
+      return iso(year);
+    }
+  }
+  return null;
+}
+
 function parseInstant(value: string | undefined): Date | null {
   if (!value) return null;
   const d = new Date(value);
@@ -504,9 +565,16 @@ function spokenDay(d: Date, timeZone: string): string {
     .replace(',', '');
 }
 
-/** "9:00", "14:30" — 24-hour, no leading zero, which a TTS voice reads cleanly. */
+/**
+ * "9 am", "2:30 pm" — how a person says a time.
+ *
+ * Not "9:00": agents told to speak numbers as words read that as "nine zero
+ * zero", and 24-hour times sound clipped to most callers.
+ */
 function spokenTime(d: Date, timeZone: string): string {
-  return zonedParts(d, timeZone).time.replace(/^0/, '');
+  const [h, m] = zonedParts(d, timeZone).time.split(':').map(Number) as [number, number];
+  const hour = h % 12 || 12;
+  return `${hour}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
 }
 
 /** "a, b and c". */
