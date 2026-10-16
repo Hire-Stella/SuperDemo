@@ -7,6 +7,7 @@ import type {
   StorageProvider,
   UpdateConversationInput,
 } from '@superdemo/contracts';
+import { demoCallFromTags } from '@superdemo/contracts';
 import { PrismaService } from '../prisma/prisma.service';
 import { STORAGE_PROVIDER } from '../integrations/storage/storage.module';
 import { RealtimeService } from '../realtime/realtime.service';
@@ -269,6 +270,7 @@ export class ConversationsService {
       endedAt: c.endedAt,
       disposition: c.disposition,
       evalScore: c.callEval?.score ?? null,
+      demoCall: demoCallFromTags(c.tags),
       contact: c.contact
         ? {
             id: c.contact.id,

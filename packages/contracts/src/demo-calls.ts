@@ -25,6 +25,18 @@ export type DemoDialerKind = z.infer<typeof DemoDialerKind>;
 /** Fixed order, so the three cards never reshuffle between renders. */
 export const DEMO_DIALER_KINDS = ['inbound', 'outbound', 'info'] as const;
 
+/**
+ * The tag an imported call carries when one of the demo slots' agents took it,
+ * e.g. `demo:info`. The Inbox reads it back to say which demo the call was —
+ * direction alone cannot, since outbound and info both ring out.
+ */
+export const demoCallTag = (kind: DemoDialerKind): string => `demo:${kind}`;
+
+export function demoCallFromTags(tags: readonly string[]): DemoDialerKind | null {
+  for (const kind of DEMO_DIALER_KINDS) if (tags.includes(demoCallTag(kind))) return kind;
+  return null;
+}
+
 export const DEMO_DIALER_LABELS: Record<
   DemoDialerKind,
   { label: string; note: string; hint: string }

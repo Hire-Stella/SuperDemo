@@ -456,6 +456,8 @@ export const ConversationListItem = z.object({
   crmSynced: z.boolean(),
   /** Overall eval score, when the call has been scored. */
   evalScore: z.number().int().nullable(),
+  /** Which demo-call slot's agent took this call, when one did. */
+  demoCall: DemoDialerKind.nullable().default(null),
 });
 export type ConversationListItem = z.infer<typeof ConversationListItem>;
 
