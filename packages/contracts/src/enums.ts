@@ -248,6 +248,51 @@ export type NumberStatus = z.infer<typeof NumberStatus>;
 export const TelephonyDriver = z.enum(['simulated', 'browser', 'twilio', 'elevenlabs', 'livekit']);
 export type TelephonyDriver = z.infer<typeof TelephonyDriver>;
 
+/**
+ * What a driver is called anywhere a customer can read it.
+ *
+ * Vendors are named by their role, never by brand: a client watching a demo
+ * should see "the AI voice provider ran out of credit", not a third party's
+ * name they never signed up with — and a vendor swap should not change the
+ * product's vocabulary. Config, logs and env vars keep the real names.
+ */
+export const PROVIDER_LABELS: Record<string, string> = {
+  simulated: 'Simulated calls',
+  browser: 'Browser voice',
+  twilio: 'Phone carrier',
+  elevenlabs: 'AI voice provider',
+  livekit: 'Voice provider',
+  'web-speech': 'Browser speech',
+  scripted: 'Scripted AI',
+  claude: 'AI model',
+  ollama: 'Local AI model',
+  mock: 'Simulated',
+  'mock-whatsapp': 'Simulated WhatsApp',
+  meta: 'WhatsApp Business',
+  local: 'Local storage',
+  r2: 'Cloud storage',
+};
+
+/**
+ * The customer-facing name for a driver. Every voice and speech vendor is in
+ * the map above; anything else (a CRM the client chose themselves, say) is
+ * fine to show as it is.
+ */
+export function providerLabel(driver: string): string {
+  return PROVIDER_LABELS[driver] ?? CRM_DRIVER_LABELS[driver as CrmDriver] ?? driver;
+}
+
+/** What each driver slot is, for the same audience. */
+export const DRIVER_KIND_LABELS: Record<string, string> = {
+  telephony: 'Calls',
+  messaging: 'Messaging',
+  llm: 'AI brain',
+  crm: 'CRM',
+  stt: 'Speech-to-text',
+  tts: 'Text-to-speech',
+  storage: 'Recordings',
+};
+
 export const MessagingDriver = z.enum(['mock', 'meta']);
 export type MessagingDriver = z.infer<typeof MessagingDriver>;
 

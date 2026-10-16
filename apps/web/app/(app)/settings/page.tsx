@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import {
   CRM_DRIVER_LABELS,
+  DRIVER_KIND_LABELS,
+  providerLabel,
   DEMO_DIALER_LABELS,
   type CrmDriver,
   type DemoCallsView,
@@ -420,7 +422,8 @@ export default function SettingsPage() {
                   key={k}
                   className={mocked ? 'bg-warn-soft text-warn' : 'bg-live-soft text-live'}
                 >
-                  {k}: {v}
+                  {/* By role, never by vendor — this panel is shown to clients. */}
+                  {DRIVER_KIND_LABELS[k] ?? k}: {providerLabel(v)}
                 </Badge>
               );
             })

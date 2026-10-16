@@ -281,7 +281,7 @@ export default function SimulatorPage() {
       <div className="grid gap-4 lg:grid-cols-2">
         {/* ---------------------- live browser call ---------------------- */}
         <Card
-          title="Fallback — browser speech (only if ElevenLabs quota runs out)"
+          title="Fallback — browser speech (only if the AI voice provider is unavailable)"
           subtitle="Web Speech API: free and unmetered, but robotic and no barge-in. Not the demo path."
           action={
             callId ? (

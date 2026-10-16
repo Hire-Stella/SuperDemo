@@ -35,7 +35,7 @@ export class DriverErrorFilter implements ExceptionFilter {
     res.status(HttpStatus.NOT_IMPLEMENTED).json({
       statusCode: HttpStatus.NOT_IMPLEMENTED,
       error: 'Not Implemented',
-      message: err.message,
+      message: err.publicMessage,
     });
   }
 }

@@ -81,10 +81,12 @@ function ElevenLabsCallInner() {
       // exhaustion looks like from inside the SDK — it never names the cause,
       // so say it here rather than showing the user a bare "{}".
       const opaque = !detail || detail === '{}' || /unknown error/i.test(detail);
+      // The vendor's raw text stays in the console above; the toast names it by
+      // role, because a client may be watching this screen.
       toast.error(
         opaque
-          ? 'Call ended by ElevenLabs. The usual cause is an exhausted character quota — check the plan, or use “Start fallback call”.'
-          : `ElevenLabs: ${detail}`,
+          ? 'The AI voice provider ended the call — usually its usage limit has been reached. Use “Start fallback call” for now.'
+          : 'The AI voice provider ended the call unexpectedly. Try again, or use “Start fallback call”.',
       );
     },
   });
@@ -178,7 +180,7 @@ function ElevenLabsCallInner() {
 
   return (
     <Card
-      title="Talk to the AI — ElevenLabs voice"
+      title="Talk to the AI — natural voice"
       subtitle="Real speech, real turn-taking, real barge-in. No phone number required."
       action={
         live ? (
@@ -194,11 +196,11 @@ function ElevenLabsCallInner() {
     >
       <div className="space-y-3 p-4">
         <MockNotice>
-          This is a browser call, not a phone call — ElevenLabs does not sell phone numbers, so a
-          dialable line needs Twilio or a TDRA-licensed UAE SIP trunk. The agent, voice, prompt and
-          knowledge base are configured on ElevenLabs (<strong>FIT AI Inbound</strong>), which is
-          what keeps the responses as fast as their own playground. The handoff to a human, the
-          call record, routing and the CRM write are ours.
+          This is a browser call, not a phone call — a dialable line needs a phone carrier or a
+          TDRA-licensed UAE SIP trunk connected to the AI voice provider. The agent, voice, prompt
+          and knowledge base live with the voice provider (<strong>FIT AI Inbound</strong>), which
+          is what keeps responses this fast. The handoff to a human, the call record, routing and
+          the CRM write are ours.
         </MockNotice>
 
         {!live && (
