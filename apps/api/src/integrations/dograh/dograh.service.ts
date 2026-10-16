@@ -737,13 +737,16 @@ export class DograhService {
     const dialers = this.parseDialers(row?.dograhDialers ?? null);
     const failed: string[] = [];
 
+    // Pages connected before the uuid was stored have only the id; look it up.
+    const pageUuid =
+      pub.workflowUuid || (pub.workflowId ? await client.workflowUuid(pub.workflowId).catch(() => '') : '');
     if (!kinds.includes('inbound')) {
       // Not chosen: the landing page still has its agent, the slot stays as is.
-    } else if (pub.workflowId && pub.workflowUuid) {
+    } else if (pub.workflowId && pageUuid) {
       dialers.inbound = {
         enabled: true,
         workflowId: pub.workflowId,
-        workflowUuid: pub.workflowUuid,
+        workflowUuid: pageUuid,
         workflowName: pub.workflowName,
         // Shared with the landing page — see webCallScript on why a token is
         // never minted twice for one workflow.

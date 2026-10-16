@@ -151,6 +151,12 @@ export const SaveDemoDialerInput = z.object({
 });
 export type SaveDemoDialerInput = z.infer<typeof SaveDemoDialerInput>;
 
+/** Build the agents a centre's chosen slots are missing. */
+export const BuildDemoAgentsInput = z.object({
+  kinds: z.array(DemoDialerKind).min(1).default(['inbound', 'outbound', 'info']),
+});
+export type BuildDemoAgentsInput = z.infer<typeof BuildDemoAgentsInput>;
+
 export const PlaceDemoCallInput = z.object({
   kind: DemoDialerKind,
   phone: z.string().trim().min(6, 'A number the agent can ring').max(24),

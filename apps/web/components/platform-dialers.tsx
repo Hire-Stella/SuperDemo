@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import {
@@ -8,7 +9,7 @@ import {
   type DemoDialerKind,
 } from '@superdemo/contracts';
 import { api } from '@/lib/api';
-import { CalendarCheck } from 'lucide-react';
+import { CalendarCheck, Loader2, Sparkles } from 'lucide-react';
 import { Badge, Button, Card, Select, Spinner } from '@/components/composites';
 
 /**
@@ -35,6 +36,45 @@ export function PlatformDialers({ orgId }: { orgId: string }) {
     mutationFn: (body: { kind: DemoDialerKind; enabled?: boolean; workflowId?: number | null }) =>
       api.put<DemoCallsView>(`${base}/dialers`, body),
     onSuccess: (r) => queryClient.setQueryData(['platform-voice', orgId], r),
+    onError: (e) => toast.error((e as Error).message),
+  });
+
+  /*
+   * The background build's progress, polled only while one is running.
+   *
+   * Separate from the view above so the slot pickers do not re-render, and
+   * lose a half-open dropdown, every five seconds while agents are built.
+   */
+  const build = useQuery({
+    queryKey: ['platform-voice-build', orgId],
+    queryFn: async () =>
+      (await api.get<{ build: { status: string; error: string | null } }>(base)).build,
+    refetchInterval: (q) =>
+      q.state.data && ['queued', 'running'].includes(q.state.data.status) ? 5000 : false,
+  });
+  const building = ['queued', 'running'].includes(build.data?.status ?? '');
+
+  // When a build finishes, show the slots it filled.
+  const wasBuilding = useRef(false);
+  useEffect(() => {
+    if (wasBuilding.current && !building) {
+      void queryClient.invalidateQueries({ queryKey: ['platform-voice', orgId] });
+      // A centre with no page agent gets one from the build, shown above.
+      void queryClient.invalidateQueries({ queryKey: ['dograh', orgId] });
+      if (build.data?.status === 'ready') toast.success('Demo agents are ready');
+      else if (build.data?.status === 'failed' && build.data.error) toast.error(build.data.error);
+    }
+    wasBuilding.current = building;
+  }, [building, build.data, orgId, queryClient]);
+
+  const missing = (view.data?.dialers ?? []).filter((d) => !d.workflowId).map((d) => d.kind);
+
+  const buildAgents = useMutation({
+    mutationFn: () => api.post<{ queued: true }>(`${base}/build-agents`, { kinds: missing }),
+    onSuccess: () => {
+      toast.success('Building demo agents — this takes two or three minutes');
+      void queryClient.invalidateQueries({ queryKey: ['platform-voice-build', orgId] });
+    },
     onError: (e) => toast.error((e as Error).message),
   });
 
@@ -115,6 +155,30 @@ export function PlatformDialers({ orgId }: { orgId: string }) {
               </div>
             ))}
           </div>
+
+          {/*
+            For centres whose slots nothing ever filled: anything made before
+            agents were built automatically, or made without a website.
+          */}
+          {(missing.length > 0 || building) && (
+            <div className="mt-4 flex flex-wrap items-center gap-3 rounded-md border border-border bg-muted/40 p-3">
+              <Button onClick={() => buildAgents.mutate()} disabled={building || buildAgents.isPending}>
+                {building ? (
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                ) : (
+                  <Sparkles className="size-4" aria-hidden />
+                )}
+                {building
+                  ? 'Building agents…'
+                  : `Build ${missing.length === 3 ? 'all three' : missing.map((k) => DEMO_DIALER_LABELS[k].label.toLowerCase()).join(' and ')} agent${missing.length === 1 ? '' : 's'}`}
+              </Button>
+              <p className="max-w-prose text-[11px] leading-relaxed text-muted-foreground">
+                {building
+                  ? 'The voice provider is writing each agent from this centre\u2019s website or its own copy. Keep this open or come back in a few minutes.'
+                  : 'Creates agents for the empty slots from this centre\u2019s website — or, without one, from its landing page and knowledge — and switches on calendar booking. The landing page\u2019s agent becomes the inbound one.'}
+              </p>
+            </div>
+          )}
 
           {/*
             Booking rides on whichever agents are wired above, so it is a
