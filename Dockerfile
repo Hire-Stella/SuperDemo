@@ -27,7 +27,13 @@ COPY packages/contracts/package.json packages/contracts/
 COPY packages/db/package.json packages/db/
 # Only the API and the workspace packages it depends on. The web app's dependencies — including the private
 # @hire-stella/ui package — are never needed in this image, so the build needs no registry token.
-RUN pnpm install --frozen-lockfile --filter "@superdemo/api..."
+# --trust-lockfile: pnpm 11 re-verifies every lockfile entry against its
+# supply-chain policies before installing, the web app's private
+# @hire-stella/ui included — and this build has no GitHub Packages token, so
+# that check fails with a 401 even though the API never installs the package.
+# The lockfile is verified when dependencies change, on a developer machine;
+# a frozen install here can only reproduce exactly what was verified.
+RUN pnpm install --frozen-lockfile --trust-lockfile --filter "@superdemo/api..."
 
 # ── build ────────────────────────────────────────────────────────────────────
 FROM base AS build
@@ -38,9 +44,13 @@ COPY --from=deps /app/packages/contracts/node_modules ./packages/contracts/node_
 COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
 COPY . .
 # `db build` runs prisma generate, so the client is emitted before tsc needs it.
-RUN pnpm --filter @superdemo/contracts build \
-  && pnpm --filter @superdemo/db build \
-  && pnpm --filter @superdemo/api build
+# verify-deps-before-run=false: the source copied in above includes the web
+# app and templates, whose dependencies are deliberately not installed, so
+# pnpm 11 would otherwise decide node_modules is stale and run a full install
+# before each build — which needs the private UI package and fails with a 401.
+RUN pnpm --config.verify-deps-before-run=false --filter @superdemo/contracts build \
+  && pnpm --config.verify-deps-before-run=false --filter @superdemo/db build \
+  && pnpm --config.verify-deps-before-run=false --filter @superdemo/api build
 
 # ── runtime ──────────────────────────────────────────────────────────────────
 FROM base AS runtime
@@ -52,7 +62,8 @@ COPY pnpm-lock.yaml pnpm-workspace.yaml package.json .npmrc ./
 COPY apps/api/package.json apps/api/
 COPY packages/contracts/package.json packages/contracts/
 COPY packages/db/package.json packages/db/
-RUN pnpm install --frozen-lockfile --prod --filter @superdemo/api...
+# Same reason as the deps stage for --trust-lockfile.
+RUN pnpm install --frozen-lockfile --trust-lockfile --prod --filter @superdemo/api...
 
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/packages/contracts/dist ./packages/contracts/dist
