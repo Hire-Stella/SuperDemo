@@ -626,6 +626,7 @@ export class DograhService {
           dograhUpdatedAt: new Date(),
         },
       });
+      await this.registerForImport(orgId, client, [created.id, pair.chat?.workflowId ?? null]);
       this.log.log(
         `dograh: built workflow ${created.id} ("${created.name}") for org=${orgId}` +
           (uuid ? '' : ' — no uuid returned, so demo calls are unavailable'),
@@ -766,11 +767,64 @@ export class DograhService {
       where: { orgId },
       data: { dograhDialers: dialers as unknown as Prisma.InputJsonValue },
     });
+    await this.registerForImport(orgId, client, [
+      pub.workflowId,
+      pub.chatWorkflowId,
+      ...DEMO_DIALER_KINDS.map((k) => dialers[k].workflowId),
+    ]);
     this.log.log(
       `dograh: demo slots for org=${orgId} — inbound=${dialers.inbound.workflowId} ` +
         `outbound=${dialers.outbound.workflowId} info=${dialers.info.workflowId}`,
     );
     return failed.length ? { ok: false, detail: `not set up: ${failed.join('; ')}` } : { ok: true };
+  }
+
+  /**
+   * Make this centre's agents' calls show up in its Inbox.
+   *
+   * DograhSyncService imports finished runs for centres with a `dograhOrgId`,
+   * keeping only the workflows in `dograhWorkflowIds`. Nothing set either for
+   * agents built here, so their calls never arrived. Both are now set
+   * whenever this centre gets an agent:
+   *
+   * - the Dograh organisation is the one the key belongs to, and is only
+   *   filled when empty — an operator who mapped a centre to a different
+   *   Dograh org by hand keeps that mapping;
+   * - workflow ids are only ever added. That list must never be left empty
+   *   for a centre on the shared deployment key: empty means "every workflow
+   *   in the organisation", which is every other centre's calls too.
+   *
+   * Best-effort: a failure here costs the Inbox entries, not the agent.
+   */
+  private async registerForImport(orgId: string, client: DograhClient, ids: (number | null)[]): Promise<void> {
+    const add = ids.filter((id): id is number => typeof id === 'number');
+    if (add.length === 0) return;
+    try {
+      const org = await this.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { dograhOrgId: true, dograhWorkflowIds: true },
+      });
+      if (!org) return;
+      // Only asked when unknown, so a voice host that is slow to answer cannot
+      // cost a centre the calls of an agent it has just been given.
+      const me = org.dograhOrgId
+        ? null
+        : ((await client.whoAmI()) as { organization_id?: number });
+      const dograhOrgId =
+        org.dograhOrgId ?? (typeof me?.organization_id === 'number' ? me.organization_id : null);
+      await this.prisma.organization.update({
+        where: { id: orgId },
+        data: {
+          dograhOrgId,
+          dograhWorkflowIds: [...new Set([...org.dograhWorkflowIds, ...add])],
+        },
+      });
+    } catch (e) {
+      this.log.warn(
+        `dograh: calls of workflows ${add.join(', ')} will not reach org=${orgId}'s Inbox — ` +
+          `${e instanceof Error ? e.message : e}`,
+      );
+    }
   }
 
   /**
@@ -1044,6 +1098,7 @@ export class DograhService {
           workflowUuid: uuid,
           workflowName: list.find((w) => w.id === input.workflowId)?.name ?? '',
         };
+        await this.registerForImport(orgId, client, [input.workflowId]);
       }
     }
 
