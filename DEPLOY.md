@@ -170,7 +170,7 @@ expand environment variables in a committed `.npmrc`.
 |---|---|
 | **Your machine** | `pnpm config set //npm.pkg.github.com/:_authToken <token>` (once; stored in your user config) |
 | **Vercel** (web) | Add an environment variable `NPM_RC` with the value `//npm.pkg.github.com/:_authToken=<token>`. Vercel writes it to the build's user `.npmrc` |
-| **API Docker image** | Nothing — the image installs only `@superdemo/api...`, which does not depend on the UI package |
+| **API Docker image** | Nothing — the image installs only `@superdemo/api...`, which does not depend on the UI package, with `--trust-lockfile` (pnpm 11 otherwise looks up *every* lockfile entry, this package included, and fails with a 401) |
 | **GitHub Actions** | `pnpm config set //npm.pkg.github.com/:_authToken ${{ secrets.HIRESTELLA_PACKAGES_TOKEN }}` before `pnpm install` |
 
 Create the token at GitHub → Settings → Developer settings → Personal access tokens (classic) with only
