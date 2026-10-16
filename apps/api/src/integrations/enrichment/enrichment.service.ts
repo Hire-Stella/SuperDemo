@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import {
+  DEFAULT_STAGES,
   DEMO_DIALER_KINDS,
   DemoDialerKind,
   DOGRAH_AGENT_NAME,
@@ -9,6 +10,7 @@ import {
   type EnrichStatus,
   type EnrichmentView,
   type GeneratedCentre,
+  type ScrapedSite,
   type Industry,
 } from '@superdemo/contracts';
 import { Prisma } from '@superdemo/db';
@@ -80,6 +82,9 @@ function orgNameShort(name: string): string {
 /** The event the create-centre transaction emits. Drained by this service. */
 export const ENRICH_EVENT = 'centre.enrich';
 
+/** Builds the demo-call agents for a centre that already exists. */
+export const BUILD_AGENTS_EVENT = 'centre.build-agents';
+
 /**
  * Website → landing page + voice agent, in the background.
  *
@@ -126,6 +131,12 @@ export class EnrichmentService implements OnModuleInit {
       const kinds = DemoDialerKind.array().safeParse(payload.demoCallKinds);
       if (!orgId || !websiteUrl) return;
       await this.run(orgId, websiteUrl, overwrite, kinds.success ? kinds.data : [...DEMO_DIALER_KINDS]);
+    });
+    this.outbox.on(BUILD_AGENTS_EVENT, async (payload) => {
+      const orgId = String(payload.orgId ?? '');
+      const kinds = DemoDialerKind.array().safeParse(payload.demoCallKinds);
+      if (!orgId) return;
+      await this.buildAgents(orgId, kinds.success ? kinds.data : [...DEMO_DIALER_KINDS]);
     });
   }
 
@@ -451,6 +462,7 @@ export class EnrichmentService implements OnModuleInit {
     site: Awaited<ReturnType<ScraperService['scrape']>>,
     orgName: string,
     kinds: DemoDialerKind[],
+    opts: { reuseInbound?: boolean } = {},
   ): Promise<{ ok: true } | { ok: false; detail: string }> {
     /*
      * The agent is built from the scrape, not from the model's paraphrase.
@@ -488,7 +500,12 @@ export class EnrichmentService implements OnModuleInit {
       .filter(Boolean)
       .join('\n');
 
-    const inbound = await this.dograh.buildAgentFor(orgId, {
+    // An existing centre keeps the agent its landing page already talks to:
+    // rebuilding it would orphan the page's embed token and its history.
+    const existing = opts.reuseInbound ? (await this.dograh.view(orgId)).workflowId : null;
+    const inbound = existing
+      ? ({ ok: true } as const)
+      : await this.dograh.buildAgentFor(orgId, {
       /*
        * The label Dograh names the workflow after, so it has to read well in
        * the operator's agent list. A page's <title> is often just the brand
@@ -590,6 +607,123 @@ export class EnrichmentService implements OnModuleInit {
       workflowName: dp?.workflowName || null,
       hasEmbedToken: Boolean(dp?.embedToken && dograhOffersWidget(dp.callMode)),
     };
+  }
+
+  /**
+   * Queue the demo-call agents for a centre that already exists.
+   *
+   * Centres made before the three-agent change, or made without a website,
+   * have empty slots and nothing that would ever fill them. This is that
+   * something: queued like an enrichment because Dograh takes minutes to build
+   * an agent, and progress is reported on the same status fields.
+   */
+  async enqueueBuildAgents(orgId: string, kinds: DemoDialerKind[]): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      await tx.outboxEvent.create({
+        data: {
+          orgId,
+          aggregate: 'organization',
+          aggregateId: orgId,
+          type: BUILD_AGENTS_EVENT,
+          payload: { orgId, demoCallKinds: kinds },
+        },
+      });
+      await tx.setting.update({
+        where: { orgId },
+        data: { enrichStatus: 'queued', enrichError: null },
+      });
+    });
+    await this.outbox.notify();
+  }
+
+  /**
+   * Build whatever agents an existing centre is missing.
+   *
+   * From its website when it has one; otherwise from what the centre already
+   * says about itself — its landing-page copy and knowledge documents — so a
+   * centre created from a vertical template still gets agents that know its
+   * name and services. The landing page's agent, if any, becomes the inbound
+   * one rather than being replaced.
+   */
+  private async buildAgents(orgId: string, kinds: DemoDialerKind[]): Promise<void> {
+    await this.setStatus(orgId, 'running', { error: null });
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { name: true, slug: true, websiteUrl: true },
+    });
+    if (!org) return;
+
+    let site: ScrapedSite | null = null;
+    if (org.websiteUrl) {
+      site = await this.scraper.scrape(org.websiteUrl).catch((e: unknown) => {
+        this.log.warn(
+          `build-agents: ${org.slug} website unreadable, using its own copy — ` +
+            `${e instanceof Error ? e.message : e}`,
+        );
+        return null;
+      });
+    }
+    const fromWebsite = Boolean(site);
+    site ??= await this.tenants.runAs(orgId, null, () => this.siteFromCentre(orgId, org));
+
+    // Stages and greeting are the copywriter's; without a website there is
+    // nothing for it to read, so the generic stages stand in.
+    const generated = fromWebsite
+      ? await this.generator.generate(site, org.name).catch(() => null)
+      : null;
+    const g = generated ?? ({ agentGreeting: '', stages: DEFAULT_STAGES } as unknown as GeneratedCentre);
+
+    const result = await this.provisionAgent(orgId, g, site, org.name, kinds, {
+      reuseInbound: true,
+    }).catch((e: unknown) => ({
+      ok: false as const,
+      detail: e instanceof Error ? e.message : 'unknown error',
+    }));
+    if (result.ok) {
+      await this.setStatus(orgId, 'ready', { error: null });
+      this.log.log(`build-agents: ${org.slug} ready (${kinds.join(', ')})`);
+    } else {
+      await this.setStatus(orgId, 'failed', { error: `The demo agents were not all built: ${result.detail}` });
+    }
+  }
+
+  /** A centre's own copy and knowledge, shaped like a scrape. */
+  private async siteFromCentre(
+    orgId: string,
+    org: { name: string; slug: string },
+  ): Promise<ScrapedSite> {
+    const [siteRow, docs] = await Promise.all([
+      this.prisma.site.findFirst({ where: { orgId }, select: { content: true } }),
+      this.prisma.knowledgeDoc.findMany({ select: { title: true, content: true }, take: 20 }),
+    ]);
+    const strings: string[] = [];
+    const walk = (v: unknown): void => {
+      if (typeof v === 'string') {
+        if (v.trim() && !/^https?:\/\//.test(v)) strings.push(v.trim());
+      } else if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === 'object') Object.values(v).forEach(walk);
+    };
+    walk(siteRow?.content ?? {});
+    const text = [
+      ...strings,
+      ...docs.map((d) => `${d.title}\n${d.content}`),
+    ]
+      .join('\n')
+      .slice(0, 20_000);
+    return {
+      url: '',
+      finalUrl: `${org.slug} landing page`,
+      // These two only name the agent in the operator's list; page copy is
+      // whatever sentence came first, which reads badly as a name.
+      title: org.name,
+      description: 'front desk',
+      text,
+      headings: [],
+      imageUrl: null,
+      images: [],
+      phone: null,
+      alsoRead: [],
+    } as ScrapedSite;
   }
 
   /** Re-run for a centre, from the platform page or the website editor. */
