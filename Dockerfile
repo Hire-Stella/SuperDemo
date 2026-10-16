@@ -44,9 +44,13 @@ COPY --from=deps /app/packages/contracts/node_modules ./packages/contracts/node_
 COPY --from=deps /app/packages/db/node_modules ./packages/db/node_modules
 COPY . .
 # `db build` runs prisma generate, so the client is emitted before tsc needs it.
-RUN pnpm --filter @superdemo/contracts build \
-  && pnpm --filter @superdemo/db build \
-  && pnpm --filter @superdemo/api build
+# verify-deps-before-run=false: the source copied in above includes the web
+# app and templates, whose dependencies are deliberately not installed, so
+# pnpm 11 would otherwise decide node_modules is stale and run a full install
+# before each build — which needs the private UI package and fails with a 401.
+RUN pnpm --config.verify-deps-before-run=false --filter @superdemo/contracts build \
+  && pnpm --config.verify-deps-before-run=false --filter @superdemo/db build \
+  && pnpm --config.verify-deps-before-run=false --filter @superdemo/api build
 
 # ── runtime ──────────────────────────────────────────────────────────────────
 FROM base AS runtime
