@@ -849,7 +849,9 @@ export class DograhService {
               name: 'date',
               type: 'string',
               description:
-                'The day the caller wants, as YYYY-MM-DD. Leave empty for the next day with openings.',
+                "The day the caller wants — YYYY-MM-DD, or their own words such as 'tomorrow' or " +
+                "'next Tuesday'. Leave empty for the next day with openings. The response's `today` " +
+                'field is the current date.',
               required: false,
             },
           ],
@@ -888,12 +890,18 @@ export class DograhService {
       ]);
 
       const text = [
-        'You can book appointments in the calendar.',
-        '- When someone wants an appointment, ask which day suits them, then call the check',
-        '  availability tool and offer two or three of the times it returns.',
-        '- Never offer or confirm a time the tool did not return.',
-        '- Once they choose, collect their full name and phone number, read the time back,',
-        '  then call the book appointment tool and read out its confirmation.',
+        'You can book appointments in the calendar. You do not know today\'s date; the check',
+        'availability tool tells you (its `today` field).',
+        '- When someone wants an appointment, call the check availability tool with the day they',
+        "  asked for, in their own words if that is easiest (\"tomorrow\", \"next Tuesday\"), and offer",
+        '  two or three of the times it returns.',
+        '- Every time the caller mentions a different day, call check availability again for that',
+        '  day. Never say a day is full or unavailable unless the tool just told you so.',
+        '- If they ask for a time near one on offer, offer the closest times; never confirm a time',
+        '  the tool did not return.',
+        '- Once they have chosen a time, collect their full name and phone number (skip any they',
+        '  already gave), read the day and time back, then call the book appointment tool with the',
+        '  chosen slot exactly as the tool listed it, and read out its confirmation.',
         '- If booking fails, say so plainly and offer the alternatives it gives.',
       ].join('\n');
 
