@@ -208,9 +208,12 @@ export class ElevenLabsController {
   async startBrowserVoiceCall(
     @Body() body: { callerName?: string; fromNumber?: string; toNumber?: string },
   ) {
+    // Both refusals below are read by whoever pressed "Talk", so they name the
+    // vendor by role — the env var and the vendor go to the log instead.
     if (!this.env.ELEVENLABS_AGENT_ID) {
+      this.log.warn('browser call refused: ELEVENLABS_AGENT_ID is not configured (see README)');
       throw new ForbiddenException(
-        'ELEVENLABS_AGENT_ID is not configured — create an agent first (see README).',
+        'The AI voice agent is not set up on this deployment yet. Use “Start fallback call” for now.',
       );
     }
 
@@ -220,10 +223,11 @@ export class ElevenLabsController {
     // being broken rather than a billing limit.
     const quota = await this.service.getRemainingCharacters();
     if (quota && quota.left <= 0) {
+      this.log.warn(`browser call refused: ElevenLabs quota exhausted (${quota.used}/${quota.limit})`);
       throw new ForbiddenException(
-        `ElevenLabs character quota is exhausted (${quota.used}/${quota.limit}). ` +
-          `Voice calls cannot run until the plan is upgraded or the quota resets. ` +
-          `Use “Start fallback call” for a free browser-speech call in the meantime.`,
+        'The AI voice provider has reached its usage limit, so voice calls are paused until ' +
+          'the plan is topped up or the limit resets. Use “Start fallback call” for a free ' +
+          'browser-speech call in the meantime.',
       );
     }
 

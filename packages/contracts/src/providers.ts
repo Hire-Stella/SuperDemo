@@ -1,5 +1,6 @@
 import type { AvailableNumberDto, KnowledgeSearchResult } from './dto';
 import type { EscalationReason, ParticipantKind, Skill } from './enums';
+import { providerLabel } from './enums';
 
 /**
  * Provider seams. Every external system the platform touches sits behind one of
@@ -398,17 +399,32 @@ export interface TranscriptTurnInput {
  * `detail` exists for the second case, which is the more common one in a live
  * deployment and needs a different sentence: "not implemented" sends the reader
  * to NOT-IMPLEMENTED.md, while "no number attached to the workspace" is
- * something they can go and fix. DriverErrorFilter passes the message through to
- * the client verbatim, so it has to be written for whoever clicked the button.
+ * something they can go and fix.
+ *
+ * Two messages, for two readers. `message` is for the log and keeps the
+ * driver's real name and the method that was asked for. `publicMessage` is
+ * what DriverErrorFilter sends to whoever clicked the button: the driver named
+ * by its role ("the AI voice provider"), never by vendor, and no method names.
+ * `detail` is shown to them as written, so it must follow the same rule.
  */
+/** "Phone carrier" → "phone carrier", but "AI voice provider" stays as it is. */
+function midSentence(label: string): string {
+  return /^[A-Z][a-z]/.test(label) ? label[0]!.toLowerCase() + label.slice(1) : label;
+}
+
 export class NotImplementedByDriverError extends Error {
+  readonly publicMessage: string;
+
   constructor(driver: string, capability: string, detail?: string) {
     super(
       detail
-        ? `Cannot ${capability} — ${detail}`
+        ? `[${driver}] Cannot ${capability} — ${detail}`
         : `Driver "${driver}" does not implement ${capability}. ` +
             `See NOT-IMPLEMENTED.md for the production path.`,
     );
     this.name = 'NotImplementedByDriverError';
+    this.publicMessage = detail
+      ? `Cannot ${capability} — ${detail}`
+      : `This isn't available with the current ${midSentence(providerLabel(driver))} yet.`;
   }
 }
