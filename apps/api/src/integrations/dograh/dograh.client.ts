@@ -13,6 +13,17 @@ import { DOGRAH_API_PREFIX, type DograhWorkflowRow } from '@superdemo/contracts'
  * "connect" button is used by a client's admin, not by us, and "Dograh said 401"
  * is the difference between them fixing their key and them filing a bug.
  */
+/**
+ * Farewell routing. The end node is reached only by an edge condition the model
+ * judges, so the condition names the words callers actually use to leave;
+ * "finished" alone is too abstract and the call stayed open after "goodbye".
+ */
+export const FAREWELL_PHRASES = 'goodbye, bye, bye-bye, thanks that is all, that is everything, nothing else, have a good day';
+export const FAREWELL_CONDITION = (lead: string): string =>
+  `Choose this pathway when ${lead}, or says a farewell (${FAREWELL_PHRASES}). A farewell always wins over any other pathway.`;
+export const FAREWELL_RULE =
+  `When the caller says a farewell (${FAREWELL_PHRASES}), do not ask another question or start a new topic: take the End Call pathway at once.`;
+
 export class DograhClient {
   private readonly log = new Logger(DograhClient.name);
 
@@ -504,6 +515,9 @@ export class DograhClient {
       '  no special characters. Say numbers as words a person would say.',
       '- One question at a time. Never stack two.',
       '',
+      '## Ending the call',
+      `- ${FAREWELL_RULE}`,
+      '',
       '## What you must not do',
       '- Never invent a price, a date, an address, a qualification or an availability.',
       '  If the facts below do not cover it, say you will have a colleague confirm and',
@@ -599,7 +613,9 @@ export class DograhClient {
           'The conversation is finished. Confirm anything you promised, thank them by name if',
           'you have it, and close warmly in one sentence.',
         ].join('\n'),
-        allow_interrupt: true,
+        // The closing line must not be cut off by the caller's last word: an
+        // interrupted farewell leaves the call open with nothing left to say.
+        allow_interrupt: false,
         add_global_prompt: false,
         is_end: true,
         extraction_enabled: false,
@@ -624,7 +640,7 @@ export class DograhClient {
     stages.forEach((st, i) =>
       link(startId, stageIds[i]!, `Choose this pathway when ${st.routeWhen}.`, st.name),
     );
-    link(startId, endId, 'Choose this pathway when the caller says they have finished, or rings off.', 'Done');
+    link(startId, endId, FAREWELL_CONDITION('the caller says they have finished, or rings off'), 'Done');
 
     // stage -> peers, so a caller can change subject; and stage -> end
     stageIds.forEach((from, i) => {
@@ -632,7 +648,7 @@ export class DograhClient {
         if (i === j) return;
         link(from, to, `Choose this pathway when ${stages[j]!.routeWhen}.`, stages[j]!.name);
       });
-      link(from, endId, 'Choose this pathway when the caller has what they need, or wants to end the call.', 'Done');
+      link(from, endId, FAREWELL_CONDITION('the caller has what they need, or wants to end the call'), 'Done');
     });
 
     await this.call(`/workflow/${workflowId}`, {

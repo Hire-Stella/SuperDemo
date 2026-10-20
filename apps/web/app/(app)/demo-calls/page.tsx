@@ -116,18 +116,37 @@ export default function DemoCallsPage() {
  */
 function WebCallHost({ kind, src }: { kind: DemoDialerKind; src: string }) {
   useEffect(() => {
-    const tag = document.createElement('script');
-    tag.src = src;
-    tag.async = true;
-    tag.dataset.dograhContext = JSON.stringify({
-      surface: 'dashboard-demo-calls',
-      dialer: kind,
-      today: new Date().toISOString().slice(0, 10),
-    });
-    document.body.appendChild(tag);
+    /*
+     * Injection is deferred a tick and cancelled by cleanup. React StrictMode
+     * (on in next.config.mjs) mounts, cleans up and mounts again in dev; a
+     * script appended synchronously has already run by the time the cleanup
+     * removes its tag, so the bundle initialised twice. Cancelling the first
+     * pending injection means exactly one script is ever appended. The
+     * `querySelector` guard covers the same src arriving by any other route.
+     *
+     * This stops the page starting the widget twice. It does not touch the
+     * widget's own audio path, so it is not a fix for echo on its own.
+     */
+    let tag: HTMLScriptElement | null = null;
+    const timer = window.setTimeout(() => {
+      const already = Array.from(document.querySelectorAll('script[data-dograh-context]')).some(
+        (el) => (el as HTMLScriptElement).src === new URL(src, window.location.href).href,
+      );
+      if (already) return;
+      tag = document.createElement('script');
+      tag.src = src;
+      tag.async = true;
+      tag.dataset.dograhContext = JSON.stringify({
+        surface: 'dashboard-demo-calls',
+        dialer: kind,
+        today: new Date().toISOString().slice(0, 10),
+      });
+      document.body.appendChild(tag);
+    }, 0);
 
     return () => {
-      tag.remove();
+      window.clearTimeout(timer);
+      tag?.remove();
       /*
        * `querySelectorAll`, not `getElementById`: the bundle ends up with more
        * than one element carrying `dograh-widget-root`, so removing "the" one
