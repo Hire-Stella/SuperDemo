@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { DograhClient, FAREWELL_PHRASES } from './dograh.client';
+import { DograhClient, FAREWELL_PHRASES, FAREWELL_RULE } from './dograh.client';
 import {
   BOOKING_CONFIRM_RULE,
   INTERRUPTION_SECTION,
@@ -169,5 +169,104 @@ describe('interruption and booking safeguards', () => {
     expect(VOICE_STYLE_SECTION).toMatch(/several parts/);
     expect(VOICE_STYLE_SECTION).toMatch(/short summary first/);
     expect(VOICE_STYLE_SECTION).toMatch(/Brevity never overrides accuracy/);
+  });
+});
+
+describe('injectFacts farewell handling on a Dograh-generated graph', () => {
+  const opts = { businessName: 'Acme', agentName: 'Ava', facts: 'Open 9 to 5.' };
+  const generated = () => ({
+    nodes: [
+      { id: '0', type: 'globalNode', data: { prompt: 'You are Sam.' } },
+      { id: '1', type: 'startCall', data: { prompt: 'Greet.' } },
+      { id: '2', type: 'agentNode', data: { prompt: 'Help.' } },
+      { id: '3', type: 'endCall', data: { prompt: 'Bye.', allow_interrupt: false, is_end: true } },
+    ],
+    edges: [
+      { id: '1-2', source: '1', target: '2', data: { condition: 'The caller wants help.', label: 'Help' } },
+      { id: '2-3', source: '2', target: '3', data: { condition: 'The caller is done.', label: 'Done' } },
+      { id: '2-1', source: '2', target: '1', data: { condition: 'Start over.', label: 'Again' } },
+    ],
+  });
+  const client = () => new DograhClient('https://dograh.invalid', 'test-key');
+  const stub = () => {
+    const puts: any[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_u: string, init: { method: string; body?: string }) => {
+        if (init.method === 'PUT' && init.body) puts.push(JSON.parse(init.body).workflow_definition);
+        return new Response(JSON.stringify({ status: 'published', is_valid: true }), { status: 200 });
+      }),
+    );
+    return puts;
+  };
+
+  it('adds the ending rule to the global prompt, once, beside the other rules', async () => {
+    const puts = stub();
+    await client().injectFacts(1, generated(), opts);
+    const prompt = puts[0].nodes[0].data.prompt as string;
+    expect(prompt).toMatch(/## Ending the call[\s\S]*goodbye[\s\S]*End Call/);
+    expect(prompt).toContain(`- ${FAREWELL_RULE}`);
+    expect(prompt.match(/## Ending the call/g)).toHaveLength(1);
+    expect(prompt.indexOf('## How you speak')).toBeLessThan(prompt.indexOf('## Ending the call'));
+    expect(prompt.indexOf('## Ending the call')).toBeLessThan(prompt.indexOf('## VERIFIED FACTS'));
+  });
+
+  it('extends only the existing edge into End Call, keeping its own condition', async () => {
+    const puts = stub();
+    const before = generated();
+    await client().injectFacts(1, generated(), opts);
+    const edges = puts[0].edges as any[];
+    expect(edges.find((e) => e.id === '2-3').data.condition).toMatch(/^The caller is done\. Also choose this pathway when .*goodbye/);
+    expect(edges.find((e) => e.id === '2-3').data.condition).toContain(FAREWELL_PHRASES);
+    expect(edges.find((e) => e.id === '2-3').data.label).toBe('Done');
+    // unrelated edges are exactly as generated, and none were added or removed
+    expect(edges.find((e) => e.id === '1-2')).toEqual(before.edges[0]);
+    expect(edges.find((e) => e.id === '2-1')).toEqual(before.edges[2]);
+    expect(edges).toHaveLength(before.edges.length);
+  });
+
+  it('is idempotent: a second run changes nothing and writes nothing', async () => {
+    const puts = stub();
+    const def = generated();
+    await client().injectFacts(1, def, opts);
+    const snap = JSON.stringify(def);
+    const again = await client().injectFacts(1, def, opts);
+    expect(again.nodesTouched).toBe(0);
+    expect(puts).toHaveLength(1);
+    expect(JSON.stringify(def)).toBe(snap);
+    expect(JSON.stringify(def).split(FAREWELL_PHRASES).length - 1).toBe(
+      // one in the global prompt's rule, one in the edge condition
+      2,
+    );
+  });
+
+  it('adds no farewell text and invents no edges when the graph has no End Call node', async () => {
+    const puts = stub();
+    const def = generated();
+    def.nodes.pop();
+    def.edges.splice(1, 1);
+    await client().injectFacts(1, def, opts);
+    expect(puts[0].nodes[0].data.prompt).not.toContain('## Ending the call');
+    expect(puts[0].edges).toHaveLength(2);
+    expect(JSON.stringify(puts[0].edges)).not.toContain('farewell');
+  });
+
+  it('does not create an edge for a node that has none to End Call', async () => {
+    const puts = stub();
+    const def = generated();
+    def.edges = def.edges.filter((e) => e.id !== '2-3');
+    await client().injectFacts(1, def, opts);
+    expect(puts[0].edges.some((e: any) => e.target === '3')).toBe(false);
+  });
+
+  it('leaves End Call node data and the normal stage-graph path as they were', async () => {
+    const puts = stub();
+    await client().injectFacts(1, generated(), opts);
+    const end = puts[0].nodes.find((n: any) => n.type === 'endCall');
+    expect(end.data).toEqual({ prompt: 'Bye.', allow_interrupt: false, is_end: true });
+    const { nodes, edges } = await buildGraph();
+    const global = nodes.find((n) => n.type === 'globalNode')!.data.prompt as string;
+    expect(global.match(/## Ending the call/g)).toHaveLength(1);
+    expect(edges.filter((e) => e.data.condition.includes('Also choose this pathway'))).toHaveLength(0);
   });
 });

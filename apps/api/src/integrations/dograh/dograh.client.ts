@@ -24,6 +24,13 @@ export const FAREWELL_CONDITION = (lead: string): string =>
   `Choose this pathway when ${lead}, or says a farewell (${FAREWELL_PHRASES}). A farewell always wins over any other pathway.`;
 export const FAREWELL_RULE =
   `When the caller says a farewell (${FAREWELL_PHRASES}), do not ask another question or start a new topic: take the End Call pathway at once.`;
+/**
+ * For an edge to End Call that a Dograh-generated graph already carries: keep its
+ * own condition and add the farewell words to it. Used by injectFacts, which does
+ * not own those edges and so extends them rather than rewriting them.
+ */
+export const FAREWELL_ALSO = (condition: string): string =>
+  `${condition.trimEnd()} Also choose this pathway when the caller says a farewell (${FAREWELL_PHRASES}). A farewell always wins over any other pathway.`;
 
 export class DograhClient {
   private readonly log = new Logger(DograhClient.name);
@@ -402,11 +409,19 @@ export class DograhClient {
     opts: { businessName: string; agentName: string; facts: string },
   ): Promise<{ nodesTouched: number }> {
     const nodes = Array.isArray(definition.nodes) ? definition.nodes : [];
+    const endIds = new Set(
+      nodes
+        .filter((n): n is { id: unknown; type: unknown } => !!n && typeof n === 'object')
+        .filter((n) => n.type === 'endCall')
+        .map((n) => String(n.id)),
+    );
     const block = [
       '',
       '',
       VOICE_RULES_BLOCK,
       '',
+      // Only when there is an End Call node to route to; the rule names that pathway.
+      ...(endIds.size ? ['## Ending the call', `- ${FAREWELL_RULE}`, ''] : []),
       `## VERIFIED FACTS ABOUT ${opts.businessName}`,
       '',
       'These come from the business\'s own website. Answer from them.',
@@ -446,6 +461,20 @@ export class DograhClient {
         nodesTouched++;
       }
     }
+
+    // Edges into End Call that already carry a condition get the farewell words
+    // added once. Nodes with no such edge are left alone: creating one would mean
+    // guessing the generated graph's edge shape.
+    const edges = Array.isArray(definition.edges) ? definition.edges : [];
+    for (const edge of edges) {
+      if (!edge || typeof edge !== 'object') continue;
+      const e = edge as { target?: unknown; data?: Record<string, unknown> };
+      if (!endIds.has(String(e.target)) || typeof e.data?.condition !== 'string') continue;
+      if (e.data.condition.includes(FAREWELL_PHRASES)) continue;
+      e.data.condition = FAREWELL_ALSO(e.data.condition);
+      nodesTouched++;
+    }
+
     if (nodesTouched === 0) return { nodesTouched: 0 };
 
     await this.call(`/workflow/${workflowId}`, {
