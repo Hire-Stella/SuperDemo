@@ -9,6 +9,7 @@ import {
 } from './public-calendar.controller';
 import { CalcomService } from './calcom/calcom.service';
 import { CalcomCalendarProvider } from './calcom/calcom-calendar.provider';
+import { OfficeHoursController } from './office-hours.controller';
 
 @Module({
   controllers: [
@@ -16,6 +17,7 @@ import { CalcomCalendarProvider } from './calcom/calcom-calendar.provider';
     PublicSiteCalendarController,
     VoiceCalendarController,
     CalcomWebhookController,
+    OfficeHoursController,
   ],
   providers: [CalendarService, MockCalendarProvider, CalcomService, CalcomCalendarProvider],
   // Exported for voice-agent provisioning, which needs ensureToken() to put

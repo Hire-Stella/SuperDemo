@@ -24,6 +24,7 @@ import {
   composeE164,
   countryByCode,
   isPlausibleNumber,
+  spokenClock,
   zonedParts,
   zonedTimeToUtc,
 } from '@superdemo/contracts';
@@ -255,7 +256,7 @@ export class CalendarService {
 
       const slots = found.slots.map((s) => ({
         start: `${found.date} ${s.label}`,
-        label: s.label,
+        label: spokenClock(s.label),
       }));
       const offered = spread(found.slots, SPOKEN_SLOTS).map((s) => spokenTime(new Date(s.startsAt), timezone));
       const dayName = spokenDay(new Date(found.slots[0]!.startsAt), timezone);
@@ -566,15 +567,13 @@ function spokenDay(d: Date, timeZone: string): string {
 }
 
 /**
- * "9 am", "2:30 pm" — how a person says a time.
+ * "9 AM", "2:30 PM" — how a person says a time.
  *
  * Not "9:00": agents told to speak numbers as words read that as "nine zero
  * zero", and 24-hour times sound clipped to most callers.
  */
 function spokenTime(d: Date, timeZone: string): string {
-  const [h, m] = zonedParts(d, timeZone).time.split(':').map(Number) as [number, number];
-  const hour = h % 12 || 12;
-  return `${hour}${m ? `:${String(m).padStart(2, '0')}` : ''} ${h < 12 ? 'am' : 'pm'}`;
+  return spokenClock(zonedParts(d, timeZone).time);
 }
 
 /** "a, b and c". */

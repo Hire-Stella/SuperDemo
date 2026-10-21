@@ -42,6 +42,7 @@ import { dateTime } from '@/lib/format';
 import { useSession } from '@/components/providers';
 import { TenantLogo } from '@/components/tenant-logo';
 import { DograhConnection } from '@/components/dograh-connection';
+import { DograhImport } from '@/components/dograh-import';
 import { PlatformDialers } from '@/components/platform-dialers';
 import {
   Dialog,
@@ -955,6 +956,10 @@ export default function SuperadminPage() {
             <>
               <DograhConnection orgId={voiceFor} />
               <PlatformDialers orgId={voiceFor} />
+              {(() => {
+                const org = rows.find((o) => o.id === voiceFor);
+                return org && <DograhImport key={org.id} org={org} />;
+              })()}
             </>
           )}
         </DialogContent>

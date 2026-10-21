@@ -10,6 +10,7 @@ import {
   type BookingRow,
   type BookingSource,
   type BookingStatus,
+  spokenClock,
   weekdayOfIso,
   zonedParts,
   zonedTimeToUtc,
@@ -181,11 +182,11 @@ const FULL_DAY = [
 
 /*
  * These messages are read out by the voice agent as well as shown on a page,
- * so they are written to be spoken: "9:30 on Tuesday 13 October", not
+ * so they are written to be spoken: "9:30 AM on Tuesday 13 October", not
  * "09:30 on 2026-10-13".
  */
 function clock(hhmm: string): string {
-  return hhmm.replace(/^0/, '');
+  return spokenClock(hhmm);
 }
 
 function dayLabel(d: Date, timeZone: string): string {
