@@ -37,6 +37,7 @@ import { ENV } from '../../config/config.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { decryptSecret, encryptSecret, fingerprint } from '../../shared/secret-box';
 import { DograhClient } from './dograh.client';
+import { BOOKING_CONFIRM_RULE } from './dograh-prompts';
 import { CalendarService } from '../../calendar/calendar.service';
 
 /** Heading the booking how-to is appended under; also what makes it idempotent. */
@@ -960,6 +961,7 @@ export class DograhService {
         '  already gave), read the day and time back, then call the book appointment tool with the',
         '  chosen slot exactly as the tool listed it, and read out its confirmation.',
         '- If booking fails, say so plainly and offer the alternatives it gives.',
+        ...BOOKING_CONFIRM_RULE,
       ].join('\n');
 
       for (const id of workflows) {

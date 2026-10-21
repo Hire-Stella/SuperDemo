@@ -1,4 +1,5 @@
 import { Logger } from '@nestjs/common';
+import { VOICE_RULES_BLOCK } from './dograh-prompts';
 import { DOGRAH_API_PREFIX, type DograhWorkflowRow } from '@superdemo/contracts';
 
 /**
@@ -404,6 +405,8 @@ export class DograhClient {
     const block = [
       '',
       '',
+      VOICE_RULES_BLOCK,
+      '',
       `## VERIFIED FACTS ABOUT ${opts.businessName}`,
       '',
       'These come from the business\'s own website. Answer from them.',
@@ -429,6 +432,14 @@ export class DograhClient {
 
       if (n.type === 'globalNode' && !prompt.includes('## VERIFIED FACTS')) {
         prompt += block;
+      }
+
+      // A generated node may ship uninterruptible. Only the nodes a caller talks
+      // over are switched on: End Call stays as it is (see buildStageGraph) and
+      // the global node never speaks.
+      if ((n.type === 'startCall' || n.type === 'agentNode') && n.data.allow_interrupt !== true) {
+        n.data.allow_interrupt = true;
+        nodesTouched++;
       }
       if (prompt !== n.data.prompt) {
         n.data.prompt = prompt;
@@ -509,11 +520,7 @@ export class DograhClient {
       '',
       opts.overallGoal,
       '',
-      '## How you speak',
-      '- Keep replies short — two or three sentences, and stop.',
-      '- Your words are read aloud by a speech engine, so no markdown, no lists,',
-      '  no special characters. Say numbers as words a person would say.',
-      '- One question at a time. Never stack two.',
+      VOICE_RULES_BLOCK,
       '',
       '## Ending the call',
       `- ${FAREWELL_RULE}`,
