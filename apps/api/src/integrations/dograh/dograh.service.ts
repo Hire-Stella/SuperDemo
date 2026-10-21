@@ -626,6 +626,7 @@ export class DograhService {
           dograhUpdatedAt: new Date(),
         },
       });
+      await this.registerForImport(orgId, client, [created.id, pair.chat?.workflowId ?? null]);
       this.log.log(
         `dograh: built workflow ${created.id} ("${created.name}") for org=${orgId}` +
           (uuid ? '' : ' — no uuid returned, so demo calls are unavailable'),
@@ -737,13 +738,16 @@ export class DograhService {
     const dialers = this.parseDialers(row?.dograhDialers ?? null);
     const failed: string[] = [];
 
+    // Pages connected before the uuid was stored have only the id; look it up.
+    const pageUuid =
+      pub.workflowUuid || (pub.workflowId ? await client.workflowUuid(pub.workflowId).catch(() => '') : '');
     if (!kinds.includes('inbound')) {
       // Not chosen: the landing page still has its agent, the slot stays as is.
-    } else if (pub.workflowId && pub.workflowUuid) {
+    } else if (pub.workflowId && pageUuid) {
       dialers.inbound = {
         enabled: true,
         workflowId: pub.workflowId,
-        workflowUuid: pub.workflowUuid,
+        workflowUuid: pageUuid,
         workflowName: pub.workflowName,
         // Shared with the landing page — see webCallScript on why a token is
         // never minted twice for one workflow.
@@ -766,11 +770,64 @@ export class DograhService {
       where: { orgId },
       data: { dograhDialers: dialers as unknown as Prisma.InputJsonValue },
     });
+    await this.registerForImport(orgId, client, [
+      pub.workflowId,
+      pub.chatWorkflowId,
+      ...DEMO_DIALER_KINDS.map((k) => dialers[k].workflowId),
+    ]);
     this.log.log(
       `dograh: demo slots for org=${orgId} — inbound=${dialers.inbound.workflowId} ` +
         `outbound=${dialers.outbound.workflowId} info=${dialers.info.workflowId}`,
     );
     return failed.length ? { ok: false, detail: `not set up: ${failed.join('; ')}` } : { ok: true };
+  }
+
+  /**
+   * Make this centre's agents' calls show up in its Inbox.
+   *
+   * DograhSyncService imports finished runs for centres with a `dograhOrgId`,
+   * keeping only the workflows in `dograhWorkflowIds`. Nothing set either for
+   * agents built here, so their calls never arrived. Both are now set
+   * whenever this centre gets an agent:
+   *
+   * - the Dograh organisation is the one the key belongs to, and is only
+   *   filled when empty — an operator who mapped a centre to a different
+   *   Dograh org by hand keeps that mapping;
+   * - workflow ids are only ever added. That list must never be left empty
+   *   for a centre on the shared deployment key: empty means "every workflow
+   *   in the organisation", which is every other centre's calls too.
+   *
+   * Best-effort: a failure here costs the Inbox entries, not the agent.
+   */
+  private async registerForImport(orgId: string, client: DograhClient, ids: (number | null)[]): Promise<void> {
+    const add = ids.filter((id): id is number => typeof id === 'number');
+    if (add.length === 0) return;
+    try {
+      const org = await this.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: { dograhOrgId: true, dograhWorkflowIds: true },
+      });
+      if (!org) return;
+      // Only asked when unknown, so a voice host that is slow to answer cannot
+      // cost a centre the calls of an agent it has just been given.
+      const me = org.dograhOrgId
+        ? null
+        : ((await client.whoAmI()) as { organization_id?: number });
+      const dograhOrgId =
+        org.dograhOrgId ?? (typeof me?.organization_id === 'number' ? me.organization_id : null);
+      await this.prisma.organization.update({
+        where: { id: orgId },
+        data: {
+          dograhOrgId,
+          dograhWorkflowIds: [...new Set([...org.dograhWorkflowIds, ...add])],
+        },
+      });
+    } catch (e) {
+      this.log.warn(
+        `dograh: calls of workflows ${add.join(', ')} will not reach org=${orgId}'s Inbox — ` +
+          `${e instanceof Error ? e.message : e}`,
+      );
+    }
   }
 
   /**
@@ -849,7 +906,9 @@ export class DograhService {
               name: 'date',
               type: 'string',
               description:
-                'The day the caller wants, as YYYY-MM-DD. Leave empty for the next day with openings.',
+                "The day the caller wants — YYYY-MM-DD, or their own words such as 'tomorrow' or " +
+                "'next Tuesday'. Leave empty for the next day with openings. The response's `today` " +
+                'field is the current date.',
               required: false,
             },
           ],
@@ -888,12 +947,18 @@ export class DograhService {
       ]);
 
       const text = [
-        'You can book appointments in the calendar.',
-        '- When someone wants an appointment, ask which day suits them, then call the check',
-        '  availability tool and offer two or three of the times it returns.',
-        '- Never offer or confirm a time the tool did not return.',
-        '- Once they choose, collect their full name and phone number, read the time back,',
-        '  then call the book appointment tool and read out its confirmation.',
+        'You can book appointments in the calendar. You do not know today\'s date; the check',
+        'availability tool tells you (its `today` field).',
+        '- When someone wants an appointment, call the check availability tool with the day they',
+        "  asked for, in their own words if that is easiest (\"tomorrow\", \"next Tuesday\"), and offer",
+        '  two or three of the times it returns.',
+        '- Every time the caller mentions a different day, call check availability again for that',
+        '  day. Never say a day is full or unavailable unless the tool just told you so.',
+        '- If they ask for a time near one on offer, offer the closest times; never confirm a time',
+        '  the tool did not return.',
+        '- Once they have chosen a time, collect their full name and phone number (skip any they',
+        '  already gave), read the day and time back, then call the book appointment tool with the',
+        '  chosen slot exactly as the tool listed it, and read out its confirmation.',
         '- If booking fails, say so plainly and offer the alternatives it gives.',
       ].join('\n');
 
@@ -1036,6 +1101,7 @@ export class DograhService {
           workflowUuid: uuid,
           workflowName: list.find((w) => w.id === input.workflowId)?.name ?? '',
         };
+        await this.registerForImport(orgId, client, [input.workflowId]);
       }
     }
 

@@ -4,6 +4,7 @@ import {
   type DemoCallsView,
   type DograhConnectionView,
   type DograhWorkflowRow,
+  BuildDemoAgentsInput,
   SaveDemoDialerInput,
   SaveDograhConnectionInput,
   type TestDograhConnectionOutput,
@@ -11,6 +12,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenancy/tenant-context.service';
 import { DograhService } from '../integrations/dograh/dograh.service';
+import { EnrichmentService } from '../integrations/enrichment/enrichment.service';
 import { CurrentUser, Platform, Roles } from '../auth/guards';
 import { ZodBody } from '../shared/zod.pipe';
 import type { SessionUser } from '@superdemo/contracts';
@@ -55,6 +57,7 @@ export class PlatformVoiceController {
     private readonly prisma: PrismaService,
     private readonly tenants: TenantContext,
     private readonly dograh: DograhService,
+    private readonly enrichment: EnrichmentService,
   ) {}
 
   /** Fails loudly rather than writing another centre's row on a typo'd id. */
@@ -69,12 +72,20 @@ export class PlatformVoiceController {
   async view(
     @Param('id') id: string,
     @CurrentUser() actor: SessionUser,
-  ): Promise<{ connection: DograhConnectionView; demoCalls: DemoCallsView }> {
+  ): Promise<{
+    connection: DograhConnectionView;
+    demoCalls: DemoCallsView;
+    build: { status: string; error: string | null };
+  }> {
     await this.assertOrg(id);
-    return this.tenants.runAs(id, actor.id, async () => ({
-      connection: await this.dograh.view(id),
-      demoCalls: await this.dograh.dialersView(id),
-    }));
+    return this.tenants.runAs(id, actor.id, async () => {
+      const [connection, demoCalls, enrich] = await Promise.all([
+        this.dograh.view(id),
+        this.dograh.dialersView(id),
+        this.enrichment.view(id),
+      ]);
+      return { connection, demoCalls, build: { status: enrich.status, error: enrich.error } };
+    });
   }
 
   /** Every workflow on the host — which is exactly why this is operator-only. */
@@ -116,6 +127,23 @@ export class PlatformVoiceController {
   ): Promise<ConnectDograhSiteOutput> {
     await this.assertOrg(id);
     return this.tenants.runAs(id, actor.id, () => this.dograh.connectSite(id));
+  }
+
+  /**
+   * Build the demo-call agents this centre is missing, in the background.
+   *
+   * Returns at once; the panel polls `GET` (which carries `build`) until the
+   * chosen slots fill or the build reports a failure.
+   */
+  @Post('build-agents')
+  @HttpCode(202)
+  async buildAgents(
+    @Param('id') id: string,
+    @ZodBody(BuildDemoAgentsInput) body: BuildDemoAgentsInput,
+  ): Promise<{ queued: true }> {
+    await this.assertOrg(id);
+    await this.enrichment.enqueueBuildAgents(id, body.kinds);
+    return { queued: true };
   }
 
   /** Give this centre's agents the calendar's check-availability and book tools. */

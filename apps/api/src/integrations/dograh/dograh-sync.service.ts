@@ -1,6 +1,14 @@
 import { Inject, Injectable, Logger, type OnApplicationBootstrap } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
-import type { AiLiveCall, ApiEnv, StorageProvider } from '@superdemo/contracts';
+import {
+  DEMO_DIALER_KINDS,
+  DograhDialers,
+  demoCallTag,
+  type AiLiveCall,
+  type ApiEnv,
+  type DemoDialerKind,
+  type StorageProvider,
+} from '@superdemo/contracts';
 import { Prisma, type Direction, type Disposition, type HangupCause } from '@superdemo/db';
 import { ENV } from '../../config/config.module';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -208,13 +216,26 @@ export class DograhSyncService implements OnApplicationBootstrap {
     });
     if (!aiAgent) throw new Error('centre has no AI agent to attribute Dograh calls to');
 
+    // Which demo slot each workflow fills, so an imported call can say whether
+    // it was the inbound, outbound or info demo — direction alone cannot.
+    const slotOf = new Map<number, DemoDialerKind>();
+    const dialers = DograhDialers.safeParse(
+      (await this.prisma.setting.findFirst({ select: { dograhDialers: true } }))?.dograhDialers ?? {},
+    );
+    if (dialers.success) {
+      for (const kind of DEMO_DIALER_KINDS) {
+        const id = dialers.data[kind].workflowId;
+        if (id && !slotOf.has(id)) slotOf.set(id, kind);
+      }
+    }
+
     let imported = 0;
     for (const scope of scopes) {
       for (let page = 1; ; page++) {
         const { runs, totalPages } = await this.fetchPage(scope, page, from);
         for (const run of runs) {
           if (!run.is_completed || run.mode === 'textchat') continue;
-          if (await this.importRun(orgId, aiAgent.id, run)) imported++;
+          if (await this.importRun(orgId, aiAgent.id, run, slotOf.get(run.workflow_id) ?? null)) imported++;
         }
         if (page >= totalPages) break;
       }
@@ -257,13 +278,31 @@ export class DograhSyncService implements OnApplicationBootstrap {
   }
 
   /** True when the run was new; false when it had already been imported. */
-  private async importRun(orgId: string, aiAgentId: string, run: DograhRun): Promise<boolean> {
+  private async importRun(
+    orgId: string,
+    aiAgentId: string,
+    run: DograhRun,
+    slot: DemoDialerKind | null,
+  ): Promise<boolean> {
     const providerCallId = `dograh-run-${run.id}`;
     const exists = await this.prisma.call.findUnique({
       where: { providerCallId },
       select: { id: true, conversationId: true, ringingAt: true, totalMs: true },
     });
     if (exists) {
+      // Calls imported before slots were tagged learn which demo they were.
+      if (slot) {
+        const conv = await this.prisma.conversation.findUnique({
+          where: { id: exists.conversationId },
+          select: { tags: true },
+        });
+        if (conv && !conv.tags.includes(demoCallTag(slot))) {
+          await this.prisma.conversation.update({
+            where: { id: exists.conversationId },
+            data: { tags: [...conv.tags, demoCallTag(slot)] },
+          });
+        }
+      }
       // Backfill for calls imported before the gathered fields were stored.
       await this.prisma.aiSession.updateMany({
         where: { conversationId: exists.conversationId, gathered: { equals: Prisma.DbNull } },
@@ -329,7 +368,7 @@ export class DograhSyncService implements OnApplicationBootstrap {
         aiContained: true,
         disposition: dispositionFor(outcome, str(gathered.inquiry_type)),
         notes: notesFrom(gathered) || null,
-        tags: ['dograh', ...(outcome ? [outcome] : [])],
+        tags: ['dograh', ...(slot ? [demoCallTag(slot)] : []), ...(outcome ? [outcome] : [])],
         // Nested creates are invisible to the tenant extension, so orgId is
         // passed explicitly — packages/db/src/tenant.ts.
         call: {

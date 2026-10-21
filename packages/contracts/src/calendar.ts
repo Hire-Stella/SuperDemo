@@ -228,6 +228,14 @@ export const VoiceAvailabilityOutput = z.object({
   slots: z.array(z.object({ start: z.string(), label: z.string() })),
   /** One sentence the agent can read out as-is. */
   speech: z.string(),
+  /**
+   * Today in the centre's timezone, e.g. "Friday 16 October 2026".
+   *
+   * An agent on a phone line has no clock, so without this it cannot tell
+   * that the slots it was handed are today's rather than the "tomorrow" the
+   * caller asked for.
+   */
+  today: z.string().optional(),
 });
 export type VoiceAvailabilityOutput = z.infer<typeof VoiceAvailabilityOutput>;
 

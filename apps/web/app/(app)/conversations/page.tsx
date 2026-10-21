@@ -15,6 +15,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import {
+  DEMO_DIALER_LABELS,
   Disposition,
   dispositionLabel,
   evalBand,
@@ -278,6 +279,13 @@ export default function ConversationsPage() {
                       )}
                       {c.direction === 'OUTBOUND' ? 'Out' : 'In'}
                     </span>
+                    {/* Which demo agent took it — outbound and info both ring
+                        out, so direction alone cannot say which demo this was. */}
+                    {c.demoCall && (
+                      <Badge className="ml-1.5">
+                        Demo · {DEMO_DIALER_LABELS[c.demoCall].label}
+                      </Badge>
+                    )}
                   </Td>
                   <Td>
                     {/* The outcome itself leads: what came of the call is the

@@ -94,7 +94,12 @@ export class ElevenLabsTelephony implements TelephonyProvider {
 
   async dial(params: { fromNumber: string; toNumber: string }): Promise<TelephonyCallHandle> {
     if (!this.env.ELEVENLABS_AGENT_ID) {
-      throw new NotImplementedByDriverError('elevenlabs', 'dial() without ELEVENLABS_AGENT_ID');
+      // ELEVENLABS_AGENT_ID is unset; the log line carries the driver name.
+      throw new NotImplementedByDriverError(
+        'elevenlabs',
+        'place the call',
+        'the AI voice agent is not set up on this deployment yet',
+      );
     }
 
     const numbers = await this.service.listPhoneNumbers();
@@ -108,8 +113,8 @@ export class ElevenLabsTelephony implements TelephonyProvider {
       throw new NotImplementedByDriverError(
         'elevenlabs',
         'place the call',
-        'no phone number is attached to the ElevenLabs workspace. Import a Twilio number, ' +
-          'or connect a SIP trunk, then assign it to the agent',
+        'no phone number is connected to the AI voice provider yet. Connect a phone number ' +
+          'or SIP trunk to it and assign it to the agent',
       );
     }
 
@@ -240,7 +245,8 @@ export class ElevenLabsTelephony implements TelephonyProvider {
     await this.calls().escalate({
       callId,
       reason: 'CALLER_REQUESTED',
-      detail: 'Caller asked for a human; ElevenLabs invoked escalate_to_advisor.',
+      // Shown on the call's timeline, so in the product's words, not the vendor's.
+      detail: 'Caller asked for a human; the AI voice agent handed the call over.',
       skill: 'GENERAL',
     });
 
