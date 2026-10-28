@@ -255,17 +255,23 @@ export ELEVENLABS_BRIDGE_SECRET="…"
 export ELEVENLABS_WEBHOOK_SECRET="…"
 ```
 
-And the Dograh key every centre's demo-call agents are built with (create one at
-https://voice.hirestella.ai → Settings → API keys). `DOGRAH_BASE_URL` defaults to
-that host:
+Optionally, a deployment-wide Dograh key for demo-call agents (create one at
+https://voice.hirestella.ai → Settings → API keys; `DOGRAH_BASE_URL` defaults to
+that host). Not required: the platform administration page has a **Platform
+voice (Dograh)** card that does the same job without touching Azure, and a
+centre uses that first.
 
 ```bash
-export DOGRAH_API_KEY="…"
+export DOGRAH_API_KEY="…"   # optional
 ```
 
-Both go through the template, not the portal: `containerapp update --yaml`
-replaces the whole environment, so a variable added by hand is gone after the
-next deploy.
+If you do set it, set it here rather than in the portal: `containerapp update
+--yaml` replaces the whole environment, so a variable added by hand is gone
+after the next deploy.
+
+The API creates its `PlatformSetting` table at startup if it is missing, and
+queues agent builds for centres with empty demo slots once a Dograh is
+available, so neither needs a manual step after a deploy.
 
 ## 5. Build the image in Azure
 

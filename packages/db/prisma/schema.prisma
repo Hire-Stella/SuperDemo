@@ -1093,6 +1093,27 @@ model AuditLog {
   @@index([orgId, at(sort: Desc)])
 }
 
+/// Platform-wide settings: one row, id "platform", owned by no tenant.
+///
+/// Holds the Dograh every centre falls back to when it has saved none of its
+/// own — the same role DOGRAH_BASE_URL / DOGRAH_API_KEY play in the deployment's
+/// environment, but editable from the platform page instead of the host.
+/// Resolution is centre row, then this row, then the environment.
+///
+/// Deliberately not in TENANT_MODELS: it belongs to the platform, and the
+/// drainer reads it with no tenant in context.
+model PlatformSetting {
+  id                String    @id @default("platform")
+  dograhBaseUrl     String?
+  /// encryptSecret() with CRM_SECRET_KEY, like Setting.dograhSecretsEnc.
+  dograhApiKeyEnc   String?
+  /// The key's last four characters, so the page can show which key is stored
+  /// without ever decrypting it for display.
+  dograhApiKeyLast4 String?
+  updatedById       String?
+  updatedAt         DateTime  @updatedAt
+}
+
 /// One row per organisation. Was a literal singleton before tenancy; the shape
 /// is otherwise unchanged, so an admin's settings page still edits exactly the
 /// knobs it always did — just their own centre's.

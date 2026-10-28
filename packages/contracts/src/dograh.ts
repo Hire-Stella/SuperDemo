@@ -154,6 +154,13 @@ export const DograhConnectionView = z.object({
   hasApiKey: z.boolean(),
   /** True when the key comes from DOGRAH_API_KEY rather than this centre's row. */
   inheritedFromDeployment: z.boolean(),
+  /**
+   * Where this centre's Dograh actually comes from, in resolution order:
+   * its own saved row, the platform setting, the deployment's environment,
+   * or nowhere. `inheritedFromDeployment` predates the platform setting and is
+   * true for both inherited sources.
+   */
+  source: z.enum(['centre', 'platform', 'deployment', 'none']).default('none'),
   workflowId: z.number().int().nullable(),
   workflowName: z.string().nullable(),
   hasEmbedToken: z.boolean(),
@@ -336,3 +343,44 @@ export function dograhOffersWidget(mode: DograhCallMode): boolean {
 export function dograhOffersCallback(mode: DograhCallMode): boolean {
   return mode === 'callback' || mode === 'both';
 }
+
+/* ------------------------- platform-wide Dograh -------------------------- */
+
+/**
+ * The Dograh every centre without its own falls back to, as the platform page
+ * shows it. The key itself is never returned — only whether one is stored and
+ * its last four characters.
+ */
+export const PlatformDograhView = z.object({
+  baseUrl: z.string().nullable(),
+  hasApiKey: z.boolean(),
+  apiKeyLast4: z.string().nullable(),
+  /** What centres without their own Dograh are using right now. */
+  effectiveSource: z.enum(['platform', 'deployment', 'none']),
+  /** Whether the deployment's environment also has a host and key set. */
+  deploymentFallback: z.object({ baseUrl: z.boolean(), hasApiKey: z.boolean() }),
+  /** Centres with no Dograh of their own, which therefore use this one. */
+  centresUsing: z.number().int(),
+  updatedAt: z.coerce.date().nullable(),
+});
+export type PlatformDograhView = z.infer<typeof PlatformDograhView>;
+
+export const SavePlatformDograhInput = z.object({
+  baseUrl: z.string().trim().url('That does not look like a URL — e.g. https://voice.hirestella.ai'),
+  /** Omitted to keep the stored key while changing the host. */
+  apiKey: z.string().trim().min(8, 'That key looks too short').max(500).optional(),
+});
+export type SavePlatformDograhInput = z.infer<typeof SavePlatformDograhInput>;
+
+/** Result of a save: the new view plus how many centres were queued for agents. */
+export const SavePlatformDograhOutput = z.object({
+  view: PlatformDograhView,
+  queuedCentres: z.number().int(),
+});
+export type SavePlatformDograhOutput = z.infer<typeof SavePlatformDograhOutput>;
+
+export const TestPlatformDograhOutput = z.object({
+  ok: z.boolean(),
+  detail: z.string(),
+});
+export type TestPlatformDograhOutput = z.infer<typeof TestPlatformDograhOutput>;

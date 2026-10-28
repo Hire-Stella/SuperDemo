@@ -44,6 +44,7 @@ import { TenantLogo } from '@/components/tenant-logo';
 import { DograhConnection } from '@/components/dograh-connection';
 import { DograhImport } from '@/components/dograh-import';
 import { PlatformDialers } from '@/components/platform-dialers';
+import { PlatformDograhSettings } from '@/components/platform-dograh-settings';
 import {
   Dialog,
   DialogContent,
@@ -277,6 +278,13 @@ export default function SuperadminPage() {
           value={String(rows.reduce((n, o) => n + o.counts.users, 0))}
         />
       </div>
+
+      {/*
+        Above the form and the table, because it is what a new centre's demo
+        calls are built on — set this first and every centre created after it
+        arrives with working agents.
+      */}
+      <PlatformDograhSettings />
 
       {creating && (
         <Card
