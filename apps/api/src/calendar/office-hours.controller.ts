@@ -1,7 +1,15 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, HttpCode, Inject, Post, Query } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
+import type { ApiEnv } from '@superdemo/contracts';
 import { Public } from '../auth/guards';
-import { checkOfficeHours, officeHoursFrom, type OfficeHoursCheck } from './office-hours';
+import { ENV } from '../config/config.module';
+import {
+  checkOfficeHours,
+  officeHoursFrom,
+  officeHoursNow,
+  type OfficeHoursCheck,
+  type OfficeHoursNow,
+} from './office-hours';
 
 /**
  * A voice agent's "is the office open then?" check, as a plain HTTP tool.
@@ -17,6 +25,8 @@ import { checkOfficeHours, officeHoursFrom, type OfficeHoursCheck } from './offi
 @Public()
 @Controller('public/office-hours')
 export class OfficeHoursController {
+  constructor(@Inject(ENV) private readonly env: ApiEnv) {}
+
   @Throttle({ default: { limit: 120, ttl: 60_000 } })
   @Get('check')
   check(
@@ -27,11 +37,37 @@ export class OfficeHoursController {
     @Query('open') open?: string,
     @Query('close') close?: string,
     @Query('breaks') breaks?: string,
+    @Query('closed') closed?: string,
+    @Query('max_days') max_days?: string,
   ): OfficeHoursCheck {
     return checkOfficeHours(
       String(day).slice(0, 200),
       String(time).slice(0, 100),
-      officeHoursFrom({ tz, days, open, close, breaks }),
+      officeHoursFrom({ tz, days, open, close, breaks, closed, max_days }),
+      new Date(),
+      this.env.JWT_ACCESS_SECRET,
     );
+  }
+
+  /**
+   * "What is the date and time right now?", for an agent that must never
+   * guess it. As a GET it is a plain HTTP tool; as a POST it is the shape of a
+   * Dograh pre-call data fetch, which runs once when the call connects and
+   * merges `initial_context` into the call, so the prompts can say
+   * {{today_spoken}} without the model ever calling a tool.
+   *
+   *   GET|POST /api/public/office-hours/now?tz=Asia/Dubai
+   */
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Get('now')
+  now(@Query('tz') tz?: string): OfficeHoursNow {
+    return officeHoursNow(officeHoursFrom({ tz }).timeZone);
+  }
+
+  @Throttle({ default: { limit: 120, ttl: 60_000 } })
+  @Post('now')
+  @HttpCode(200)
+  nowForPreCallFetch(@Query('tz') tz?: string): OfficeHoursNow {
+    return this.now(tz);
   }
 }
