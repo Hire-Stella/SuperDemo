@@ -1,5 +1,7 @@
 import {
+  BadGatewayException,
   BadRequestException,
+  ConflictException,
   Controller,
   Delete,
   Get,
@@ -11,17 +13,24 @@ import {
   Query,
 } from '@nestjs/common';
 import {
+  AddCampaignPeopleInput,
+  type AddCampaignPeopleResult,
   AddCampaignTargetsInput,
   type CallableContact,
   type CampaignSummary,
   type CampaignTargetRow,
   CreateCampaignInput,
+  DograhDialers,
   UpdateCampaignInput,
   type TargetStatus,
+  countryByCode,
+  readPhoneNumber,
 } from '@superdemo/contracts';
+import { Throttle } from '@nestjs/throttler';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenancy/tenant-context.service';
-import { DialerService } from './dialer.service';
+import { DograhService } from '../integrations/dograh/dograh.service';
+import { AGENT_DIAL_GAP_MS, DialerService, voiceAgentContext } from './dialer.service';
 import { Roles } from '../auth/guards';
 import { ZodBody } from '../shared/zod.pipe';
 
@@ -38,6 +47,7 @@ export class CampaignsController {
     private readonly prisma: PrismaService,
     private readonly tenants: TenantContext,
     private readonly dialer: DialerService,
+    private readonly dograh: DograhService,
   ) {}
 
   @Roles('ADMIN', 'SUPERVISOR')
@@ -82,6 +92,7 @@ export class CampaignsController {
         daysOfWeek: c.daysOfWeek,
         maxAttempts: c.maxAttempts,
         retryAfterMinutes: c.retryAfterMinutes,
+        voiceAgent: c.voiceAgent,
         startedAt: c.startedAt,
         completedAt: c.completedAt,
         createdAt: c.createdAt,
@@ -259,6 +270,7 @@ export class CampaignsController {
         daysOfWeek: body.daysOfWeek,
         maxAttempts: body.maxAttempts,
         retryAfterMinutes: body.retryAfterMinutes,
+        voiceAgent: body.voiceAgent,
       },
       select: { id: true, name: true, status: true },
     });
@@ -283,6 +295,15 @@ export class CampaignsController {
       body.windowEndHour <= body.windowStartHour
     ) {
       throw new BadRequestException('The calling window must end after it starts');
+    }
+
+    if (body.status === 'RUNNING' && (body.voiceAgent ?? existing.voiceAgent)) {
+      // Said here, where someone pressed Start; the dialer would only pause it.
+      const setting = await this.prisma.setting.findFirst({ select: { dograhDialers: true } });
+      const dialers = DograhDialers.safeParse(setting?.dograhDialers ?? {});
+      if (!dialers.success || !dialers.data.outbound.enabled || !dialers.data.outbound.workflowUuid) {
+        throw new BadRequestException('This centre has no outbound voice agent to call with yet');
+      }
     }
 
     if (body.status === 'RUNNING') {
@@ -322,12 +343,11 @@ export class CampaignsController {
   }
 
   /**
-   * Add people to call.
+   * Add people to call, from contacts this centre already has.
    *
-   * Contacts only — there is no "paste a list of numbers" path, and that is the
-   * point. A contact exists in this centre because they called, messaged or were
-   * imported deliberately; requiring one keeps the dialer on the right side of
-   * consent rules instead of trusting whoever pastes the list.
+   * The other way in is `people` below, which imports a typed or uploaded list
+   * first. Either way the dialer only ever sees contacts, and the campaign's
+   * consent basis is written onto every call it places.
    */
   @Roles('ADMIN', 'SUPERVISOR')
   @Post(':id/targets')
@@ -359,6 +379,237 @@ export class CampaignsController {
       skippedNoPhoneOrOptedOut: skipped,
       notFoundInThisCentre: unknown,
     };
+  }
+
+  /**
+   * Import people by name and number — typed in, or rows of a CSV — and queue
+   * them on this campaign.
+   *
+   * Each number becomes (or matches) a contact, so a person uploaded twice, or
+   * who already called in, stays one record. A contact who opted out keeps their
+   * opt-out: re-uploading them does not make them callable again.
+   */
+  @Roles('ADMIN', 'SUPERVISOR')
+  @Post(':id/people')
+  @HttpCode(201)
+  async addPeople(
+    @Param('id') id: string,
+    @ZodBody(AddCampaignPeopleInput) body: AddCampaignPeopleInput,
+  ): Promise<AddCampaignPeopleResult> {
+    const campaign = await this.prisma.campaign.findUnique({ where: { id } });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+
+    const country = countryByCode(body.country);
+    const invalid: AddCampaignPeopleResult['invalid'] = [];
+    // Keyed by number: the last name given for a number wins within one upload.
+    const byPhone = new Map<string, string | undefined>();
+    body.people.forEach((p, i) => {
+      const e164 = readPhoneNumber(country, p.phone);
+      if (!e164) {
+        invalid.push({ row: i + 1, phone: p.phone, reason: p.phone ? 'Not a phone number' : 'No phone number' });
+        return;
+      }
+      byPhone.set(e164, p.name || undefined);
+    });
+
+    const phones = [...byPhone.keys()];
+    if (phones.length > 0) {
+      await this.prisma.contact.createMany({
+        data: phones.map((phoneE164) => ({ phoneE164, name: byPhone.get(phoneE164) ?? null })),
+        // Existing contacts keep their record; a name is only filled in below.
+        skipDuplicates: true,
+      });
+    }
+    const contacts = await this.prisma.contact.findMany({
+      where: { phoneE164: { in: phones } },
+      select: { id: true, name: true, phoneE164: true, doNotCall: true },
+    });
+
+    // A contact we only knew by number gets the name from the list.
+    await Promise.all(
+      contacts
+        .filter((c) => !c.name && byPhone.get(c.phoneE164!))
+        .map((c) =>
+          this.prisma.contact.update({
+            where: { id: c.id },
+            data: { name: byPhone.get(c.phoneE164!) },
+          }),
+        ),
+    );
+
+    const callable = contacts.filter((c) => !c.doNotCall);
+    const created = await this.prisma.campaignTarget.createMany({
+      data: callable.map((c) => ({ campaignId: id, contactId: c.id })),
+      skipDuplicates: true,
+    });
+
+    return {
+      added: created.count,
+      alreadyOnList: callable.length - created.count,
+      optedOut: contacts.length - callable.length,
+      invalid,
+    };
+  }
+
+  /**
+   * Ring one person on the list now, with the centre's outbound voice agent.
+   *
+   * This is the centre's Dograh outbound slot rather than the dialer: the
+   * dialer paces through the telephony driver, which only simulates, while this
+   * places a real call. Opt-outs are still honoured, and each press counts as
+   * an attempt so the list shows who has been rung and when.
+   */
+  @Roles('ADMIN', 'SUPERVISOR')
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post(':id/targets/:targetId/call')
+  @HttpCode(200)
+  async callNow(@Param('id') id: string, @Param('targetId') targetId: string) {
+    const target = await this.prisma.campaignTarget.findFirst({
+      where: { id: targetId, campaignId: id },
+      include: { contact: { select: { name: true, phoneE164: true, doNotCall: true } } },
+    });
+    if (!target) throw new NotFoundException('That person is not on this campaign');
+    const { name, phoneE164, doNotCall } = target.contact;
+    if (!phoneE164) throw new BadRequestException('This person has no phone number');
+    if (doNotCall || target.status === 'SUPPRESSED') {
+      throw new BadRequestException('This person asked not to be called');
+    }
+
+    // Waits its turn behind any call started in the last AGENT_DIAL_GAP_MS.
+    await this.dialer.agentDialTurn(this.tenants.requireOrgId());
+
+    // Claimed the way the dialer claims, so a running campaign does not ring
+    // them again while this call is out; the dialer settles it from the import.
+    const claimed = await this.prisma.campaignTarget.updateMany({
+      where: { id: target.id, status: { not: 'CALLING' } },
+      data: {
+        status: 'CALLING',
+        attempts: { increment: 1 },
+        lastAttemptAt: new Date(),
+        nextAttemptAt: null,
+        dograhRunId: null,
+        lastError: null,
+      },
+    });
+    if (claimed.count === 0) throw new ConflictException('A call to this person is already in progress');
+
+    const result = await this.dograh.placeDialerCall(
+      this.tenants.requireOrgId(),
+      'outbound',
+      phoneE164,
+      undefined,
+      voiceAgentContext(name, phoneE164),
+    );
+
+    await this.prisma.campaignTarget.update({
+      where: { id: target.id },
+      data: result.ok
+        ? { dograhRunId: result.workflowRunId }
+        : {
+            status: target.status,
+            attempts: { decrement: 1 },
+            nextAttemptAt: target.nextAttemptAt,
+            lastError: result.detail.slice(0, 300),
+          },
+    });
+    if (!result.ok) throw new BadGatewayException(result.detail);
+    return result;
+  }
+
+  /**
+   * Ring everyone on the list, now.
+   *
+   * The opposite of the dialer's pacing, on purpose: someone pressed a button
+   * to call these people now, so neither the calling window nor maxConcurrent
+   * applies. CALL_ALL_MAX is the guard instead — a phone system has a fixed
+   * number of lines, and the rest are simply left for the next press. Calls
+   * start AGENT_DIAL_GAP_MS apart and then run side by side.
+   * Everyone means everyone not already on a call and not opted out, answered
+   * or not: this is "call my list", not "finish my list".
+   */
+  @Roles('ADMIN', 'SUPERVISOR')
+  @Throttle({ default: { limit: 3, ttl: 60_000 } })
+  @Post(':id/call-all')
+  @HttpCode(200)
+  async callAll(@Param('id') id: string) {
+    const campaign = await this.prisma.campaign.findUnique({ where: { id } });
+    if (!campaign) throw new NotFoundException('Campaign not found');
+
+    const waiting = await this.prisma.campaignTarget.findMany({
+      where: { campaignId: id, status: { notIn: ['CALLING', 'SUPPRESSED'] } },
+      orderBy: { createdAt: 'asc' },
+      take: CALL_ALL_MAX,
+      include: { contact: { select: { name: true, phoneE164: true, doNotCall: true } } },
+    });
+    const remaining =
+      (await this.prisma.campaignTarget.count({
+        where: { campaignId: id, status: { notIn: ['CALLING', 'SUPPRESSED'] } },
+      })) - waiting.length;
+
+    const optedOut = waiting.filter((t) => t.contact.doNotCall || !t.contact.phoneE164);
+    if (optedOut.length) {
+      await this.prisma.campaignTarget.updateMany({
+        where: { id: { in: optedOut.map((t) => t.id) } },
+        data: { status: 'SUPPRESSED', lastError: 'Contact is marked do-not-call' },
+      });
+    }
+
+    const callable = waiting.filter((t) => !optedOut.includes(t));
+    const gapSeconds = AGENT_DIAL_GAP_MS / 1000;
+    const summary = { optedOut: optedOut.length, remaining, gapSeconds };
+    const [first, ...rest] = callable;
+    if (!first) return { placed: 0, queued: 0, failed: [], ...summary };
+
+    // The first call now, so whoever pressed sees a phone ring — or hears at
+    // once why not, before anyone else is queued behind a broken setup. The
+    // rest start one every AGENT_DIAL_GAP_MS in the background: see there for
+    // why they are no longer all dialled in the same second.
+    const orgId = this.tenants.requireOrgId();
+    await this.dialer.agentDialTurn(orgId);
+    const result = await this.dialer.dialAgentTarget(orgId, first);
+    if (result && !result.ok) {
+      return {
+        placed: 0,
+        queued: 0,
+        failed: [{ name: first.contact.name, detail: result.detail }],
+        ...summary,
+        remaining: remaining + rest.length,
+      };
+    }
+    this.dialer.callInTurn(
+      orgId,
+      id,
+      rest.map((t) => t.id),
+    );
+    return { placed: result ? 1 : 0, queued: rest.length, failed: [], ...summary };
+  }
+
+  /**
+   * Take one person off the list.
+   *
+   * Only the campaign entry goes: the contact, and every call and conversation
+   * with them, stay in the Inbox. Refused while they are on a call, because the
+   * dialer settles a voice-agent call against this row when the run is
+   * imported, and a row deleted mid-call would leave that call unaccounted for.
+   */
+  @Roles('ADMIN', 'SUPERVISOR')
+  @Delete(':id/targets/:targetId')
+  @HttpCode(204)
+  async removeTarget(
+    @Param('id') id: string,
+    @Param('targetId') targetId: string,
+  ): Promise<void> {
+    const removed = await this.prisma.campaignTarget.deleteMany({
+      where: { id: targetId, campaignId: id, status: { not: 'CALLING' } },
+    });
+    if (removed.count === 0) {
+      const onCall = await this.prisma.campaignTarget.count({ where: { id: targetId, campaignId: id } });
+      if (onCall) throw new ConflictException('This person is on a call — remove them once it ends');
+      throw new NotFoundException('That person is not on this campaign');
+    }
+    // A landing-page lead keeps its consent record, but stops pointing at a
+    // campaign entry that no longer exists.
+    await this.prisma.siteLead.updateMany({ where: { targetId }, data: { targetId: null } });
   }
 
   @Roles('ADMIN')
@@ -399,6 +650,9 @@ export class CampaignsController {
     return { contact, suppressedTargets: suppressed.count };
   }
 }
+
+/** Most calls one "Call all now" press places; the rest wait for the next press. */
+const CALL_ALL_MAX = 50;
 
 function tally(statuses: TargetStatus[]) {
   const count = (s: TargetStatus) => statuses.filter((x) => x === s).length;

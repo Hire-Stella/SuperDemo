@@ -117,6 +117,28 @@ export function composeE164(country: DiallingCountry, typed: string): string {
 }
 
 /** Whether a composed number is plausible for that country. */
+/**
+ * A number however someone typed it or a spreadsheet stored it, as E.164, or
+ * null when it cannot be read.
+ *
+ * `country` is assumed only when the number fits it. Two shapes that
+ * composeE164 alone would wrongly prefix with that country are also accepted:
+ * "00" as the international prefix ("0091 98765 43210"), and a number that
+ * already carries some other country's code without the "+" ("919876543210").
+ */
+export function readPhoneNumber(country: DiallingCountry, typed: string): string | null {
+  const cleaned = typed.replace(/[^\d+]/g, '');
+  const intl = cleaned.startsWith('00') ? `+${cleaned.slice(2)}` : cleaned;
+
+  const local = composeE164(country, intl);
+  if (local && isPlausibleNumber(country, local)) return local;
+
+  const bare = `+${intl.replace(/^\+/, '')}`;
+  const other = countryForE164(bare);
+  if (other && other.code !== country.code && isPlausibleNumber(other, bare)) return bare;
+  return null;
+}
+
 export function isPlausibleNumber(country: DiallingCountry, e164: string): boolean {
   if (!/^\+[1-9]\d{6,14}$/.test(e164)) return false;
   const national = e164.slice(1 + country.dial.length);

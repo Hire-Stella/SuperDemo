@@ -51,6 +51,13 @@ cd apps/web && pnpm dev
 | `omar@fitiedu.com` | Supervisor | live ops, analytics |
 | `mariam@fitiedu.com` | Agent | the softphone receiving a real handoff |
 
+Client demo centres are created from **Contact centres**, not by the seed, so these logins exist
+only in the database they were made in:
+
+| Account | Password | Centre | Use it to see |
+|---|---|---|---|
+| `demoadmin@homes4life.ae` | `Homes4Life@2026` | Homes 4 Life Real Estate | Live ops, Inbox, Analytics, Calendar and **Campaign** (Voice AI campaigns) |
+
 ### Tenancy
 
 **HireStella is the platform; FIT Institute is a tenant on it.** The deployment hosts many

@@ -1,9 +1,10 @@
 import { Inject, Injectable, Logger, type OnModuleInit } from '@nestjs/common';
 import { Interval } from '@nestjs/schedule';
-import type { ApiEnv } from '@superdemo/contracts';
+import { DograhDialers, type ApiEnv, type TargetStatus } from '@superdemo/contracts';
 import { ENV } from '../config/config.module';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenancy/tenant-context.service';
+import { DograhService } from '../integrations/dograh/dograh.service';
 import { CallsService } from './calls.service';
 import { TELEPHONY_PROVIDER } from '../integrations/telephony/telephony.module';
 import type { TelephonyProvider } from '@superdemo/contracts';
@@ -16,6 +17,44 @@ const TICK_MS = 5_000;
  * the carrier never calls back. Anything older than this is released.
  */
 const CALLING_TIMEOUT_MS = 3 * 60_000;
+
+/**
+ * How long a voice-agent call may go without its run being imported.
+ *
+ * Its outcome only arrives when the Dograh import picks up the finished run
+ * (about a minute after hang-up), and the agent allows calls of up to ten
+ * minutes — so this must outlast both, or a person still talking would be
+ * released and rung a second time.
+ */
+const AGENT_CALL_TIMEOUT_MS = 20 * 60_000;
+
+/** Shorter than this and nobody really picked up: voicemail, a reject, a dropped line. */
+const AGENT_ANSWERED_MIN_MS = 5_000;
+
+/**
+ * The least time between two voice-agent calls starting for one centre.
+ *
+ * Calls Dograh placed within the same second came out with one of each pair
+ * answering to silence — the agent spoke, no audio crossed either way (runs
+ * 65998, 66006 and 66237 on 2026-10-27) — while calls that only overlapped,
+ * having started seconds apart, were fine. So starts are spread out; the calls
+ * themselves still run side by side once connected.
+ */
+export const AGENT_DIAL_GAP_MS = 15_000;
+
+/**
+ * What a voice-agent call tells the agent about the person, as the run's
+ * initial_context. `first_name` is what outbound prompts greet with.
+ */
+export function voiceAgentContext(name: string | null, phoneE164: string): Record<string, unknown> {
+  const full = name?.trim() || undefined;
+  return { first_name: full?.split(/\s+/)[0], name: full, phone_number: phoneE164 };
+}
+
+/** CALLING targets placed through the voice agent, whose outcome comes from the Dograh import. */
+const AGENT_TARGET = {
+  OR: [{ dograhRunId: { not: null } }, { campaign: { voiceAgent: true } }],
+};
 
 /**
  * The outbound dialer.
@@ -46,6 +85,11 @@ export class DialerService implements OnModuleInit {
   private readonly log = new Logger(DialerService.name);
   /** Guards against a slow tick overlapping the next one. */
   private ticking = false;
+  /**
+   * When each centre may next start a voice-agent call. In memory, because one
+   * API process does the dialling; a second would need this in Redis.
+   */
+  private readonly nextAgentDialAt = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -53,6 +97,7 @@ export class DialerService implements OnModuleInit {
     private readonly calls: CallsService,
     @Inject(TELEPHONY_PROVIDER) private readonly telephony: TelephonyProvider,
     @Inject(ENV) private readonly env: ApiEnv,
+    private readonly dograh: DograhService,
   ) {}
 
   onModuleInit(): void {
@@ -65,10 +110,13 @@ export class DialerService implements OnModuleInit {
 
   @Interval(TICK_MS)
   async tick(): Promise<void> {
-    if (this.ticking || !this.telephony.supportsOutbound) return;
+    // Not gated on the telephony driver any more: a voice-agent campaign dials
+    // through Dograh and runs whatever the driver is. runCampaign checks per campaign.
+    if (this.ticking) return;
     this.ticking = true;
     try {
       await this.reconcileFinishedCalls();
+      await this.reconcileAgentCalls();
       await this.releaseStuckTargets();
 
       // Unscoped on purpose: the dialer serves every centre, and each campaign
@@ -90,6 +138,7 @@ export class DialerService implements OnModuleInit {
           daysOfWeek: true,
           maxAttempts: true,
           retryAfterMinutes: true,
+          voiceAgent: true,
         },
       });
 
@@ -120,7 +169,10 @@ export class DialerService implements OnModuleInit {
     daysOfWeek: number[];
     maxAttempts: number;
     retryAfterMinutes: number;
+    voiceAgent: boolean;
   }): Promise<void> {
+    if (!campaign.voiceAgent && !this.telephony.supportsOutbound) return;
+
     await this.tenants.runAs(campaign.orgId, null, async () => {
       const org = await this.prisma.organization.findUnique({
         where: { id: campaign.orgId },
@@ -137,6 +189,22 @@ export class DialerService implements OnModuleInit {
       });
       const slots = campaign.maxConcurrent - inFlight;
       if (slots <= 0) return;
+
+      if (campaign.voiceAgent) {
+        if (!(await this.hasOutboundAgent())) {
+          this.log.warn(`campaign ${campaign.name} has no outbound voice agent — pausing it`);
+          await this.prisma.campaign.update({
+            where: { id: campaign.id },
+            data: { status: 'PAUSED' },
+          });
+          return;
+        }
+        // One start per tick at most, and only once the centre's gap has
+        // passed: further free lines fill on later ticks, AGENT_DIAL_GAP_MS apart.
+        if (this.agentDialFree(campaign.orgId)) await this.placeNextViaAgent(campaign);
+        await this.completeIfDone(campaign.id);
+        return;
+      }
 
       const fromNumber = campaign.fromNumberId
         ? await this.prisma.phoneNumber.findUnique({
@@ -262,7 +330,14 @@ export class DialerService implements OnModuleInit {
    */
   private async reconcileFinishedCalls(): Promise<void> {
     const inFlight = await this.prisma.campaignTarget.findMany({
-      where: { status: 'CALLING', conversationId: { not: null } },
+      // Voice-agent targets keep the previous attempt's conversation while a
+      // new call is out; reconcileAgentCalls settles those instead.
+      where: {
+        status: 'CALLING',
+        conversationId: { not: null },
+        dograhRunId: null,
+        campaign: { voiceAgent: false },
+      },
       include: { campaign: { select: { maxAttempts: true, retryAfterMinutes: true } } },
     });
 
@@ -294,6 +369,240 @@ export class DialerService implements OnModuleInit {
             ? null
             : new Date(Date.now() + target.campaign.retryAfterMinutes * 60_000),
           lastError: call.hangupCause ? `Not answered (${call.hangupCause})` : 'Not answered',
+        },
+      });
+    }
+  }
+
+  /** Whether a voice-agent call may start for this centre right now. */
+  private agentDialFree(orgId: string): boolean {
+    return (this.nextAgentDialAt.get(orgId) ?? 0) <= Date.now();
+  }
+
+  /**
+   * Take this centre's next start slot, waiting for it if another call started
+   * less than AGENT_DIAL_GAP_MS ago. Slots are handed out in order, so callers
+   * arriving together are spaced out rather than released at once. Every
+   * voice-agent dial goes through here: the dialer, "Call all now" and Call.
+   */
+  async agentDialTurn(orgId: string): Promise<void> {
+    const now = Date.now();
+    const at = Math.max(now, this.nextAgentDialAt.get(orgId) ?? 0);
+    this.nextAgentDialAt.set(orgId, at + AGENT_DIAL_GAP_MS);
+    if (at > now) await new Promise((resolve) => setTimeout(resolve, at - now));
+  }
+
+  /**
+   * Ring one person on a voice-agent campaign: claim, place, record.
+   *
+   * The claim is guarded on the status just read, so the dialer and a press
+   * can never ring the same person. Null when someone else claimed them first.
+   * Call inside the centre's tenant context, after agentDialTurn.
+   */
+  async dialAgentTarget(
+    orgId: string,
+    t: {
+      id: string;
+      status: TargetStatus;
+      nextAttemptAt: Date | null;
+      contact: { name: string | null; phoneE164: string | null };
+    },
+  ): Promise<{ ok: boolean; detail: string } | null> {
+    const claimed = await this.prisma.campaignTarget.updateMany({
+      where: { id: t.id, status: t.status },
+      data: {
+        status: 'CALLING',
+        attempts: { increment: 1 },
+        lastAttemptAt: new Date(),
+        nextAttemptAt: null,
+        dograhRunId: null,
+        lastError: null,
+      },
+    });
+    if (claimed.count === 0) return null;
+
+    const phone = t.contact.phoneE164!;
+    const result = await this.dograh.placeDialerCall(
+      orgId,
+      'outbound',
+      phone,
+      undefined,
+      voiceAgentContext(t.contact.name, phone),
+    );
+    await this.prisma.campaignTarget.update({
+      where: { id: t.id },
+      data: result.ok
+        ? { dograhRunId: result.workflowRunId }
+        : {
+            status: t.status,
+            attempts: { decrement: 1 },
+            nextAttemptAt: t.nextAttemptAt,
+            lastError: `Not placed: ${result.detail}`.slice(0, 500),
+          },
+    });
+    return result;
+  }
+
+  /**
+   * The rest of a "Call all now" press, one start per AGENT_DIAL_GAP_MS, in the
+   * background.
+   *
+   * Each person is re-read at their turn, so anyone removed, opted out or
+   * already rung by the dialer in the meantime is skipped. Stops at the first
+   * call Dograh refuses, as the dialer pauses on one: the usual causes — the
+   * host down, the agent unset — are not about the person.
+   */
+  callInTurn(orgId: string, campaignId: string, targetIds: string[]): void {
+    void (async () => {
+      for (const id of targetIds) {
+        const result = await this.tenants.runAs(orgId, null, async () => {
+          const t = await this.prisma.campaignTarget.findFirst({
+            where: { id, campaignId, status: { notIn: ['CALLING', 'SUPPRESSED'] } },
+            include: { contact: { select: { name: true, phoneE164: true, doNotCall: true } } },
+          });
+          if (!t) return null;
+          if (t.contact.doNotCall || !t.contact.phoneE164) {
+            await this.prisma.campaignTarget.update({
+              where: { id: t.id },
+              data: { status: 'SUPPRESSED', lastError: 'Contact is marked do-not-call' },
+            });
+            return null;
+          }
+          await this.agentDialTurn(orgId);
+          return this.dialAgentTarget(orgId, t);
+        });
+        if (result && !result.ok) {
+          this.log.warn(`call-all for campaign ${campaignId} stopped — ${result.detail}`);
+          return;
+        }
+      }
+    })().catch((e: unknown) =>
+      this.log.error(`call-all for campaign ${campaignId} failed: ${String(e)}`),
+    );
+  }
+
+  /** Whether this centre has an outbound voice agent to dial with. Call inside its tenant context. */
+  private async hasOutboundAgent(): Promise<boolean> {
+    const setting = await this.prisma.setting.findFirst({ select: { dograhDialers: true } });
+    const dialers = DograhDialers.safeParse(setting?.dograhDialers ?? {});
+    return dialers.success && dialers.data.outbound.enabled && Boolean(dialers.data.outbound.workflowUuid);
+  }
+
+  /**
+   * placeNext for a voice-agent campaign: the same claim and opt-out check,
+   * then a real call through the centre's Dograh outbound agent.
+   *
+   * A call Dograh refuses pauses the campaign instead of failing the person.
+   * The usual causes — a bad key, the host down, the agent unset — are not
+   * about this person, and would otherwise fail everyone left on the list one
+   * tick at a time.
+   */
+  private async placeNextViaAgent(campaign: { id: string; orgId: string; name: string }): Promise<boolean> {
+    const now = new Date();
+
+    const candidate = await this.prisma.campaignTarget.findFirst({
+      where: {
+        campaignId: campaign.id,
+        status: 'PENDING',
+        OR: [{ nextAttemptAt: null }, { nextAttemptAt: { lte: now } }],
+      },
+      orderBy: [{ nextAttemptAt: 'asc' }, { createdAt: 'asc' }],
+      include: { contact: { select: { name: true, phoneE164: true, doNotCall: true } } },
+    });
+    if (!candidate) return false;
+
+    const claimed = await this.prisma.campaignTarget.updateMany({
+      where: { id: candidate.id, status: 'PENDING' },
+      data: { status: 'CALLING', lastAttemptAt: now, attempts: { increment: 1 }, dograhRunId: null },
+    });
+    if (claimed.count === 0) return true;
+
+    const { name, phoneE164, doNotCall } = candidate.contact;
+    if (doNotCall || !phoneE164) {
+      await this.prisma.campaignTarget.update({
+        where: { id: candidate.id },
+        data: {
+          status: 'SUPPRESSED',
+          lastError: doNotCall ? 'Contact is marked do-not-call' : 'Contact has no phone number',
+        },
+      });
+      return true;
+    }
+
+    await this.agentDialTurn(campaign.orgId);
+    const result = await this.dograh.placeDialerCall(
+      campaign.orgId,
+      'outbound',
+      phoneE164,
+      undefined,
+      voiceAgentContext(name, phoneE164),
+    );
+    if (!result.ok) {
+      await this.prisma.campaignTarget.update({
+        where: { id: candidate.id },
+        data: {
+          status: 'PENDING',
+          attempts: { decrement: 1 },
+          lastError: `Not placed: ${result.detail}`.slice(0, 500),
+        },
+      });
+      await this.prisma.campaign.update({ where: { id: campaign.id }, data: { status: 'PAUSED' } });
+      this.log.warn(`campaign ${campaign.name} paused — the voice agent refused a call: ${result.detail}`);
+      return false;
+    }
+
+    await this.prisma.campaignTarget.update({
+      where: { id: candidate.id },
+      data: { dograhRunId: result.workflowRunId, lastError: null },
+    });
+    return true;
+  }
+
+  /**
+   * Settle voice-agent calls from their imported runs.
+   *
+   * The Dograh import turns a finished run into a Call whose providerCallId is
+   * `dograh-run-<id>`, and that row is the outcome: long enough and not an
+   * error means someone answered. Anything else — or a run that has not shown
+   * up within AGENT_CALL_TIMEOUT_MS — is retried like an unanswered call.
+   */
+  private async reconcileAgentCalls(): Promise<void> {
+    const inFlight = await this.prisma.campaignTarget.findMany({
+      where: { status: 'CALLING', ...AGENT_TARGET },
+      include: { campaign: { select: { maxAttempts: true, retryAfterMinutes: true } } },
+    });
+    const cutoff = Date.now() - AGENT_CALL_TIMEOUT_MS;
+
+    for (const target of inFlight) {
+      const call = target.dograhRunId
+        ? await this.prisma.call.findUnique({
+            where: { providerCallId: `dograh-run-${target.dograhRunId}` },
+            select: { conversationId: true, totalMs: true, hangupCause: true },
+          })
+        : null;
+      // Not imported yet: still on the phone, or just hung up. Wait for it.
+      if (!call && (target.lastAttemptAt?.getTime() ?? 0) > cutoff) continue;
+
+      const answered =
+        call && (call.totalMs ?? 0) >= AGENT_ANSWERED_MIN_MS && call.hangupCause !== 'SYSTEM_ERROR';
+      if (answered) {
+        await this.prisma.campaignTarget.update({
+          where: { id: target.id },
+          data: { status: 'ANSWERED', conversationId: call.conversationId, lastError: null },
+        });
+        continue;
+      }
+
+      const exhausted = target.attempts >= target.campaign.maxAttempts;
+      await this.prisma.campaignTarget.update({
+        where: { id: target.id },
+        data: {
+          status: exhausted ? 'EXHAUSTED' : 'PENDING',
+          nextAttemptAt: exhausted
+            ? null
+            : new Date(Date.now() + target.campaign.retryAfterMinutes * 60_000),
+          conversationId: call?.conversationId ?? target.conversationId,
+          lastError: call ? 'Not answered' : 'No result from the voice agent',
         },
       });
     }
@@ -354,7 +663,13 @@ export class DialerService implements OnModuleInit {
   private async releaseStuckTargets(): Promise<void> {
     const cutoff = new Date(Date.now() - CALLING_TIMEOUT_MS);
     const stale = await this.prisma.campaignTarget.findMany({
-      where: { status: 'CALLING', lastAttemptAt: { lt: cutoff } },
+      // Voice-agent calls are settled by reconcileAgentCalls, on a longer clock.
+      where: {
+        status: 'CALLING',
+        lastAttemptAt: { lt: cutoff },
+        dograhRunId: null,
+        campaign: { voiceAgent: false },
+      },
       select: { id: true, conversationId: true },
     });
 

@@ -7,6 +7,7 @@ export * from './brand';
 export * from './sites';
 export * from './dograh';
 export * from './demo-calls';
+export * from './voice-campaigns';
 export * from './enrichment';
 export * from './events';
 export * from './providers';

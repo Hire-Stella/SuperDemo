@@ -22,6 +22,7 @@ import {
   DograhDialers,
   type ApiEnv,
   type DemoCallsView,
+  type DograhCallerId,
   type DemoDialerConfig,
   type DemoDialerKind,
   type SaveDemoDialerInput,
@@ -119,7 +120,7 @@ export class DograhService {
   }
 
   /** A client for this centre, or a clear reason there is none. */
-  private async clientFor(orgId: string): Promise<{ client: DograhClient; pub: DograhPublic }> {
+  async clientFor(orgId: string): Promise<{ client: DograhClient; pub: DograhPublic }> {
     const row = await this.row(orgId);
     const baseUrl = this.resolveBaseUrl(row?.dograhBaseUrl);
     if (!baseUrl) {
@@ -695,7 +696,9 @@ export class DograhService {
       },
     };
 
-    const build = async (kind: 'outbound' | 'info'): Promise<DemoDialerConfig> => {
+    // The slot's caller ID is the operator's choice and outlives the agent in it.
+    type BuiltSlot = Omit<DemoDialerConfig, 'callerIdNumberId' | 'telephonyConfigId' | 'callerId'>;
+    const build = async (kind: 'outbound' | 'info'): Promise<BuiltSlot> => {
       const created = await client.createWorkflowFromTemplate({
         callType: 'outbound',
         useCase: specs[kind].useCase,
@@ -745,6 +748,7 @@ export class DograhService {
       // Not chosen: the landing page still has its agent, the slot stays as is.
     } else if (pub.workflowId && pageUuid) {
       dialers.inbound = {
+        ...dialers.inbound,
         enabled: true,
         workflowId: pub.workflowId,
         workflowUuid: pageUuid,
@@ -758,7 +762,7 @@ export class DograhService {
     }
     for (const [kind, r] of [['outbound', outbound], ['info', info]] as const) {
       if (r.status === 'fulfilled') {
-        if (r.value) dialers[kind] = r.value;
+        if (r.value) dialers[kind] = { ...dialers[kind], ...r.value };
       } else {
         const why = r.reason instanceof Error ? r.reason.message : String(r.reason);
         failed.push(`${kind} (${why})`);
@@ -1026,16 +1030,28 @@ export class DograhService {
 
     let workflows: DemoCallsView['workflows'] = [];
     let workflowsError: string | null = null;
+    let callerIds: DograhCallerId[] = [];
+    let callerIdsError: string | null = null;
     if (connected) {
-      try {
-        workflows = (await new DograhClient(baseUrl!, key!.key).listWorkflows()).map((w) => ({
-          id: w.id,
-          name: w.name,
-          status: w.status,
-        }));
-      } catch (e) {
-        workflowsError = e instanceof Error ? e.message : 'Dograh did not return a workflow list';
-      }
+      const client = new DograhClient(baseUrl!, key!.key);
+      await Promise.all([
+        client
+          .listWorkflows()
+          .then((list) => {
+            workflows = list.map((w) => ({ id: w.id, name: w.name, status: w.status }));
+          })
+          .catch((e: unknown) => {
+            workflowsError = e instanceof Error ? e.message : 'Dograh did not return a workflow list';
+          }),
+        client
+          .listCallerIds()
+          .then((list) => {
+            callerIds = list;
+          })
+          .catch((e: unknown) => {
+            callerIdsError = e instanceof Error ? e.message : 'Dograh did not return its numbers';
+          }),
+      ]);
     }
 
     return {
@@ -1043,6 +1059,8 @@ export class DograhService {
       baseUrl,
       workflows,
       workflowsError,
+      callerIds,
+      callerIdsError,
       updatedAt: row?.dograhUpdatedAt ?? null,
       dialers: DEMO_DIALER_KINDS.map((kind) => {
         const c = dialers[kind];
@@ -1102,6 +1120,28 @@ export class DograhService {
           workflowName: list.find((w) => w.id === input.workflowId)?.name ?? '',
         };
         await this.registerForImport(orgId, client, [input.workflowId]);
+      }
+    }
+
+    if (input.callerIdNumberId !== undefined) {
+      if (input.callerIdNumberId === null) {
+        next = { ...next, callerIdNumberId: null, telephonyConfigId: null, callerId: '' };
+      } else if (input.callerIdNumberId !== current.callerIdNumberId) {
+        // Resolved now, like the uuid, so a number that is not on this Dograh
+        // fails here rather than on the first call of a campaign.
+        const { client } = await this.clientFor(orgId);
+        const found = (await client.listCallerIds()).find((n) => n.id === input.callerIdNumberId);
+        if (!found) {
+          throw new BadRequestException(
+            `Dograh has no active outbound number with id ${input.callerIdNumberId}. Pick another.`,
+          );
+        }
+        next = {
+          ...next,
+          callerIdNumberId: found.id,
+          telephonyConfigId: found.telephonyConfigId,
+          callerId: found.number,
+        };
       }
     }
 
@@ -1218,12 +1258,18 @@ export class DograhService {
     return build(token);
   }
 
-  /** Ring a number with one slot's agent. */
+  /**
+   * Ring a number with one slot's agent.
+   *
+   * `context` becomes the run's initial_context, which the agent's prompts read
+   * as `{{initial_context.<key>}}` — how a campaign tells it who it is calling.
+   */
   async placeDialerCall(
     orgId: string,
     kind: DemoDialerKind,
     phoneE164: string,
     note?: string,
+    context?: Record<string, unknown>,
   ): Promise<{ ok: boolean; detail: string; workflowRunId: number | null }> {
     const row = await this.row(orgId);
     const slot = this.parseDialers(row?.dograhDialers ?? null)[kind];
@@ -1254,22 +1300,35 @@ export class DograhService {
       };
     }
 
+    const from =
+      slot.callerIdNumberId && slot.telephonyConfigId
+        ? { telephonyConfigId: slot.telephonyConfigId, phoneNumberId: slot.callerIdNumberId }
+        : undefined;
+
     try {
       const run = await client.demoCall(
         slot.workflowUuid,
         phoneE164,
-        note ? { note } : undefined,
+        { ...context, ...(note ? { note } : {}) },
+        from,
       );
-      this.log.log(`dograh: ${kind} demo call ${run.workflow_run_name} org=${orgId} -> ${phoneE164}`);
+      this.log.log(
+        `dograh: ${kind} demo call ${run.workflow_run_name} org=${orgId} -> ${phoneE164}` +
+          (from ? ` from ${slot.callerId}` : ''),
+      );
       return {
         ok: true,
         detail: `Calling ${phoneE164} now — ${slot.workflowName || 'the agent'} speaks as soon as it is picked up.`,
         workflowRunId: run.workflow_run_id ?? null,
       };
     } catch (e) {
+      const message = e instanceof Error ? e.message : 'Dograh refused the call';
       return {
         ok: false,
-        detail: e instanceof Error ? e.message : 'Dograh refused the call',
+        detail:
+          from && /from_phone_number_not_found|Telephony configuration not found/.test(message)
+            ? `The caller ID set for the ${DEMO_DIALER_LABELS[kind].label.toLowerCase()} dialer (${slot.callerId}) is no longer active in Dograh. Ask your platform operator to choose another.`
+            : message,
         workflowRunId: null,
       };
     }

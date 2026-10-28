@@ -7,6 +7,8 @@ import {
   DEMO_DIALER_LABELS,
   type DemoCallsView,
   type DemoDialerKind,
+  type DemoDialerView,
+  type DograhCallerId,
 } from '@superdemo/contracts';
 import { api } from '@/lib/api';
 import { CalendarCheck, Loader2, Sparkles } from 'lucide-react';
@@ -33,8 +35,12 @@ export function PlatformDialers({ orgId }: { orgId: string }) {
   });
 
   const save = useMutation({
-    mutationFn: (body: { kind: DemoDialerKind; enabled?: boolean; workflowId?: number | null }) =>
-      api.put<DemoCallsView>(`${base}/dialers`, body),
+    mutationFn: (body: {
+      kind: DemoDialerKind;
+      enabled?: boolean;
+      workflowId?: number | null;
+      callerIdNumberId?: number | null;
+    }) => api.put<DemoCallsView>(`${base}/dialers`, body),
     onSuccess: (r) => queryClient.setQueryData(['platform-voice', orgId], r),
     onError: (e) => toast.error((e as Error).message),
   });
@@ -152,9 +158,22 @@ export function PlatformDialers({ orgId }: { orgId: string }) {
                     </option>
                   ))}
                 </Select>
+                <CallerIdPicker
+                  dialer={dialer}
+                  numbers={view.data!.callerIds}
+                  disabled={save.isPending}
+                  onChange={(callerIdNumberId) => save.mutate({ kind: dialer.kind, callerIdNumberId })}
+                />
               </div>
             ))}
           </div>
+
+          {view.data.callerIdsError && (
+            <p className="mt-3 max-w-prose text-[11px] leading-relaxed text-muted-foreground">
+              The voice host&apos;s numbers could not be listed — {view.data.callerIdsError}. Caller
+              IDs already chosen still apply.
+            </p>
+          )}
 
           {/*
             For centres whose slots nothing ever filled: anything made before
@@ -203,5 +222,59 @@ export function PlatformDialers({ orgId }: { orgId: string }) {
         </>
       )}
     </Card>
+  );
+}
+
+/**
+ * Which number a slot's calls show as.
+ *
+ * Grouped by telephony config because a number only works on its own carrier
+ * account or trunk, and the config name is how an operator tells HireStella's
+ * UK trunk from its UAE one. A saved number Dograh no longer lists is kept as
+ * an option and said so, rather than silently showing the default.
+ */
+function CallerIdPicker({
+  dialer,
+  numbers,
+  disabled,
+  onChange,
+}: {
+  dialer: DemoDialerView;
+  numbers: DograhCallerId[];
+  disabled: boolean;
+  onChange: (callerIdNumberId: number | null) => void;
+}) {
+  const label = DEMO_DIALER_LABELS[dialer.kind].label;
+  const configs = [...new Map(numbers.map((n) => [n.telephonyConfigId, n])).values()];
+  const missing =
+    dialer.callerIdNumberId !== null && !numbers.some((n) => n.id === dialer.callerIdNumberId);
+
+  return (
+    <label className="mt-2 grid gap-1 text-[11px] text-muted-foreground">
+      Caller ID
+      <Select
+        aria-label={`Caller ID for the ${label} dialer`}
+        value={dialer.callerIdNumberId ?? ''}
+        disabled={disabled || (numbers.length === 0 && !dialer.callerIdNumberId)}
+        onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
+      >
+        <option value="">Voice host default</option>
+        {missing && (
+          <option value={dialer.callerIdNumberId!}>{dialer.callerId} — no longer on the host</option>
+        )}
+        {configs.map((c) => (
+          <optgroup key={c.telephonyConfigId} label={`${c.telephonyConfigName} (${c.provider})`}>
+            {numbers
+              .filter((n) => n.telephonyConfigId === c.telephonyConfigId)
+              .map((n) => (
+                <option key={n.id} value={n.id}>
+                  {n.number}
+                  {n.label ? ` · ${n.label}` : ''}
+                </option>
+              ))}
+          </optgroup>
+        ))}
+      </Select>
+    </label>
   );
 }

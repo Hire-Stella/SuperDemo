@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, PhoneIncoming, Inbox, BarChart3 } from 'lucide-react';
+import { ArrowRight, PhoneIncoming, Inbox, BarChart3, Eye, EyeOff } from 'lucide-react';
 import { Eyebrow, Rail, SignalTriangle } from '@hire-stella/ui';
 import { PlatformMark } from '@/components/platform-mark';
 import { homeFor, useSession } from '@/components/providers';
@@ -41,6 +41,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -150,15 +151,36 @@ export default function LoginPage() {
 
               <label className="mt-4 block text-xs font-medium text-muted-foreground">
                 Password
-                <Input
-                  className="mt-1.5"
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
+                {/* The eye sits inside the label's box but is its own button, so
+                    clicking it toggles visibility rather than focusing the field. */}
+                <span className="relative mt-1.5 block">
+                  <Input
+                    className="pr-10"
+                    type={showPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-pressed={showPassword}
+                    title={showPassword ? 'Hide password' : 'Show password'}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowPassword((v) => !v);
+                    }}
+                    className="absolute inset-y-0 right-1.5 my-auto inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="size-4" aria-hidden />
+                    ) : (
+                      <Eye className="size-4" aria-hidden />
+                    )}
+                  </button>
+                </span>
               </label>
 
               {error && (

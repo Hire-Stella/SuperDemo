@@ -272,6 +272,12 @@ function DialerCard({
             <span className="text-muted-foreground">none chosen</span>
           )}
         </p>
+        {dialer.callerId && (
+          <p className="text-sm">
+            <span className="text-muted-foreground">Calls from: </span>
+            <span className="font-mono">{dialer.callerId}</span>
+          </p>
+        )}
 
         {/* ------------------------------ dial ------------------------------- */}
         <div className="grid grid-cols-[7rem_1fr] gap-2">

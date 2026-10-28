@@ -1,3 +1,4 @@
+import type { NestExpressApplication } from '@nestjs/platform-express';
 import 'reflect-metadata';
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
@@ -12,7 +13,7 @@ async function bootstrap(): Promise<void> {
   // than a stack trace from three layers down.
   const env = parseApiEnv(process.env);
 
-  const app = await NestFactory.create(AppModule, {
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, {
     // Webhook signatures are computed over the exact bytes received, so the raw
     // body must be preserved alongside the parsed one. Nest's own option does
     // this without displacing its body parser — mounting express.json() by hand
@@ -25,6 +26,8 @@ async function bootstrap(): Promise<void> {
   });
 
   app.setGlobalPrefix('api', { exclude: ['health', 'ready'] });
+  // A voice campaign's contact list arrives as JSON, up to twenty thousand rows.
+  app.useBodyParser('json', { limit: '5mb' });
 
   app.use(
     helmet({
