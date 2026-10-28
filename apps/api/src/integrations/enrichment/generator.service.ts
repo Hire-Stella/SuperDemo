@@ -4,6 +4,7 @@ import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import * as z from 'zod/v4';
 import { DEFAULT_STAGES, GeneratedCentre, type ApiEnv, type ScrapedSite } from '@superdemo/contracts';
 import { ENV } from '../../config/config.module';
+import { clampToSchema, type Clamp } from './clamp-to-contract';
 
 /**
  * Turns a scraped website into a landing page and a voice-agent brief.
@@ -341,7 +342,24 @@ export class GeneratorService {
   }
 
   private validate(raw: unknown): GeneratedCentre {
-    const parsed = GeneratedCentre.safeParse(raw);
+    /*
+     * Fit over-long values to the contract's limits before judging the shape.
+     *
+     * The limits reach the model only as prose, and a tagline of 121 characters
+     * used to fail the whole generation as "did not fit the expected shape" —
+     * the page copy, notes and agent brief all lost to a trailing word. The
+     * consumers truncate to these limits anyway. Structure is still strict:
+     * only `max` on strings and arrays is adjusted.
+     */
+    const clamps: Clamp[] = [];
+    const fitted = clampToSchema(GeneratedCentre, raw, clamps);
+    if (clamps.length > 0) {
+      this.log.warn(
+        'generated content exceeded the contract limits and was trimmed: ' +
+          clamps.map((c) => `${c.path} (${c.kind} ${c.from}→${c.to})`).join(', '),
+      );
+    }
+    const parsed = GeneratedCentre.safeParse(fitted);
     if (!parsed.success) {
       this.log.warn(`generated content failed contract validation: ${parsed.error.message}`);
       throw new BadRequestException('The generated page did not fit the expected shape');
