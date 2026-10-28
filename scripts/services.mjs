@@ -136,7 +136,7 @@ async function pgUp() {
   const log = join(DATA, 'pg.log');
   execFileSync(
     join(bin, 'pg_ctl'),
-    ['-D', PG_DIR, '-l', log, '-o', `-p ${PG_PORT} -k ${PG_DIR}`, '-w', 'start'],
+    ['-D', PG_DIR, '-l', log, '-o', `-p ${PG_PORT} -k "${PG_DIR}"`, '-w', 'start'],
     { stdio: 'ignore' },
   );
   await waitForPort(PG_PORT, 'postgres');
