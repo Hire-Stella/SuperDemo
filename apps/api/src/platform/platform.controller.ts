@@ -405,6 +405,36 @@ export class PlatformController {
       // schedule it — notify() defers the work off the request.
       if (body.websiteUrl) await this.outbox.notify();
 
+      /*
+       * Agents for a centre with no website to read.
+       *
+       * The enrichment above builds the demo-call agents as part of reading the
+       * site, so a centre created with a URL and its landing page switched on
+       * already has them coming. Every other centre that asked for demo calls —
+       * no URL, or a URL but no landing page — used to arrive with its chosen
+       * slots switched on and empty, and nothing would ever fill them until an
+       * operator found the Voice panel's build button. So queue that build here.
+       *
+       * buildAgents still reads `org.websiteUrl` when there is one (it is saved
+       * above whether or not the landing page is on), and falls back to the
+       * centre's own copy and knowledge otherwise.
+       *
+       * After the transaction, not inside it: enqueueBuildAgents writes through
+       * its own client, which cannot see the Setting row until the create has
+       * committed. And caught, because the centre already exists — a failed
+       * enqueue is a build somebody can press again, not a reason to answer a
+       * successful create with a 500 the operator will retry into a conflict.
+       */
+      const websiteEnriches = Boolean(body.websiteUrl && body.websiteEnabled);
+      if (!websiteEnriches && demoCallKinds.length > 0) {
+        await this.enrichment.enqueueBuildAgents(org.org.id, demoCallKinds).catch((e: unknown) => {
+          this.log.warn(
+            `org.create: could not queue demo agents for ${slug} — ` +
+              `${e instanceof Error ? e.message : String(e)}`,
+          );
+        });
+      }
+
       return {
         id: org.org.id,
         name: org.org.name,

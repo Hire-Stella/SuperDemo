@@ -255,6 +255,18 @@ export ELEVENLABS_BRIDGE_SECRET="…"
 export ELEVENLABS_WEBHOOK_SECRET="…"
 ```
 
+And the Dograh key every centre's demo-call agents are built with (create one at
+https://voice.hirestella.ai → Settings → API keys). `DOGRAH_BASE_URL` defaults to
+that host:
+
+```bash
+export DOGRAH_API_KEY="…"
+```
+
+Both go through the template, not the portal: `containerapp update --yaml`
+replaces the whole environment, so a variable added by hand is gone after the
+next deploy.
+
 ## 5. Build the image in Azure
 
 ```bash

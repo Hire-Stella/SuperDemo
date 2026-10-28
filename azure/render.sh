@@ -23,11 +23,16 @@ VARS=(
   WEB_ORIGIN PUBLIC_BASE_URL
   ELEVENLABS_API_KEY ELEVENLABS_AGENT_ID
   ELEVENLABS_BRIDGE_SECRET ELEVENLABS_WEBHOOK_SECRET
+  DOGRAH_BASE_URL DOGRAH_API_KEY
 )
 
 # LOCATION is spelled LOC in the runbook's exports, because that is what reads
 # naturally next to RG. Accept either rather than making the two disagree.
 : "${LOCATION:=${LOC:-}}"
+
+# The shared voice host. Every deployment so far uses this one, so only the key
+# has to be supplied.
+: "${DOGRAH_BASE_URL:=https://voice.hirestella.ai}"
 
 missing=()
 for v in "${VARS[@]}"; do

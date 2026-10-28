@@ -58,62 +58,135 @@ export const ScrapedSite = z.object({
   phone: z.string().nullable(),
   /** Pages beyond the entry point that were also read. */
   alsoRead: z.array(z.string()),
+  /**
+   * Every page read, entry point first, each with its own cleaned text.
+   *
+   * `text` above is these joined and capped for prompts; this keeps the
+   * per-page split so each page can become its own knowledge document.
+   */
+  pages: z
+    .array(z.object({ url: z.string(), title: z.string(), text: z.string() }))
+    .default([]),
 });
 export type ScrapedSite = z.infer<typeof ScrapedSite>;
+
+/*
+ * Lenient building blocks for GeneratedCentre.
+ *
+ * The model's answer is advisory input, not a request body. A strict schema
+ * here meant one over-long headline, or a ninth service on a site that sells
+ * twenty-four, failed the *whole* generation — and the agent build behind it —
+ * over a detail the landing page trims anyway. So every field below degrades
+ * instead of failing: a missing or malformed string becomes '', a list keeps
+ * the items that make sense and drops the rest, an unknown industry becomes
+ * GENERIC. Length and count limits are not this schema's business any more;
+ * the page enforces its own (SiteContent, via fitToPage in the enrichment
+ * service), and the agent and the knowledge base want everything the site said.
+ *
+ * The only thing that still fails is a reply that is not an object at all —
+ * there is nothing to salvage from that.
+ */
+
+/** Any string, a number written as one, or '' for anything else or nothing. */
+const LenientText = z
+  .preprocess((v) => (typeof v === 'number' ? String(v) : v), z.string())
+  .catch('');
+
+/** A list item that is a string (or a number). Non-strings are dropped, not blanked. */
+const ListText = z.union([z.string(), z.number()]).transform(String);
+
+/**
+ * An array that keeps its valid items and drops the rest.
+ *
+ * `z.array(item)` rejects the whole list for one bad element, which is the
+ * wrong trade for model output: four good FAQs and one null should be four
+ * FAQs. Anything that is not an array at all becomes [].
+ */
+function lenientList<T extends z.ZodTypeAny>(item: T) {
+  return z
+    .preprocess(
+      (v) => (Array.isArray(v) ? v.filter((x) => item.safeParse(x).success) : []),
+      z.array(item),
+    )
+    .catch([]);
+}
+
+/**
+ * One stage of the phone agent — the one item shape with real requirements.
+ * A stage with no name, nothing to do or nothing to route on cannot become a
+ * node in a graph, so such items are dropped from the list rather than
+ * blanked into it.
+ */
+const GeneratedStage = z.object({
+  name: z.string().trim().min(1),
+  /** What the agent does once the caller is in this stage. */
+  purpose: z.string().trim().min(1),
+  /** When to route here — becomes the edge's condition. */
+  routeWhen: z.string().trim().min(1),
+});
 
 /**
  * The LLM's structured output.
  *
  * One call produces everything downstream needs, because two calls would let
  * the page and the agent disagree about what the business does.
+ *
+ * Tolerant by construction — see the building blocks above. `safeParse` of
+ * any object succeeds; the worst a bad reply can do is come back mostly
+ * empty, which every consumer already handles by keeping what it had.
  */
 export const GeneratedCentre = z.object({
   /** Which vertical the site reads as. Drives queues, labels and defaults. */
-  industry: Industry,
-  tagline: z.string().max(120),
+  industry: z
+    .preprocess((v) => (typeof v === 'string' ? v.trim().toUpperCase() : v), Industry)
+    .catch('GENERIC'),
+  tagline: LenientText,
   /** Hero, services, FAQ and the rest, shaped for SiteContent. */
-  hero: z.object({
-    headline: z.string().max(120),
-    subhead: z.string().max(300),
-    ctaLabel: z.string().max(40),
-    /**
-     * The chip above the headline — "Trusted by 500+ homeowners" in the
-     * reference design, and one of the things that makes it read as finished.
-     *
-     * Empty when the site claims nothing checkable. A fabricated "trusted by
-     * 10,000 customers" is the one kind of copy that could actually harm a
-     * client, so it is left blank rather than invented.
-     */
-    eyebrow: z.string().max(60).default(''),
-  }),
-  highlights: z.array(z.object({ title: z.string().max(60), body: z.string().max(200) })).max(6),
-  services: z.array(z.object({ name: z.string().max(80), body: z.string().max(240) })).max(8),
-  faq: z.array(z.object({ q: z.string().max(160), a: z.string().max(400) })).max(6),
+  hero: z
+    .object({
+      headline: LenientText,
+      subhead: LenientText,
+      ctaLabel: LenientText,
+      /**
+       * The chip above the headline — "Trusted by 500+ homeowners" in the
+       * reference design, and one of the things that makes it read as finished.
+       *
+       * Empty when the site claims nothing checkable. A fabricated "trusted by
+       * 10,000 customers" is the one kind of copy that could actually harm a
+       * client, so it is left blank rather than invented.
+       */
+      eyebrow: LenientText,
+    })
+    .catch({ headline: '', subhead: '', ctaLabel: '', eyebrow: '' }),
+  highlights: lenientList(z.object({ title: LenientText, body: LenientText })),
+  /**
+   * Every service the site offers, not the first eight. The landing page
+   * shows as many as its design has room for; all of them are still worth
+   * having here for the stages and the knowledge base.
+   */
+  services: lenientList(z.object({ name: LenientText, body: LenientText })),
+  faq: lenientList(z.object({ q: LenientText, a: LenientText })),
   /**
    * "How it works", for layouts with a numbered band.
    *
-   * Optional and empty by default: a business whose site describes no process
-   * gets no process. Inventing four confident steps for a shop that just sells
-   * things would be exactly the kind of plausible fiction this whole generator
-   * is written against.
+   * Empty by default: a business whose site describes no process gets no
+   * process. Inventing four confident steps for a shop that just sells things
+   * would be exactly the kind of plausible fiction this whole generator is
+   * written against.
    */
-  steps: z
-    .array(z.object({ title: z.string().max(60), body: z.string().max(200) }))
-    .max(4)
-    .default([]),
+  steps: lenientList(z.object({ title: LenientText, body: LenientText })),
   /**
    * What the agent says when the phone is answered.
    *
-   * Optional, like everything below the page copy. Every field asked of the
-   * model is a field it can omit, and a bigger required set made it drop
-   * three at once — so only what the landing page genuinely needs is
-   * mandatory, and the agent's inputs all have fallbacks.
+   * Optional, like everything else here. Every field asked of the model is a
+   * field it can omit, and a bigger required set made it drop three at once —
+   * so the agent's inputs all have fallbacks.
    *
    * There is deliberately no `agentBrief` any more: Dograh's generator is
    * given the raw scrape instead, so asking a model to paraphrase the site
    * first was a lossy step and one more thing to go wrong.
    */
-  agentGreeting: z.string().max(300).default(''),
+  agentGreeting: LenientText,
   /**
    * Quotes the site publishes. Extracted, never written.
    *
@@ -121,42 +194,33 @@ export const GeneratedCentre = z.object({
    * fabricated testimonial puts words in a named person's mouth on the
    * client's own site. Empty is the correct and common answer.
    */
-  testimonials: z
-    .array(
-      z.object({
-        quote: z.string().max(400),
-        author: z.string().max(60),
-        role: z.string().max(80).default(''),
-      }),
-    )
-    .max(6)
-    .default([]),
+  testimonials: lenientList(
+    z.object({ quote: LenientText, author: LenientText, role: LenientText }),
+  ),
   /** Price tiers the site publishes. Same rule: extracted, never invented. */
-  pricing: z
-    .array(
-      z.object({
-        name: z.string().max(40),
-        price: z.string().max(40).default(''),
-        note: z.string().max(120).default(''),
-        features: z.array(z.string().max(90)).max(8).default([]),
-      }),
-    )
-    .max(4)
-    .default([]),
+  pricing: lenientList(
+    z.object({
+      name: LenientText,
+      price: LenientText,
+      note: LenientText,
+      features: lenientList(ListText),
+    }),
+  ),
   /** A before/after framing, drawn from how the site positions itself. */
   comparison: z
     .object({
-      beforeLabel: z.string().max(40).default(''),
-      afterLabel: z.string().max(40).default(''),
-      before: z.array(z.string().max(120)).max(5).default([]),
-      after: z.array(z.string().max(120)).max(5).default([]),
+      beforeLabel: LenientText,
+      afterLabel: LenientText,
+      before: lenientList(ListText),
+      after: lenientList(ListText),
     })
-    .default({ beforeLabel: '', afterLabel: '', before: [], after: [] }),
-  /** Short knowledge notes lifted from the site, for the centre's own KB. */
-  knowledge: z
-    .array(z.object({ title: z.string().max(120), content: z.string().max(2000) }))
-    .max(6)
-    .default([]),
+    .catch({ beforeLabel: '', afterLabel: '', before: [], after: [] }),
+  /**
+   * Knowledge notes lifted from the site, for the centre's own KB. Kept at
+   * full length: a note exists for the agent to answer from, and truncating
+   * it is how an opening-hours line loses Friday.
+   */
+  knowledge: lenientList(z.object({ title: LenientText, content: LenientText })),
   /**
    * The distinct things a caller wants, one per stage of the agent.
    *
@@ -171,26 +235,17 @@ export const GeneratedCentre = z.object({
    * into the stage, so it is written as a description of the caller's need
    * rather than of the stage.
    */
-  stages: z
-    .array(
-      z.object({
-        name: z.string().min(1).max(40),
-        /** What the agent does once the caller is in this stage. */
-        purpose: z.string().min(10).max(600),
-        /** When to route here — becomes the edge's condition. */
-        routeWhen: z.string().min(10).max(240),
-      }),
-    )
-    /*
-     * No minimum, deliberately.
-     *
-     * A model that ignores this field should cost us tailored stages, not the
-     * whole generation — `min(2)` here failed the entire enrichment and
-     * discarded good page copy because Groq returned an empty array. The
-     * caller substitutes DEFAULT_STAGES when there are fewer than two.
-     */
-    .max(6)
-    .default([]),
+  /*
+   * No minimum and no maximum, deliberately.
+   *
+   * A model that ignores this field should cost us tailored stages, not the
+   * whole generation — `min(2)` here once failed the entire enrichment and
+   * discarded good page copy because Groq returned an empty array. The
+   * generator substitutes DEFAULT_STAGES when there are fewer than two, and
+   * the enrichment service folds a long list into one "Other services" stage
+   * before it becomes a graph.
+   */
+  stages: lenientList(GeneratedStage),
 });
 export type GeneratedCentre = z.infer<typeof GeneratedCentre>;
 

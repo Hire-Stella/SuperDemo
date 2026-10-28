@@ -52,6 +52,8 @@ properties:
         value: __ELEVENLABS_BRIDGE_SECRET__
       - name: elevenlabs-webhook-secret
         value: __ELEVENLABS_WEBHOOK_SECRET__
+      - name: dograh-api-key
+        value: __DOGRAH_API_KEY__
   template:
     containers:
       - name: api
@@ -94,6 +96,15 @@ properties:
             secretRef: elevenlabs-bridge-secret
           - name: ELEVENLABS_WEBHOOK_SECRET
             secretRef: elevenlabs-webhook-secret
+          # The deployment-wide Dograh every centre falls back to. Without it a
+          # new centre has no voice host, its demo-call agents are never built
+          # and the Demo calls page stays empty. Kept here rather than set by
+          # hand in the portal: `containerapp update --yaml` replaces the whole
+          # env list, so anything not in this file is lost on the next deploy.
+          - name: DOGRAH_BASE_URL
+            value: __DOGRAH_BASE_URL__
+          - name: DOGRAH_API_KEY
+            secretRef: dograh-api-key
           # Recordings land on the mounted share below, not the container disk.
           - name: STORAGE_DRIVER
             value: local

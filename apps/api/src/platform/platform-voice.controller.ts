@@ -1,10 +1,21 @@
-import { Controller, Get, HttpCode, NotFoundException, Param, Post, Put } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  HttpCode,
+  Logger,
+  NotFoundException,
+  Param,
+  Post,
+  Put,
+} from '@nestjs/common';
 import {
   type ConnectDograhSiteOutput,
   type DemoCallsView,
   type DograhConnectionView,
   type DograhWorkflowRow,
   BuildDemoAgentsInput,
+  DEMO_DIALER_KINDS,
+  DograhDialers,
   SaveDemoDialerInput,
   SaveDograhConnectionInput,
   type TestDograhConnectionOutput,
@@ -53,6 +64,8 @@ import type { SessionUser } from '@superdemo/contracts';
 @Roles('SUPERADMIN')
 @Controller('platform/orgs/:id/voice')
 export class PlatformVoiceController {
+  private readonly log = new Logger(PlatformVoiceController.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly tenants: TenantContext,
@@ -98,6 +111,21 @@ export class PlatformVoiceController {
     return this.tenants.runAs(id, actor.id, () => this.dograh.workflows(id));
   }
 
+  /**
+   * Save the centre's Dograh, then build whatever agents it is waiting on.
+   *
+   * A centre created before its Dograh was connected has its chosen slots
+   * switched on and empty, and the build that would have filled them could not
+   * run — there was nothing to build on. Connecting is the moment that changes,
+   * so it is also the moment to start the build, rather than leaving the
+   * operator to discover a second button after the first one worked.
+   *
+   * Only when the saved credential actually answers: queueing a build against
+   * a host that refuses would just turn into a failed status minutes later.
+   * And never at the expense of the save — the connection is stored by the
+   * time any of this runs, so a hiccup here is logged and the response is the
+   * same view the panel has always received.
+   */
   @Put('connection')
   async saveConnection(
     @Param('id') id: string,
@@ -105,7 +133,41 @@ export class PlatformVoiceController {
     @CurrentUser() actor: SessionUser,
   ): Promise<DograhConnectionView> {
     await this.assertOrg(id);
-    return this.tenants.runAs(id, actor.id, () => this.dograh.save(id, body));
+    const view = await this.tenants.runAs(id, actor.id, () => this.dograh.save(id, body));
+    try {
+      await this.tenants.runAs(id, actor.id, () => this.buildMissingAgents(id));
+    } catch (e) {
+      this.log.warn(
+        `voice: saved Dograh for org=${id} but could not queue its agents — ` +
+          `${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+    return view;
+  }
+
+  /**
+   * Queue a build for the switched-on slots with no agent, if Dograh answers.
+   *
+   * Skipped while a build or enrichment is already queued or running: that one
+   * will fill the same slots, and a second would race it into duplicate agents.
+   */
+  private async buildMissingAgents(id: string): Promise<void> {
+    const test = await this.dograh.test(id);
+    if (!test.ok) return;
+    const setting = await this.prisma.setting.findFirst({
+      where: { orgId: id },
+      select: { dograhDialers: true, enrichStatus: true },
+    });
+    if (!setting) return;
+    if (setting.enrichStatus === 'queued' || setting.enrichStatus === 'running') return;
+    const parsed = DograhDialers.safeParse(setting.dograhDialers ?? {});
+    if (!parsed.success) return;
+    const missing = DEMO_DIALER_KINDS.filter(
+      (kind) => parsed.data[kind].enabled && !parsed.data[kind].workflowId,
+    );
+    if (missing.length === 0) return;
+    this.log.log(`voice: Dograh connected for org=${id}; building ${missing.join(', ')}`);
+    await this.enrichment.enqueueBuildAgents(id, missing);
   }
 
   @Post('test')
