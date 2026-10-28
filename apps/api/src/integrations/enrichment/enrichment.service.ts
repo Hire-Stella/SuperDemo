@@ -79,6 +79,167 @@ function orgNameShort(name: string): string {
   return name.replace(/\b(LLC|Ltd|Limited|Inc|FZE|FZCO|LLP|PLC)\b\.?/gi, '').trim() || name;
 }
 
+/** A title for a page that had none: its path, or the URL as given. */
+function pageLabel(url: string): string {
+  try {
+    const u = new URL(url);
+    return u.pathname && u.pathname !== '/' ? u.pathname : u.hostname;
+  } catch {
+    return url;
+  }
+}
+
+/* --------------------------- fitting to the page -------------------------- */
+
+/**
+ * Shorten to `max` characters at a word boundary, marking the cut with '…'.
+ *
+ * The ellipsis counts towards `max`, so the result always fits. A cut that
+ * would land in the first half of the string (one very long word) is made
+ * mid-word instead — a headline cut to two letters is worse than a split word.
+ */
+export function trimWords(s: string, max: number): string {
+  if (s.length <= max) return s;
+  if (max <= 1) return s.slice(0, max);
+  const cut = s.slice(0, max - 1);
+  const space = cut.lastIndexOf(' ');
+  const head = space >= Math.floor(max / 2) ? cut.slice(0, space) : cut;
+  return `${head.replace(/[\s,;:.\-–—]+$/u, '')}…`;
+}
+
+/**
+ * The few zod v3 internals the fitter reads.
+ *
+ * Typed structurally rather than imported, because the schema instance comes
+ * from @superdemo/contracts' copy of zod, and a type import from this app's
+ * copy would be a different nominal type the day the two versions drift.
+ */
+type ZodLike = {
+  _def: {
+    typeName?: string;
+    innerType?: ZodLike;
+    schema?: ZodLike;
+    type?: ZodLike;
+    checks?: { kind: string; value?: number }[];
+    maxLength?: { value: number } | null;
+    shape?: Record<string, ZodLike> | (() => Record<string, ZodLike>);
+  };
+  safeParse(v: unknown): { success: boolean };
+};
+
+/**
+ * Trim a value to whatever a zod schema allows, rather than reject it.
+ *
+ * Walks the schema alongside the value: strings longer than their `.max()`
+ * are cut at a word, arrays lose the items that still do not parse (an empty
+ * service name, a quote with no text) and are then cut to their `.max()`.
+ * Anything it does not recognise is passed through for safeParse to judge.
+ *
+ * Derived from the schema rather than a table of constants so that the ~50
+ * limits in SiteContent (packages/contracts/src/sites.ts) cannot drift from
+ * the code that respects them. Model copy is uncapped (see GeneratedCentre);
+ * this is the one place it is made to fit.
+ */
+export function fitToSchema(schema: ZodLike, value: unknown): unknown {
+  const def = schema._def;
+  switch (def.typeName) {
+    case 'ZodDefault':
+    case 'ZodOptional':
+    case 'ZodNullable':
+    case 'ZodCatch':
+      return value === undefined || value === null || !def.innerType
+        ? value
+        : fitToSchema(def.innerType, value);
+    case 'ZodEffects':
+      return def.schema ? fitToSchema(def.schema, value) : value;
+    case 'ZodString': {
+      if (typeof value !== 'string') return value;
+      const max = def.checks?.find((c) => c.kind === 'max')?.value;
+      return max === undefined ? value : trimWords(value, max);
+    }
+    case 'ZodArray': {
+      const item = def.type;
+      if (!Array.isArray(value) || !item) return value;
+      const kept = value.map((v) => fitToSchema(item, v)).filter((v) => item.safeParse(v).success);
+      const max = def.maxLength?.value;
+      return max === undefined ? kept : kept.slice(0, max);
+    }
+    case 'ZodObject': {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+      const shape = (typeof def.shape === 'function' ? def.shape() : def.shape) ?? {};
+      const out: Record<string, unknown> = { ...(value as Record<string, unknown>) };
+      for (const [key, field] of Object.entries(shape)) {
+        if (key in out) out[key] = fitToSchema(field, out[key]);
+      }
+      return out;
+    }
+    default:
+      return value;
+  }
+}
+
+/** A draft landing page, trimmed to SiteContent's limits. Still safeParse it. */
+export function fitToPage(draft: unknown): unknown {
+  return fitToSchema(SiteContent as unknown as ZodLike, draft);
+}
+
+/* ------------------------------ agent helpers ----------------------------- */
+
+/** What an operator is told when there is no Dograh to build on. */
+export const DOGRAH_NOT_CONNECTED =
+  'Dograh is not connected for this centre — set the host and key in the platform Voice ' +
+  'panel; the agents will build automatically once it is saved.';
+
+/**
+ * Most stages a built graph carries, and what a longer list is folded into.
+ *
+ * Every stage is a node cross-linked to every other, so edges grow with the
+ * square of the count, and each one is a routing condition the agent weighs
+ * on every turn. A site with twenty services produces twenty stages; six is
+ * where the graph stops being a switchboard and starts being a maze.
+ */
+const MAX_STAGES = 6;
+
+/**
+ * Keep the first five stages, fold the rest into one "Other services" stage.
+ *
+ * Folded rather than dropped: the caller who rings about the eleventh service
+ * still has to land somewhere that knows it exists, so the merged stage's
+ * routing names all of them and its instructions carry each one's purpose.
+ */
+export function foldStages(stages: GeneratedCentre['stages']): GeneratedCentre['stages'] {
+  if (stages.length <= MAX_STAGES) return stages;
+  const kept = stages.slice(0, MAX_STAGES - 1);
+  const rest = stages.slice(MAX_STAGES - 1);
+  const names = rest.map((s) => s.name);
+  const list = `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`;
+  return [
+    ...kept,
+    {
+      name: 'Other services',
+      purpose:
+        `Help callers with any of: ${names.join(', ')}. ` +
+        rest.map((s) => `${s.name} — ${s.purpose}`).join(' '),
+      routeWhen: `the caller asks about ${list}`,
+    },
+  ];
+}
+
+/**
+ * Would trying again plausibly work?
+ *
+ * DograhService reports failures as strings rather than typed errors, so this
+ * reads the message: DograhClient words a network failure or timeout as
+ * "Could not reach …" and an HTTP refusal as "Dograh refused the request
+ * (status…)". Unreachable, 429 and 5xx are worth the outbox's retries; a 4xx,
+ * a missing key or an invalid workflow fails identically every time.
+ */
+export function isTransientAgentFailure(detail: string): boolean {
+  return /could not reach|timed? ?out|timeout|aborted|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EAI_AGAIN|fetch failed|socket hang up|\((?:429|5\d\d)\b/i.test(
+    detail,
+  );
+}
+
 /** The event the create-centre transaction emits. Drained by this service. */
 export const ENRICH_EVENT = 'centre.enrich';
 
@@ -94,13 +255,20 @@ export const BUILD_AGENTS_EVENT = 'centre.build-agents';
  * backoff when the client's Dograh or Anthropic is briefly unreachable, and it
  * survives an API restart mid-run.
  *
- * ## Ordering, and why it is this way round
+ * ## Two halves, and why neither can stop the other
  *
- * Scrape, generate, write the page, then build the agent. The page is written
- * before the agent is attempted because it is the half that cannot fail on
- * someone else's infrastructure — so a centre whose Dograh is misconfigured
- * still ends up with a real landing page about the real business, rather than
- * losing both to one error.
+ * The page half — scrape, generate, write the landing page — and the agent
+ * half — build the Dograh agents for the page and the demo calls. The page is
+ * attempted first because it is the half that cannot fail on someone else's
+ * infrastructure, so a centre whose Dograh is misconfigured still gets a real
+ * landing page about the real business.
+ *
+ * They used to be one chain, and any throw in the page half (a site that
+ * would not load, a model answer one service too long) silently cost the
+ * centre its demo agents too. Now the page half is best-effort and only
+ * records what went wrong; the agent half always runs, from the scrape when
+ * there is one and from the centre's own copy when there is not — the same
+ * fallback the "Build agents" button uses.
  *
  * ## What it will not do
  *
@@ -127,10 +295,11 @@ export class EnrichmentService implements OnModuleInit {
       const orgId = String(payload.orgId ?? '');
       const websiteUrl = String(payload.websiteUrl ?? '');
       const overwrite = payload.overwriteContent === true;
+      const rebuild = payload.rebuildAgents === true;
       // Events queued before slots were choosable carry no list: all three.
       const kinds = DemoDialerKind.array().safeParse(payload.demoCallKinds);
       if (!orgId || !websiteUrl) return;
-      await this.run(orgId, websiteUrl, overwrite, kinds.success ? kinds.data : [...DEMO_DIALER_KINDS]);
+      await this.run(orgId, websiteUrl, overwrite, kinds.success ? kinds.data : [...DEMO_DIALER_KINDS], rebuild);
     });
     this.outbox.on(BUILD_AGENTS_EVENT, async (payload) => {
       const orgId = String(payload.orgId ?? '');
@@ -147,6 +316,7 @@ export class EnrichmentService implements OnModuleInit {
     websiteUrl: string,
     overwriteContent = false,
     demoCallKinds: DemoDialerKind[] = [...DEMO_DIALER_KINDS],
+    rebuildAgents = false,
   ): Promise<void> {
     await tx.outboxEvent.create({
       data: {
@@ -154,7 +324,7 @@ export class EnrichmentService implements OnModuleInit {
         aggregate: 'organization',
         aggregateId: orgId,
         type: ENRICH_EVENT,
-        payload: { orgId, websiteUrl, overwriteContent, demoCallKinds },
+        payload: { orgId, websiteUrl, overwriteContent, demoCallKinds, rebuildAgents },
       },
     });
     await tx.setting.update({
@@ -179,21 +349,31 @@ export class EnrichmentService implements OnModuleInit {
   }
 
   /**
-   * The whole pipeline.
+   * The whole pipeline: the page half, then the agent half. See the class
+   * comment for why the second always runs.
    *
-   * Throws on failure so the outbox retries it — but records the reason first,
-   * because the operator watching the centre page needs the message now and the
-   * retry may be minutes away. A failure that is the site's fault (404, no
-   * readable text) will simply fail the same way eight times; that is accepted
-   * rather than special-cased, since the status carries the reason either way.
+   * Retries only what retrying can fix. The outbox retries on throw, eight
+   * times with backoff — right for a Dograh that is briefly down or rate
+   * limiting, wrong for a site that will not load, a model that wrote
+   * nonsense, or a centre with no Dograh configured. So the page half never
+   * throws, and the agent half throws only for a transient Dograh failure
+   * (unreachable, timeout, 429, 5xx). Everything else is recorded on the
+   * status and swallowed. A retry is safe because agents are built with
+   * `reuseInbound`, so the second attempt does not duplicate the first's.
+   *
+   * The reason is always recorded before any throw, because the operator
+   * watching the centre page needs the message now and the retry may be
+   * minutes away.
    */
   private async run(
     orgId: string,
     websiteUrl: string,
     overwrite: boolean,
     kinds: DemoDialerKind[],
+    rebuild = false,
   ): Promise<void> {
     await this.setStatus(orgId, 'running', { error: null });
+    let retry: Error | null = null;
     try {
       const org = await this.prisma.organization.findUnique({
         where: { id: orgId },
@@ -205,47 +385,76 @@ export class EnrichmentService implements OnModuleInit {
         return;
       }
 
-      const site = await this.scraper.scrape(websiteUrl);
-      const generated = await this.generator.generate(site, org.name);
+      /*
+       * The page half. Best effort: every failure is caught, logged and kept
+       * for the status message, and the agent half runs regardless.
+       *
+       * The scrape is shared — it is also the agent's best source — so it is
+       * attempted even when there turns out to be no Site row to write to;
+       * applyContent is what checks for one. The model cannot fail this half
+       * any more (generateOrFallback falls back to the site's own words), but
+       * it is inside the same guard in case that ever stops being true.
+       */
+      let scraped: ScrapedSite | null = null;
+      let generated: GeneratedCentre | null = null;
+      let pageProblem: string | null = null;
+      try {
+        scraped = await this.scraper.scrape(websiteUrl);
+      } catch (e) {
+        pageProblem = `the website could not be read (${e instanceof Error ? e.message : String(e)})`;
+        this.log.warn(`enrich: ${org.slug} ${pageProblem} — building agents from the centre's own copy`);
+      }
+      if (scraped) {
+        const site = scraped;
+        try {
+          const g = await this.generator.generateOrFallback(site, org.name);
+          generated = g;
+          // As the tenant, because Site and Setting are tenant-scoped and the
+          // drainer has no request context of its own.
+          await this.tenants.runAs(orgId, null, () => this.applyContent(org, g, site, overwrite));
+        } catch (e) {
+          pageProblem = `the landing page could not be written (${e instanceof Error ? e.message : String(e)})`;
+          this.log.warn(`enrich: ${org.slug} ${pageProblem}`);
+        }
+      }
 
-      // Everything below runs as the tenant, because Site and Setting are
-      // tenant-scoped and the drainer has no request context of its own.
-      await this.tenants.runAs(orgId, null, async () => {
-        await this.applyContent(org, generated, site, overwrite);
-      });
+      // The agent half. Always runs; see the class comment.
+      const agents = await this.buildAgentHalf(orgId, org, scraped, generated, kinds, { rebuild });
 
-      // The agent last: see the class comment. A failure here leaves the page.
-      const agent = await this.provisionAgent(orgId, generated, site, org.name, kinds).catch((e: unknown) => {
-        const why = e instanceof Error ? e.message : 'unknown error';
-        this.log.warn(`enrich: page written for ${org.slug} but the agent failed — ${why}`);
-        return { ok: false as const, detail: why };
-      });
-
-      if (agent.ok) {
+      if (agents.ok) {
         await this.setStatus(orgId, 'ready', { error: null, enrichedAt: new Date() });
-        this.log.log(`enrich: ${org.slug} ready — page and three agents generated from ${site.finalUrl}`);
+        if (pageProblem) {
+          this.log.warn(`enrich: ${org.slug} ready — agents built, but ${pageProblem}`);
+        } else {
+          this.log.log(`enrich: ${org.slug} ready — page and agents generated from ${scraped?.finalUrl}`);
+        }
       } else {
-        // Ready-with-a-caveat is recorded as failed *with the page intact*: the
-        // operator asked for a page and an agent, and got one of the two.
+        // Recorded as failed even with the page intact: the operator asked for
+        // a page and agents, and the message says which half did not happen.
         await this.setStatus(orgId, 'failed', {
-          error: `The landing page was generated. The voice agents were not all built: ${agent.detail}`,
+          error:
+            (pageProblem
+              ? `The landing page was not updated: ${pageProblem}. `
+              : 'The landing page was generated. ') +
+            `The voice agents were not all built: ${agents.detail}`,
           enrichedAt: new Date(),
         });
+        if (agents.transient) {
+          this.log.warn(`enrich: ${orgId} agents failed, will retry — ${agents.detail}`);
+          retry = new Error(agents.detail);
+        } else {
+          this.log.warn(`enrich: ${orgId} agents not built, not retrying — ${agents.detail}`);
+        }
       }
     } catch (e) {
       const why = e instanceof Error ? e.message : 'unknown error';
       await this.setStatus(orgId, 'failed', { error: why });
 
       /*
-       * Retry only what retrying can fix.
-       *
-       * The outbox retries on throw, eight times with backoff — right for a
-       * Dograh that is briefly down or an LLM that returned 529. Wrong for a
-       * URL that is not a public address, a site with no readable text or a
-       * model refusal: those fail identically every time, and eight rounds of
-       * it is wasted work plus eight identical lines in the log. A
-       * BadRequestException is this codebase's marker for "the input is the
-       * problem", so it is recorded and swallowed.
+       * Something outside both halves' own guards — the database, most
+       * likely. A BadRequestException is this codebase's marker for "the
+       * input is the problem", so it is recorded and swallowed; anything else
+       * is presumed passing and handed to the outbox to retry.
        */
       if (e instanceof BadRequestException) {
         this.log.warn(`enrich: ${orgId} rejected permanently — ${why}`);
@@ -254,6 +463,9 @@ export class EnrichmentService implements OnModuleInit {
       this.log.warn(`enrich: ${orgId} failed, will retry — ${why}`);
       throw e;
     }
+    // Outside the try, so the message recorded above is not overwritten by
+    // the catch's generic one on the way out.
+    if (retry) throw retry;
   }
 
   /* ---------------------------- the landing page --------------------------- */
@@ -261,7 +473,7 @@ export class EnrichmentService implements OnModuleInit {
   private async applyContent(
     org: { id: string; name: string; industry: string; logoUrl: string | null; tagline: string | null },
     g: GeneratedCentre,
-    site: Awaited<ReturnType<ScraperService['scrape']>>,
+    site: ScrapedSite,
     overwrite: boolean,
   ): Promise<void> {
     const existing = await this.prisma.site.findFirst({ where: { orgId: org.id } });
@@ -289,14 +501,18 @@ export class EnrichmentService implements OnModuleInit {
      * coin toss.
      *
      * `keep` is the whole rule, applied uniformly rather than remembered
-     * per field.
+     * per field. It no longer caps: the model's copy is uncapped, and
+     * fitToPage below trims every string and list to what SiteContent allows,
+     * read from the schema itself. Items that could not survive that (an
+     * empty name) are filtered here first, so a list of only those falls
+     * back to the existing one rather than fitting down to nothing.
      */
-    const keep = <T,>(scraped: T[] | undefined, existing: T[] | undefined, cap: number): T[] =>
-      scraped && scraped.length > 0 ? scraped.slice(0, cap) : (existing ?? []);
+    const keep = <T,>(scraped: T[] | undefined, existing: T[] | undefined): T[] =>
+      scraped && scraped.length > 0 ? scraped : (existing ?? []);
     const text = (scraped: string | undefined, existing: string | undefined) =>
       scraped?.trim() || existing || '';
 
-    const next: SiteContent = {
+    const draft = {
       ...(base ?? SiteContent.parse({ hero: { headline: org.name, primaryCta: { label: 'Call us', kind: 'call' } } })),
       hero: {
         eyebrow: text(g.hero.eyebrow, base?.hero.eyebrow),
@@ -309,39 +525,36 @@ export class EnrichmentService implements OnModuleInit {
         secondaryCta: base?.hero.secondaryCta ?? null,
       },
       highlights: keep(
-        g.highlights.map((h) => ({ title: h.title.slice(0, 60), body: h.body.slice(0, 220) })),
+        g.highlights.filter((h) => h.title.trim()),
         base?.highlights,
-        6,
       ),
       services: keep(
-        g.services.map((x) => ({ name: x.name.slice(0, 60), body: x.body.slice(0, 220) })),
+        g.services.filter((x) => x.name.trim()),
         base?.services,
-        8,
       ),
       faq: keep(
-        g.faq.map((f) => ({ q: f.q.slice(0, 160), a: f.a.slice(0, 600) })),
+        g.faq.filter((f) => f.q.trim()),
         base?.faq,
-        10,
       ),
       steps: keep(
-        g.steps.map((st) => ({ title: st.title.slice(0, 60), body: st.body.slice(0, 200) })),
+        g.steps.filter((st) => st.title.trim()),
         base?.steps,
-        6,
       ),
-      gallery: keep(site.images, base?.gallery, 8),
+      // A URL cannot be shortened with an ellipsis, so an over-long one is
+      // dropped here rather than "fitted" into a broken link.
+      gallery: keep((site.images ?? []).filter((u) => u.length <= 400), base?.gallery),
       testimonials: keep(
         g.testimonials.filter((t) => t.quote.trim() && t.author.trim()),
         base?.testimonials,
-        6,
       ),
-      pricing: keep(g.pricing.filter((t) => t.name.trim()), base?.pricing, 4),
+      pricing: keep(g.pricing.filter((t) => t.name.trim()), base?.pricing),
       comparison:
         g.comparison.before.length > 0 || g.comparison.after.length > 0
           ? {
               beforeLabel: g.comparison.beforeLabel || 'Doing it alone',
               afterLabel: g.comparison.afterLabel || `With ${orgNameShort(org.name)}`,
-              before: g.comparison.before.slice(0, 5),
-              after: g.comparison.after.slice(0, 5),
+              before: g.comparison.before,
+              after: g.comparison.after,
             }
           : (base?.comparison ?? {
               beforeLabel: 'Without us',
@@ -359,7 +572,7 @@ export class EnrichmentService implements OnModuleInit {
       sections: sectionsFor({
         current: base?.sections,
         steps: g.steps.length > 0 || (base?.steps?.length ?? 0) > 0,
-        gallery: site.images.length > 0 || (base?.gallery?.length ?? 0) > 0,
+        gallery: (site.images ?? []).length > 0 || (base?.gallery?.length ?? 0) > 0,
         testimonials: g.testimonials.length > 0 || (base?.testimonials?.length ?? 0) > 0,
         pricing: g.pricing.length > 0 || (base?.pricing?.length ?? 0) > 0,
         comparison:
@@ -378,22 +591,43 @@ export class EnrichmentService implements OnModuleInit {
         }),
         // A number found on the client's own site is better than the platform's
         // generated placeholder — but only fills a blank, never replaces one an
-        // operator set.
-        phoneOverride: base?.contact.phoneOverride || site.phone || '',
+        // operator set. Like a URL, a phone number cannot be trimmed, so one
+        // longer than the field holds is not used at all.
+        phoneOverride:
+          base?.contact.phoneOverride ||
+          (site.phone && site.phone.length <= 24 ? site.phone : ''),
       },
     };
 
-    const contentChanged = !base || overwrite || this.looksLikeStarterCopy(base, org.name);
-    if (!contentChanged) {
+    /*
+     * Fit, then check. fitToPage trims to every limit SiteContent declares;
+     * the safeParse is what proves it worked. If something still does not
+     * fit — a schema shape the fitter does not know — the page keeps what it
+     * had rather than the enrichment failing over a landing-page detail.
+     */
+    const fitted = SiteContent.safeParse(fitToPage(draft));
+    if (!fitted.success) {
+      this.log.warn(
+        `enrich: generated page for ${org.id} still did not fit SiteContent, keeping the existing ` +
+          `content — ${fitted.error.message.slice(0, 500)}`,
+      );
+    }
+
+    const contentChanged =
+      fitted.success && (!base || overwrite || this.looksLikeStarterCopy(base, org.name));
+    if (fitted.success && !contentChanged) {
       this.log.log(`enrich: leaving edited copy for ${org.id} alone (overwrite not requested)`);
     }
 
     await this.prisma.site.update({
       where: { id: existing.id },
       data: {
-        ...(contentChanged ? { content: next as unknown as Prisma.InputJsonValue } : {}),
-        metaTitle: existing.metaTitle ?? site.title.slice(0, 120) ?? null,
-        metaDescription: existing.metaDescription ?? (site.description || g.hero.subhead).slice(0, 300),
+        ...(contentChanged && fitted.success
+          ? { content: fitted.data as unknown as Prisma.InputJsonValue }
+          : {}),
+        metaTitle: existing.metaTitle ?? (site.title ? trimWords(site.title, 120) : null),
+        metaDescription:
+          existing.metaDescription ?? trimWords(site.description || g.hero.subhead, 300),
       },
     });
 
@@ -403,13 +637,13 @@ export class EnrichmentService implements OnModuleInit {
         // The vertical the site actually reads as, which is better than the one
         // an operator guessed from a dropdown before seeing it.
         industry: g.industry as Industry,
-        tagline: org.tagline || g.tagline.slice(0, 120),
+        tagline: org.tagline || trimWords(g.tagline, 120),
         logoUrl: org.logoUrl ?? site.imageUrl,
       },
     });
 
     // Knowledge the agent and the KB search can both answer from.
-    await this.applyKnowledge(org.id, g);
+    await this.applyKnowledge(org.id, g, site);
   }
 
   /**
@@ -426,24 +660,53 @@ export class EnrichmentService implements OnModuleInit {
     return content.hero.headline.includes(orgName) && content.faq.length === 0;
   }
 
-  private async applyKnowledge(orgId: string, g: GeneratedCentre): Promise<void> {
-    if (g.knowledge.length === 0) return;
+  /**
+   * The website, as knowledge documents.
+   *
+   * Two sources: the model's notes, at full length, and one document per
+   * page the scraper read, in the page's own words. The pages are the more
+   * important of the two — a note is a model's summary of a site, a page is
+   * the site — and they need no model at all, so a centre on a deployment
+   * with no LLM still gets a knowledge base about the right business.
+   *
+   * Deduplicated by title (the model often titles a note after the page it
+   * came from) and capped at twenty, which is more than a small business's
+   * site has pages and few enough that a sprawling one does not bury the
+   * operator's own documents. KnowledgeDoc has no length limits on title or
+   * content (packages/db/prisma/schema.prisma); the 160 on titles is only so
+   * they read in a list.
+   */
+  private async applyKnowledge(orgId: string, g: GeneratedCentre, site: ScrapedSite): Promise<void> {
+    const MAX_DOCS = 20;
+    const PREFIX = 'From the website — ';
+    const candidates = [
+      ...g.knowledge.map((n) => ({ title: n.title, content: n.content })),
+      ...(site.pages ?? []).map((p) => ({ title: p.title || pageLabel(p.url), content: p.text })),
+    ];
+    const seen = new Set<string>();
+    const docs: { title: string; content: string }[] = [];
+    for (const c of candidates) {
+      const title = `${PREFIX}${c.title.trim()}`.slice(0, 160);
+      const content = c.content.trim();
+      const key = title.toLowerCase();
+      if (!c.title.trim() || !content || seen.has(key)) continue;
+      seen.add(key);
+      docs.push({ title, content });
+      if (docs.length >= MAX_DOCS) break;
+    }
+    if (docs.length === 0) return;
+
     // Additive: the vertical placeholders stay until a person deletes them, and
     // a re-run replaces only what a previous run of this added.
     await this.prisma.knowledgeDoc.deleteMany({
-      where: { orgId, title: { startsWith: 'From the website — ' } },
+      where: { orgId, title: { startsWith: PREFIX } },
     });
-    for (const note of g.knowledge.slice(0, 6)) {
+    for (const doc of docs) {
       await this.prisma.knowledgeDoc.create({
-        data: {
-          orgId,
-          title: `From the website — ${note.title}`.slice(0, 160),
-          category: 'GENERAL',
-          content: note.content,
-        },
+        data: { orgId, title: doc.title, category: 'GENERAL', content: doc.content },
       });
     }
-    this.log.log(`enrich: stored ${g.knowledge.length} website note(s) for ${orgId}`);
+    this.log.log(`enrich: stored ${docs.length} website document(s) for ${orgId}`);
   }
 
   /* ----------------------------- the voice agent --------------------------- */
@@ -459,7 +722,7 @@ export class EnrichmentService implements OnModuleInit {
   private async provisionAgent(
     orgId: string,
     g: GeneratedCentre,
-    site: Awaited<ReturnType<ScraperService['scrape']>>,
+    site: ScrapedSite,
     orgName: string,
     kinds: DemoDialerKind[],
     opts: { reuseInbound?: boolean } = {},
@@ -663,28 +926,76 @@ export class EnrichmentService implements OnModuleInit {
         return null;
       });
     }
-    const fromWebsite = Boolean(site);
-    site ??= await this.tenants.runAs(orgId, null, () => this.siteFromCentre(orgId, org));
 
     // Stages and greeting are the copywriter's; without a website there is
-    // nothing for it to read, so the generic stages stand in.
-    const generated = fromWebsite
-      ? await this.generator.generate(site, org.name).catch(() => null)
-      : null;
-    const g = generated ?? ({ agentGreeting: '', stages: DEFAULT_STAGES } as unknown as GeneratedCentre);
+    // nothing for it to read, so buildAgentHalf's generic stages stand in.
+    const generated = site ? await this.generator.generateOrFallback(site, org.name) : null;
 
-    const result = await this.provisionAgent(orgId, g, site, org.name, kinds, {
-      reuseInbound: true,
-    }).catch((e: unknown) => ({
-      ok: false as const,
-      detail: e instanceof Error ? e.message : 'unknown error',
-    }));
+    const result = await this.buildAgentHalf(orgId, org, site, generated, kinds);
     if (result.ok) {
       await this.setStatus(orgId, 'ready', { error: null });
       this.log.log(`build-agents: ${org.slug} ready (${kinds.join(', ')})`);
     } else {
       await this.setStatus(orgId, 'failed', { error: `The demo agents were not all built: ${result.detail}` });
     }
+  }
+
+  /**
+   * The agent half, shared by an enrichment and the "Build agents" button.
+   *
+   * Everything here is forgiving in the same way, wherever it is called from:
+   * no scrape means the centre's own copy is the source (siteFromCentre), no
+   * usable generation means the generic stages, a long stage list is folded
+   * to one the graph can carry, and the inbound agent is reused when the
+   * centre already has one — so a retry, or a second click, never builds a
+   * duplicate.
+   *
+   * Never throws for a Dograh failure; reports it, with whether a retry could
+   * plausibly fix it. A centre with no Dograh at all is checked up front so
+   * the operator gets the one message that tells them what to do about it.
+   */
+  private async buildAgentHalf(
+    orgId: string,
+    org: { name: string; slug: string },
+    scraped: ScrapedSite | null,
+    generated: GeneratedCentre | null,
+    kinds: DemoDialerKind[],
+    opts: { rebuild?: boolean } = {},
+  ): Promise<{ ok: true } | { ok: false; detail: string; transient: boolean }> {
+    const connection = await this.dograh.view(orgId);
+    if (!connection.baseUrl || !connection.hasApiKey) {
+      return { ok: false, detail: DOGRAH_NOT_CONNECTED, transient: false };
+    }
+
+    const site = scraped ?? (await this.tenants.runAs(orgId, null, () => this.siteFromCentre(orgId, org)));
+    const stages = foldStages(
+      generated && generated.stages.length >= 2 ? generated.stages : DEFAULT_STAGES,
+    );
+    const g = {
+      ...(generated ?? ({ agentGreeting: '' } as unknown as GeneratedCentre)),
+      stages,
+    } as GeneratedCentre;
+
+    /*
+     * Reuse, unless the operator asked for a fresh read.
+     *
+     * Every automatic path (creation, Voice-panel save, backfill, outbox
+     * retry) keeps agents that already exist, so no attempt leaves duplicates
+     * in Dograh. `restart` is the one deliberate "read this site again" and
+     * rebuilds the inbound agent; it clears the other slots itself.
+     */
+    const result = await this.provisionAgent(orgId, g, site, org.name, kinds, {
+      reuseInbound: !opts.rebuild,
+    }).catch((e: unknown) => ({
+      ok: false as const,
+      detail: e instanceof Error ? e.message : 'unknown error',
+    }));
+    if (result.ok) return result;
+
+    // Dograh's own wording for a missing host or key, from clientFor, mapped
+    // to the message that says where to fix it.
+    const detail = /No Dograh (host|API key)/i.test(result.detail) ? DOGRAH_NOT_CONNECTED : result.detail;
+    return { ok: false, detail, transient: isTransientAgentFailure(detail) };
   }
 
   /** A centre's own copy and knowledge, shaped like a scrape. */
@@ -723,7 +1034,8 @@ export class EnrichmentService implements OnModuleInit {
       images: [],
       phone: null,
       alsoRead: [],
-    } as ScrapedSite;
+      pages: [],
+    };
   }
 
   /** Re-run for a centre, from the platform page or the website editor. */
@@ -733,7 +1045,17 @@ export class EnrichmentService implements OnModuleInit {
     await this.scraper.assertReadable(websiteUrl);
     await this.prisma.$transaction(async (tx) => {
       await tx.organization.update({ where: { id: orgId }, data: { websiteUrl } });
-      await this.enqueue(tx, orgId, websiteUrl, overwriteContent);
+      // Empty the outbound and info slots so they are rebuilt from the new
+      // read: the builder skips any slot that already has an agent.
+      const setting = await tx.setting.findUnique({ where: { orgId }, select: { dograhDialers: true } });
+      const dialers = { ...((setting?.dograhDialers ?? {}) as Record<string, Record<string, unknown>>) };
+      for (const kind of ['outbound', 'info'] as const) {
+        if (dialers[kind]) {
+          dialers[kind] = { ...dialers[kind], workflowId: null, workflowUuid: '', workflowName: '', embedToken: '' };
+        }
+      }
+      await tx.setting.update({ where: { orgId }, data: { dograhDialers: dialers as Prisma.InputJsonValue } });
+      await this.enqueue(tx, orgId, websiteUrl, overwriteContent, [...DEMO_DIALER_KINDS], true);
     });
     await this.outbox.notify();
   }

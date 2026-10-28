@@ -96,6 +96,10 @@ export class DograhService {
         dograhSecretsEnc: true,
         dograhDialers: true,
         dograhUpdatedAt: true,
+        // For dialersView's build notice: the agent build reports on the
+        // enrichment's status fields.
+        enrichStatus: true,
+        enrichError: true,
       },
     });
   }
@@ -727,9 +731,22 @@ export class DograhService {
       };
     };
 
+    /*
+     * Only what is missing.
+     *
+     * Enrichment is retried by the outbox, and a centre can be queued by its
+     * creation, a Voice-panel save and the backfill in turn. Building
+     * unconditionally left a fresh pair of agents in Dograh on every attempt.
+     * A slot that already has a dialable agent is kept; re-reading a site on
+     * purpose clears the slots first (EnrichmentService.restart), so that path
+     * still rebuilds.
+     */
+    const before = this.parseDialers((await this.row(orgId))?.dograhDialers ?? null);
+    const wants = (kind: 'outbound' | 'info') => kinds.includes(kind) && !before[kind]?.workflowUuid;
+
     const [outbound, info] = await Promise.allSettled([
-      kinds.includes('outbound') ? build('outbound') : null,
-      kinds.includes('info') ? build('info') : null,
+      wants('outbound') ? build('outbound') : null,
+      wants('info') ? build('info') : null,
     ]);
 
     // Re-read rather than reuse: an operator may have touched a slot while the
@@ -1044,10 +1061,14 @@ export class DograhService {
       workflows,
       workflowsError,
       updatedAt: row?.dograhUpdatedAt ?? null,
+      build: { status: row?.enrichStatus ?? 'none', error: row?.enrichError ?? null },
       dialers: DEMO_DIALER_KINDS.map((kind) => {
         const c = dialers[kind];
+        // The operator connects Dograh from the platform's Voice panel — the
+        // tenant can no longer store a key — and the agents build on their own
+        // once it is connected, so there is no second step to point at.
         const blockedReason = !connected
-          ? 'This centre has no Dograh host or key yet. Connect one on the Website page.'
+          ? 'This centre has no Dograh connected yet. Your platform operator connects it from the Voice panel, and its agents build automatically once it is.'
           : !c.workflowId
             ? 'No agent chosen for this slot.'
             : !c.workflowUuid

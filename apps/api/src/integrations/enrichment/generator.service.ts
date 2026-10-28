@@ -17,7 +17,19 @@ import { clampToSchema, type Clamp } from './clamp-to-contract';
  * The schema below is zod/v4 because that is what the SDK's structured-output
  * helper needs; the result is re-validated against the v3 contract in
  * @superdemo/contracts so the rest of the codebase keeps one source of truth.
+ *
+ * It carries no length or count limits, and must not gain any. The contract
+ * is lenient now (see GeneratedCentre), and a cap here would be stricter than
+ * the thing it feeds — the SDK would reject an answer the contract accepts.
+ * Limits belong to the landing page, which trims to its own.
  */
+
+/**
+ * A failure worth one more attempt: the provider was unreachable, timed out,
+ * rate-limited us or had a 5xx. Everything else — a refusal, a malformed
+ * reply, a missing key — fails the same way on a retry, so it is not one.
+ */
+export class TransientLlmError extends Error {}
 
 const Generated = z.object({
   // Mirrors Industry in packages/contracts/src/enums.ts. Duplicated rather than
@@ -98,6 +110,20 @@ export class GeneratorService {
       '- Write in the register the site uses. A dental clinic and a gym do not sound alike.',
       '- British English. The audience is Gulf/UK, not US.',
       '',
+      'hero: the headline is short and punchy — a few words a visitor takes in at a glance, not a',
+      'sentence. The subhead is one or two plain sentences on what the business does and for whom.',
+      'ctaLabel is a two-to-three word button label, e.g. "Call us", "Book a visit".',
+      '',
+      'services: list EVERY service or product line the site offers — all of them, however many',
+      'there are. Each a short name and one or two sentences from what the site says about it.',
+      'Do not merge, sample or drop services to keep the list short.',
+      '',
+      'highlights: the handful of reasons to choose this business the site itself gives. Short',
+      'title, one sentence each.',
+      '',
+      'faq: questions and answers the site publishes, or that its text plainly answers. Keep each',
+      'answer to what the site says; never answer from general knowledge.',
+      '',
       'hero.eyebrow: a very short proof chip, two to five words, of something the site actually',
       'claims — "KHDA approved", "Trusted by 500+ homeowners", "Since 1998". Leave it an empty',
       'string if the site claims nothing checkable. Never invent a number.',
@@ -111,7 +137,7 @@ export class GeneratorService {
       'tier structure the business has not stated.',
       '',
       'comparison: how the site frames the difference the business makes — the problem without',
-      'them against the outcome with them. Up to four short lines each side, drawn from their own',
+      'them against the outcome with them. A few short lines each side, drawn from their own',
       'positioning. Labels short, e.g. "Doing it alone" / "Working with us". Empty arrays if the',
       'site makes no such argument.',
       '',
@@ -127,8 +153,9 @@ export class GeneratorService {
       'industry: one of EDUCATION, CLINIC, RESTAURANT, RETAIL, FITNESS, PROFESSIONAL, GENERIC —',
       'the closest match, since it decides the queues and the routing labels. A dentist, vet or',
       'physio is CLINIC; a law or accountancy firm is PROFESSIONAL; GENERIC if nothing fits.',
-      'knowledge: 3-6 factual notes lifted from the site (services, hours, location, policies) that',
-      'the agent can answer from. Quote the site, do not embellish it.',
+      'knowledge: factual notes lifted from the site (services, hours, location, policies) that',
+      'the agent can answer from — as many as the site supports, each complete rather than',
+      'abbreviated. Quote the site, do not embellish it.',
       '',
       'THE STAGES (stages)',
       'Three to five distinct things a caller to THIS business actually rings about, which become',
@@ -162,8 +189,43 @@ export class GeneratorService {
     const provider = this.resolveProvider();
     this.log.log(`generating copy for ${centreName} with ${provider}`);
     if (provider === 'groq') return this.viaGroq(site, centreName);
-    if (provider === 'none') return this.withoutModel(site, centreName);
+    if (provider === 'none') return this.withoutModel(site, centreName, 'no ENRICH_LLM configured');
     return this.viaAnthropic(site, centreName);
+  }
+
+  /** Pause before the one retry. A field so tests can make it zero. */
+  retryDelayMs = 3_000;
+
+  /**
+   * generate(), except it always returns something usable.
+   *
+   * A model is the optional half of enrichment: its absence already produces
+   * a page from the site's own words (withoutModel), so its *failure* should
+   * produce the same rather than a failed centre with no agents behind it.
+   * Any error — a refusal, a malformed reply, a provider that is down — logs
+   * a warning and falls back.
+   *
+   * A transient error gets one more try first, because a 429 or a 529 is
+   * usually gone a few seconds later and the model's copy is worth that wait.
+   * Only one: the outbox already retries the agents, and this must not hold
+   * an enrichment for minutes on a provider that is properly down.
+   */
+  async generateOrFallback(site: ScrapedSite, centreName: string): Promise<GeneratedCentre> {
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        return await this.generate(site, centreName);
+      } catch (e) {
+        const why = e instanceof Error ? e.message : String(e);
+        if (attempt === 1 && e instanceof TransientLlmError) {
+          this.log.warn(`generation for ${centreName} failed transiently, retrying once — ${why}`);
+          if (this.retryDelayMs > 0) await new Promise((r) => setTimeout(r, this.retryDelayMs));
+          continue;
+        }
+        return this.withoutModel(site, centreName, `the model failed (${why})`);
+      }
+    }
+    // Unreachable — the loop returns on every path — but the compiler cannot see that.
+    return this.withoutModel(site, centreName, 'the model failed');
   }
 
   /**
@@ -204,14 +266,15 @@ export class GeneratorService {
       headers: { authorization: `Bearer ${key}` },
       signal: AbortSignal.timeout(15_000),
     }).catch((e: unknown) => {
-      throw new BadRequestException(
+      throw new TransientLlmError(
         `Could not ask Groq which models are available — ${e instanceof Error ? e.message : 'request failed'}`,
       );
     });
     if (!res.ok) {
-      throw new BadRequestException(
-        `Groq refused the model list (${res.status}) — check GROQ_API_KEY`,
-      );
+      const message = `Groq refused the model list (${res.status}) — check GROQ_API_KEY`;
+      throw GeneratorService.isTransientStatus(res.status)
+        ? new TransientLlmError(message)
+        : new BadRequestException(message);
     }
 
     const body = (await res.json()) as { data?: { id?: string; context_window?: number }[] };
@@ -267,16 +330,18 @@ export class GeneratorService {
         ],
       }),
     }).catch((e: unknown) => {
-      throw new BadRequestException(
+      // Network failure or the 90s timeout: worth the one retry.
+      throw new TransientLlmError(
         `Could not reach Groq — ${e instanceof Error ? e.message : 'request failed'}`,
       );
     });
 
     if (!res.ok) {
       const detail = await res.text().catch(() => '');
-      throw new BadRequestException(
-        `Groq refused the request (${res.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`,
-      );
+      const message = `Groq refused the request (${res.status})${detail ? `: ${detail.slice(0, 300)}` : ''}`;
+      throw GeneratorService.isTransientStatus(res.status)
+        ? new TransientLlmError(message)
+        : new BadRequestException(message);
     }
 
     const body = (await res.json()) as {
@@ -285,13 +350,43 @@ export class GeneratorService {
     const content = body.choices?.[0]?.message?.content;
     if (!content) throw new BadRequestException('Groq returned no content for that site');
 
-    let raw: unknown;
-    try {
-      raw = JSON.parse(content);
-    } catch {
+    const raw = GeneratorService.parseJsonLoosely(content);
+    if (raw === undefined) {
       throw new BadRequestException('Groq did not return valid JSON for that site');
     }
     return this.validate(raw);
+  }
+
+  /** 429 and any 5xx: the provider's problem, and usually a passing one. */
+  private static isTransientStatus(status: number): boolean {
+    return status === 429 || status >= 500;
+  }
+
+  /**
+   * JSON.parse, then the rescue attempts a json_object reply sometimes needs.
+   *
+   * `json_object` mode is a strong hint rather than a guarantee on every
+   * hosted model: some wrap the object in a ```json fence anyway, and some
+   * put a sentence before it. Both still contain a perfectly good object, so
+   * the fence is stripped and, failing that, the span from the first `{` to
+   * the last `}` is tried. Undefined means nothing parseable was in there.
+   */
+  static parseJsonLoosely(content: string): unknown {
+    const attempts = [
+      content,
+      content.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, ''),
+    ];
+    const first = content.indexOf('{');
+    const last = content.lastIndexOf('}');
+    if (first !== -1 && last > first) attempts.push(content.slice(first, last + 1));
+    for (const text of attempts) {
+      try {
+        return JSON.parse(text) as unknown;
+      } catch {
+        // Next attempt.
+      }
+    }
+    return undefined;
   }
 
   /**
@@ -299,28 +394,32 @@ export class GeneratorService {
    *
    * Duplicating the schema in prose is not ideal, but the alternative — a JSON
    * schema in the request — is the thing that varies between Groq's hosted
-   * models. The zod validation below is what actually enforces it either way,
-   * so a model that ignores this produces a clear validation failure rather
-   * than a malformed page.
+   * models. The zod validation below is lenient, so a model that ignores part
+   * of this costs us that part (an empty list, a blank string), not the rest.
+   *
+   * No length caps in here any more. Asking for "max 120 chars" did not stop
+   * models exceeding it, and a site with twenty-four services met "up to 8"
+   * with either a truncated list or a rejected answer. The page trims to its
+   * own limits; everything else wants the whole of what the site said.
    */
   private jsonShape(): string {
     return [
-      'Reply with a single JSON object, no prose and no code fence, with exactly these keys.',
-      'EVERY key is required, including "stages" — an empty stages array is not acceptable.',
+      'Reply with a single JSON object and nothing else — no prose before or after it, no code fence.',
+      'Use these keys. Use an empty string or an empty array where the site gives you nothing.',
       '{',
       '  "industry": "EDUCATION|CLINIC|RESTAURANT|RETAIL|FITNESS|PROFESSIONAL|GENERIC",',
-      '  "tagline": "string, max 120 chars",',
-      '  "hero": { "headline": "max 120", "subhead": "max 300", "ctaLabel": "max 40", "eyebrow": "max 60" },',
-      '  "highlights": [ { "title": "max 60", "body": "max 200" } ],   // up to 6',
-      '  "services":   [ { "name": "max 80",  "body": "max 240" } ],   // up to 8',
-      '  "faq":        [ { "q": "max 160",    "a": "max 400" } ],      // up to 6',
-      '  "steps":      [ { "title": "max 60", "body": "max 200" } ],    // 0 or 3-4, see below',
-      '  "agentGreeting": "max 300",',
-      '  "knowledge":  [ { "title": "max 120", "content": "max 2000" } ], // 3-6',
-      '  "stages":     [ { "name": "max 40", "purpose": "max 600", "routeWhen": "max 240" } ], // 3-5',
-      '  "testimonials": [ { "quote": "max 400", "author": "max 60", "role": "max 80" } ], // [] unless on the page',
-      '  "pricing":    [ { "name": "max 40", "price": "max 40", "note": "max 120", "features": ["max 90"] } ], // [] unless on the page',
-      '  "comparison": { "beforeLabel": "max 40", "afterLabel": "max 40", "before": ["max 120"], "after": ["max 120"] }',
+      '  "tagline": "one short line",',
+      '  "hero": { "headline": "short and punchy", "subhead": "1-2 sentences", "ctaLabel": "2-3 words", "eyebrow": "short proof chip or empty" },',
+      '  "highlights": [ { "title": "short", "body": "one sentence" } ],',
+      '  "services":   [ { "name": "short", "body": "1-2 sentences" } ],   // every service the site offers',
+      '  "faq":        [ { "q": "question", "a": "answer from the site" } ],',
+      '  "steps":      [ { "title": "short", "body": "one sentence" } ],    // [] unless the site describes a process',
+      '  "agentGreeting": "first line on answering",',
+      '  "knowledge":  [ { "title": "topic", "content": "the facts, in full" } ],',
+      '  "stages":     [ { "name": "2-4 words", "purpose": "instructions", "routeWhen": "the caller need" } ], // 3-5',
+      '  "testimonials": [ { "quote": "verbatim", "author": "name", "role": "" } ], // [] unless on the page',
+      '  "pricing":    [ { "name": "tier", "price": "as written", "note": "", "features": ["..."] } ], // [] unless on the page',
+      '  "comparison": { "beforeLabel": "", "afterLabel": "", "before": ["..."], "after": ["..."] }',
       '}',
     ].join('\n');
   }
@@ -341,6 +440,11 @@ export class GeneratorService {
       .join('\n');
   }
 
+  /**
+   * Re-validate against the contract — which is lenient, so this only fails
+   * for a reply that is not an object at all. Over-long copy and extra items
+   * pass through untouched; the landing page trims to its own limits.
+   */
   private validate(raw: unknown): GeneratedCentre {
     /*
      * Fit over-long values to the contract's limits before judging the shape.
@@ -389,43 +493,43 @@ export class GeneratorService {
    *
    * The agent brief falls back to the scraped text itself, because Dograh's own
    * generator reads natural language and does not need ours to pre-digest it.
+   *
+   * Also the fallback for a model that failed (generateOrFallback), so it must
+   * never throw: every input is read defensively, and the result is parsed
+   * leniently rather than through validate().
    */
-  private withoutModel(site: ScrapedSite, centreName: string): GeneratedCentre {
-    this.log.warn(
-      `no ENRICH_LLM configured — building ${centreName}'s page from the page's own text`,
-    );
-    const headings = site.headings.filter((h) => h.length > 3 && h.length < 70);
-    const sentences = site.text
+  private withoutModel(site: ScrapedSite, centreName: string, reason: string): GeneratedCentre {
+    this.log.warn(`${reason} — building ${centreName}'s page from the page's own text`);
+    const headings = (site.headings ?? []).filter((h) => h.length > 3 && h.length < 70);
+    const sentences = (site.text ?? '')
       .split(/(?<=[.!?])\s+/)
       .map((x) => x.trim())
       .filter((x) => x.length > 40 && x.length < 240);
 
-    return this.validate({
+    const draft = {
       industry: 'GENERIC',
-      tagline: (site.description || site.title || centreName).slice(0, 120),
+      tagline: site.description || site.title || centreName,
       hero: {
-        headline: (site.title || centreName).slice(0, 120),
-        subhead: (site.description || sentences[0] || '').slice(0, 300),
+        headline: site.title || centreName,
+        subhead: site.description || sentences[0] || '',
         ctaLabel: 'Call us',
         eyebrow: '',
       },
-      highlights: headings.slice(0, 3).map((h, i) => ({
-        title: h.slice(0, 60),
-        body: (sentences[i + 1] ?? '').slice(0, 200),
-      })),
-      services: headings.slice(3, 9).map((h) => ({ name: h.slice(0, 80), body: '' })),
+      highlights: headings.slice(0, 3).map((h, i) => ({ title: h, body: sentences[i + 1] ?? '' })),
+      services: headings.slice(3).map((h) => ({ name: h, body: '' })),
       faq: [],
       steps: [],
       testimonials: [],
       pricing: [],
       comparison: { beforeLabel: '', afterLabel: '', before: [], after: [] },
-      agentGreeting: `Thank you for calling ${centreName}. How can I help you today?`.slice(0, 300),
-      knowledge: headings.slice(0, 4).map((h, i) => ({
-        title: h.slice(0, 120),
-        content: (sentences[i] ?? h).slice(0, 2000),
-      })),
+      agentGreeting: `Thank you for calling ${centreName}. How can I help you today?`,
+      knowledge: headings.slice(0, 4).map((h, i) => ({ title: h, content: sentences[i] ?? h })),
       stages: DEFAULT_STAGES,
-    });
+    };
+    const parsed = GeneratedCentre.safeParse(draft);
+    // Cannot fail for an object literal, but the type system does not know
+    // the contract is lenient — and this path must not be the one that throws.
+    return parsed.success ? parsed.data : (draft as unknown as GeneratedCentre);
   }
 
   private async viaAnthropic(site: ScrapedSite, centreName: string): Promise<GeneratedCentre> {
@@ -450,9 +554,15 @@ export class GeneratorService {
         },
       });
     } catch (e) {
-      throw new BadRequestException(
-        `Could not write the page — ${e instanceof Error ? e.message : 'the model call failed'}`,
-      );
+      const message = `Could not write the page — ${e instanceof Error ? e.message : 'the model call failed'}`;
+      // Connection errors and timeouts (APIConnectionError covers both), 429
+      // and 5xx — 529 "overloaded" above all — are worth the one retry.
+      const transient =
+        e instanceof Anthropic.APIConnectionError ||
+        (e instanceof Anthropic.APIError &&
+          typeof e.status === 'number' &&
+          GeneratorService.isTransientStatus(e.status));
+      throw transient ? new TransientLlmError(message) : new BadRequestException(message);
     }
 
     if (response.stop_reason === 'refusal') {
@@ -465,8 +575,8 @@ export class GeneratorService {
     const raw = response.parsed_output;
     if (!raw) throw new BadRequestException('The model returned nothing usable for that site');
 
-    // Re-validated against the shared contract, which also enforces the length
-    // caps the DB columns and the templates assume.
+    // Re-validated against the shared contract, which normalises the shape
+    // (industry, empty defaults). Length limits are the landing page's job.
     const parsed = this.validate(raw);
     this.log.log(
       `generated ${parsed.industry} content for ${centreName} from ${site.finalUrl} ` +

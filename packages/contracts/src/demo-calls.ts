@@ -145,6 +145,17 @@ export const DemoCallsView = z.object({
   /** Set when the workflow list could not be fetched, so the picker can say why. */
   workflowsError: z.string().nullable(),
   updatedAt: z.coerce.date().nullable(),
+  /**
+   * Where the background agent build has got to.
+   *
+   * Agents are built for the chosen slots automatically — on creation, and
+   * again once the operator connects Dograh — and that takes minutes. Without
+   * this the page shows "none chosen" for the whole build and again after it
+   * fails, and the two look identical. `status` is Setting.enrichStatus
+   * ('none' | 'queued' | 'running' | 'ready' | 'failed'); a string rather than
+   * the enum so this file does not depend on enrichment's.
+   */
+  build: z.object({ status: z.string(), error: z.string().nullable() }),
 });
 export type DemoCallsView = z.infer<typeof DemoCallsView>;
 

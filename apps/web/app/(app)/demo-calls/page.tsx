@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Link from 'next/link';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { Mic, PhoneOutgoing, X } from 'lucide-react';
+import { Loader2, Mic, PhoneOutgoing, X } from 'lucide-react';
 import {
   DEFAULT_DIALLING_COUNTRY,
   DEMO_DIALER_LABELS,
@@ -27,11 +26,22 @@ import { Badge, Button, Card, Input, Select, Spinner } from '@/components/compos
  * them to another page to fix it is how a demo stalls. Settings carries the
  * same controls for whoever is setting a centre up rather than testing it.
  */
+/**
+ * A build queued or under way. Optional-chained because an API that predates
+ * the `build` field should render as "not building" rather than crash.
+ */
+function isBuilding(d: DemoCallsView | undefined): boolean {
+  return d?.build?.status === 'queued' || d?.build?.status === 'running';
+}
+
 export default function DemoCallsPage() {
 
   const view = useQuery({
     queryKey: ['demo-calls'],
     queryFn: () => api.get<DemoCallsView>('/demo-calls'),
+    // While the agents are building, poll so the cards fill in on their own;
+    // otherwise the page would sit on "none chosen" until somebody reloads.
+    refetchInterval: (q) => (isBuilding(q.state.data) ? 5_000 : false),
   });
 
   /*
@@ -68,12 +78,32 @@ export default function DemoCallsPage() {
       {!d.dograhConnected && (
         <Card className="mb-4" title="No Dograh connected" contentClassName="p-4">
           <p className="max-w-prose text-sm text-muted-foreground">
-            These dialers ring through this centre&rsquo;s own Dograh, and none is configured yet.
-            Connect a host and key on the{' '}
-            <Link href="/website" className="underline underline-offset-2">
-              Website
-            </Link>{' '}
-            page, then come back and choose an agent for each slot.
+            These dialers ring through this centre&rsquo;s own Dograh, and none is connected yet.
+            Your platform operator connects it from the Voice panel; once it is, this
+            centre&rsquo;s agents are built automatically and appear here.
+          </p>
+        </Card>
+      )}
+
+      {/*
+        The agent build runs in the background and takes minutes. Said here so
+        an empty slot during a build does not read as a slot nobody set up, and
+        a failed build says why instead of just staying empty.
+      */}
+      {isBuilding(d) && (
+        <Card className="mb-4" title="Building agents…" contentClassName="p-4">
+          <p className="flex max-w-prose items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 shrink-0 animate-spin" aria-hidden />
+            This centre&rsquo;s demo-call agents are being built. The cards below fill in on
+            their own when they are ready.
+          </p>
+        </Card>
+      )}
+
+      {d.build?.status === 'failed' && d.build.error && (
+        <Card className="mb-4" title="Agents could not be built" contentClassName="p-4">
+          <p className="max-w-prose text-sm text-muted-foreground">
+            {d.build.error} Ask your platform operator to retry from the Voice panel.
           </p>
         </Card>
       )}
@@ -93,6 +123,8 @@ export default function DemoCallsPage() {
           <DialerCard
             key={dialer.kind}
             dialer={dialer}
+            connected={d.dograhConnected}
+            building={isBuilding(d)}
             talking={webCall?.kind === dialer.kind}
             anyTalking={Boolean(webCall)}
             onWebCall={(src) => setWebCall({ kind: dialer.kind, src })}
@@ -204,11 +236,15 @@ function WebCallHost({ kind, src }: { kind: DemoDialerKind; src: string }) {
 
 function DialerCard({
   dialer,
+  connected,
+  building,
   talking,
   anyTalking,
   onWebCall,
 }: {
   dialer: DemoDialerView;
+  connected: boolean;
+  building: boolean;
   talking: boolean;
   anyTalking: boolean;
   onWebCall: (src: string) => void;
@@ -341,8 +377,9 @@ function DialerCard({
 
         {!dialer.ready && (
           <p className="text-[11px] leading-relaxed text-muted-foreground">
-            {dialer.blockedReason ?? 'This dialer is switched off.'} Ask your platform operator
-            to set it up.
+            {dialer.blockedReason ?? 'This dialer is switched off.'}
+            {/* Unconnected already says who connects it and what happens next. */}
+            {connected && (building ? ' Its agent is being built.' : ' Ask your platform operator to set it up.')}
           </p>
         )}
 
