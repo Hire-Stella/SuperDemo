@@ -175,7 +175,24 @@ export function DograhConnection({ orgId }: { orgId: string }) {
           </div>
         </div>
 
-        {c.inheritedFromDeployment ? (
+        {/*
+          `source` is newer than `inheritedFromDeployment` and tells the two
+          inherited cases apart. An API that predates the platform setting sends
+          no `source`, which falls through to the old check below.
+        */}
+        {c.source === 'platform' ? (
+          <p className="rounded-lg bg-muted px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+            Using the platform default — this centre has saved no Dograh of its own, so it uses the
+            one set on the platform administration page. A key saved here replaces it for this
+            centre alone.
+          </p>
+        ) : c.source === 'deployment' ? (
+          <p className="rounded-lg bg-muted px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
+            Using the server&rsquo;s environment settings (<code>DOGRAH_API_KEY</code>), because
+            neither this centre nor the platform has saved a Dograh. A key saved here is encrypted
+            at rest and scoped to this centre alone.
+          </p>
+        ) : c.inheritedFromDeployment ? (
           <p className="rounded-lg bg-muted px-3 py-2.5 text-xs leading-relaxed text-muted-foreground">
             Using the deployment&rsquo;s <code>DOGRAH_API_KEY</code>, because this centre has saved
             none of its own. That is convenient for a demo and wrong for a real client — a key saved

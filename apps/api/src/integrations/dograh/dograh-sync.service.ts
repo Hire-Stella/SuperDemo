@@ -15,6 +15,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContext } from '../../tenancy/tenant-context.service';
 import { AnalyticsService } from '../../analytics/analytics.service';
 import { STORAGE_PROVIDER } from '../storage/storage.module';
+import { PlatformSettingsService } from '../../platform-settings/platform-settings.service';
 
 const DEFAULT_BASE_URL = 'https://voice.hirestella.ai';
 const TICK_MS = 60_000;
@@ -107,7 +108,23 @@ export class DograhSyncService implements OnApplicationBootstrap {
     private readonly analytics: AnalyticsService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
     @Inject(ENV) private readonly env: ApiEnv,
+    private readonly platform: PlatformSettingsService,
   ) {}
+
+  /**
+   * The host the superuser API is asked on.
+   *
+   * DOGRAH_BASE_URL first, unlike a centre's resolution: the superuser key is
+   * env-only, so it belongs to the env's host, and pairing it with a different
+   * platform host would fail every import. The platform host is used only when
+   * the environment names none.
+   */
+  private async baseUrl(): Promise<string> {
+    const envHost = this.env.DOGRAH_BASE_URL?.trim();
+    if (envHost) return envHost;
+    const platform = await this.platform.dograh();
+    return platform.baseUrl?.trim() || DEFAULT_BASE_URL;
+  }
 
   onApplicationBootstrap(): void {
     if (!this.env.DOGRAH_SUPERUSER_KEY) return;
@@ -260,10 +277,7 @@ export class DograhSyncService implements OnApplicationBootstrap {
         value: { from: from.toISOString(), to: new Date().toISOString() },
       });
     }
-    const url = new URL(
-      '/api/v1/superuser/workflow-runs',
-      this.env.DOGRAH_BASE_URL ?? DEFAULT_BASE_URL,
-    );
+    const url = new URL('/api/v1/superuser/workflow-runs', await this.baseUrl());
     url.searchParams.set('limit', String(PAGE_SIZE));
     url.searchParams.set('page', String(page));
     url.searchParams.set('filters', JSON.stringify(filters));
@@ -480,7 +494,7 @@ export class DograhSyncService implements OnApplicationBootstrap {
 
   /** A Dograh storage key's bytes, via a short-lived signed URL. */
   private async download(key: string): Promise<Buffer> {
-    const url = new URL('/api/v1/s3/signed-url', this.env.DOGRAH_BASE_URL ?? DEFAULT_BASE_URL);
+    const url = new URL('/api/v1/s3/signed-url', await this.baseUrl());
     url.searchParams.set('key', key);
     const signed = await fetch(url, {
       headers: { 'X-API-Key': this.env.DOGRAH_SUPERUSER_KEY! },

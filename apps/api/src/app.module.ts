@@ -37,6 +37,7 @@ import { SitesModule } from './sites/sites.module';
 import { MediaModule } from './media/media.module';
 import { ReportsModule } from './reports/reports.module';
 import { CalendarModule } from './calendar/calendar.module';
+import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -45,6 +46,7 @@ import { HealthController } from './health.controller';
     // Before PrismaModule: PrismaService takes TenantContext in its constructor.
     TenancyModule,
     PrismaModule,
+    PlatformSettingsModule,
     RedisModule,
     ScheduleModule.forRoot(),
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 300 }]),

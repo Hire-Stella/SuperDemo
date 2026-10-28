@@ -20,7 +20,8 @@
  * Skipped, and reported:
  *   - a build or enrichment already queued or running (it fills the same slots,
  *     and a second would race it into duplicate agents);
- *   - no Dograh host or key, neither the centre's own nor the deployment's
+ *   - no Dograh host or key, neither the centre's own, the platform's (the
+ *     PlatformSetting row saved from the platform page), nor the deployment's
  *     DOGRAH_BASE_URL / DOGRAH_API_KEY — the build would only fail.
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -94,6 +95,18 @@ async function main() {
   try {
     await client.query(`SET search_path TO "${schema.replaceAll('"', '""')}"`);
 
+    // The platform-wide Dograh, which centres without their own fall back to
+    // before the environment. Presence is enough here — the key is not
+    // decrypted, only checked to be stored.
+    const { rows: platformRows } = await client.query(
+      `SELECT "dograhBaseUrl", "dograhApiKeyEnc" FROM "PlatformSetting" WHERE id = 'platform'`,
+    );
+    const platform = platformRows[0];
+    const platformBaseUrl = platform?.dograhBaseUrl?.trim() || null;
+    const platformKey = platform?.dograhApiKeyEnc || null;
+    const fallbackBaseUrl = platformBaseUrl && platformKey ? platformBaseUrl : envBaseUrl;
+    const fallbackKey = platformBaseUrl && platformKey ? platformKey : envKey;
+
     const { rows } = await client.query(`
       SELECT o.id, o.slug, o.name,
              s."dograhDialers", s."enrichStatus", s."dograhBaseUrl", s."dograhSecretsEnc"
@@ -110,7 +123,7 @@ async function main() {
       if (kinds.length === 0) continue;
       const row = { id: r.id, slug: r.slug, name: r.name, kinds, status: r.enrichStatus };
       if (r.enrichStatus === 'queued' || r.enrichStatus === 'running') busy.push(row);
-      else if (!(r.dograhBaseUrl?.trim() || envBaseUrl) || !(r.dograhSecretsEnc || envKey)) {
+      else if (!(r.dograhBaseUrl?.trim() || fallbackBaseUrl) || !(r.dograhSecretsEnc || fallbackKey)) {
         noDograh.push(row);
       } else due.push(row);
     }

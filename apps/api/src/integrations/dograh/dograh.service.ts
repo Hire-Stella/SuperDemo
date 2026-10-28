@@ -38,6 +38,17 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { decryptSecret, encryptSecret, fingerprint } from '../../shared/secret-box';
 import { DograhClient } from './dograh.client';
 import { CalendarService } from '../../calendar/calendar.service';
+import { PlatformSettingsService } from '../../platform-settings/platform-settings.service';
+
+/** Where a centre's Dograh credential came from. */
+export type DograhSource = DograhConnectionView['source'];
+
+/** A centre's host and key after fallbacks. `key` null means none was found. */
+interface ResolvedDograh {
+  baseUrl: string | null;
+  key: string | null;
+  source: DograhSource;
+}
 
 /** Heading the booking how-to is appended under; also what makes it idempotent. */
 const BOOKING_MARKER = '## BOOKING APPOINTMENTS';
@@ -59,10 +70,11 @@ const EMPTY: DograhPublic = {
 /**
  * Which Dograh a given centre's landing page talks to.
  *
- * Resolution mirrors CrmResolver deliberately: a centre's own row wins, and a
- * centre that has saved nothing inherits the deployment's DOGRAH_BASE_URL and
- * DOGRAH_API_KEY. That is what lets one key in .env light up every seeded
- * tenant for a demo, while a real client's key stays scoped to their row.
+ * Resolution mirrors CrmResolver deliberately: a centre's own row wins; a
+ * centre that has saved no key inherits the platform-wide Dograh (saved from
+ * the platform page, PlatformSettingsService) and only then the deployment's
+ * DOGRAH_BASE_URL and DOGRAH_API_KEY. That is what lets one key light up every
+ * seeded tenant for a demo, while a real client's key stays scoped to their row.
  */
 @Injectable()
 export class DograhService {
@@ -72,6 +84,7 @@ export class DograhService {
     private readonly prisma: PrismaService,
     @Inject(ENV) private readonly env: ApiEnv,
     private readonly calendar: CalendarService,
+    private readonly platform: PlatformSettingsService,
   ) {}
 
   private parsePublic(raw: Prisma.JsonValue | null): DograhPublic {
@@ -104,58 +117,119 @@ export class DograhService {
     });
   }
 
-  /** The key for this centre, or the deployment's. Null when there is neither. */
-  private resolveKey(enc: string | null | undefined): { key: string; inherited: boolean } | null {
-    if (enc) {
-      if (!this.env.CRM_SECRET_KEY) {
-        throw new BadRequestException(
-          'CRM_SECRET_KEY is not configured, so this centre’s stored Dograh key cannot be read',
-        );
-      }
-      return { key: decryptSecret(enc, this.env.CRM_SECRET_KEY), inherited: false };
-    }
-    const fallback = this.env.DOGRAH_API_KEY?.trim();
-    return fallback ? { key: fallback, inherited: true } : null;
-  }
+  /**
+   * This centre's host and key, after fallbacks.
+   *
+   * - The centre's own key: used with the centre's host, else the platform's,
+   *   else the deployment's.
+   * - No key of its own: the platform pair when the platform has both a host
+   *   and a key. The pair is taken whole — a platform key is only trusted
+   *   against the platform host, so a stale host saved on the centre cannot
+   *   pair with it. Otherwise the deployment's key, with the centre's host,
+   *   else the deployment's (exactly as before the platform setting existed).
+   * - Nothing anywhere: `source: 'none'` and the best host known, so the
+   *   editor can still show one.
+   *
+   * Throws only for a stored centre key that cannot be read; `safe` turns that
+   * into "no key" for read-only views, which must load so it can be replaced.
+   */
+  private async resolve(
+    row: { dograhBaseUrl?: string | null; dograhSecretsEnc?: string | null } | null | undefined,
+    opts: { safe?: boolean } = {},
+  ): Promise<ResolvedDograh> {
+    const own = row?.dograhBaseUrl?.trim() || null;
+    const envBase = this.env.DOGRAH_BASE_URL?.trim() || null;
+    const envKey = this.env.DOGRAH_API_KEY?.trim() || null;
+    const platform = await this.platform.dograh();
+    const platBase = platform.baseUrl?.trim() || null;
+    const platKey = platform.apiKey?.trim() || null;
 
-  private resolveBaseUrl(saved: string | null | undefined): string | null {
-    return saved?.trim() || this.env.DOGRAH_BASE_URL?.trim() || null;
+    if (row?.dograhSecretsEnc) {
+      const baseUrl = own ?? platBase ?? envBase;
+      try {
+        if (!this.env.CRM_SECRET_KEY) {
+          throw new BadRequestException(
+            'CRM_SECRET_KEY is not configured, so this centre’s stored Dograh key cannot be read',
+          );
+        }
+        return {
+          baseUrl,
+          key: decryptSecret(row.dograhSecretsEnc, this.env.CRM_SECRET_KEY),
+          source: 'centre',
+        };
+      } catch (e) {
+        if (opts.safe) return { baseUrl, key: null, source: 'none' };
+        throw e;
+      }
+    }
+    if (platBase && platKey) return { baseUrl: platBase, key: platKey, source: 'platform' };
+    if (envKey) return { baseUrl: own ?? envBase ?? platBase, key: envKey, source: 'deployment' };
+    return { baseUrl: own ?? platBase ?? envBase, key: null, source: 'none' };
   }
 
   /** A client for this centre, or a clear reason there is none. */
   private async clientFor(orgId: string): Promise<{ client: DograhClient; pub: DograhPublic }> {
     const row = await this.row(orgId);
-    const baseUrl = this.resolveBaseUrl(row?.dograhBaseUrl);
-    if (!baseUrl) {
+    const resolved = await this.resolve(row);
+    if (!resolved.baseUrl) {
       throw new BadRequestException('No Dograh host is configured for this centre');
     }
-    const resolved = this.resolveKey(row?.dograhSecretsEnc);
-    if (!resolved) {
+    if (!resolved.key) {
       throw new BadRequestException(
-        'No Dograh API key for this centre — add one, or set DOGRAH_API_KEY for the deployment',
+        'No Dograh API key for this centre — add one, connect the platform Dograh, or set DOGRAH_API_KEY for the deployment',
       );
     }
-    return { client: new DograhClient(baseUrl, resolved.key), pub: this.parsePublic(row?.dograhPublic ?? null) };
+    return {
+      client: new DograhClient(resolved.baseUrl, resolved.key),
+      pub: this.parsePublic(row?.dograhPublic ?? null),
+    };
+  }
+
+  /** whoAmI plus a workflow count, phrased for a person. Throws on failure. */
+  private async probe(client: DograhClient): Promise<{ detail: string; workflowCount: number | null }> {
+    const me = await client.whoAmI();
+    const count = await client.workflowCount().catch(() => null);
+    return {
+      workflowCount: count?.total ?? null,
+      detail: me.email
+        ? `Connected as ${me.email}${count ? ` — ${count.total} workflow(s)` : ''}`
+        : `Connected${count ? ` — ${count.total} workflow(s)` : ''}`,
+    };
+  }
+
+  /**
+   * Prove a host and key work, without storing either.
+   *
+   * For the platform page's "Test" button: the same check `test(orgId)` runs,
+   * against credentials that belong to no centre.
+   */
+  async testConnection(baseUrl: string, apiKey: string): Promise<{ ok: boolean; detail: string }> {
+    const host = baseUrl?.trim();
+    const key = apiKey?.trim();
+    if (!host) return { ok: false, detail: 'No Dograh host given' };
+    if (!key) return { ok: false, detail: 'No Dograh API key given' };
+    try {
+      const { detail } = await this.probe(new DograhClient(host, key));
+      return { ok: true, detail };
+    } catch (e) {
+      return { ok: false, detail: e instanceof Error ? e.message : 'Could not reach Dograh' };
+    }
   }
 
   /** What the website editor renders. Never carries the key. */
   async view(orgId: string): Promise<DograhConnectionView> {
     const row = await this.row(orgId);
     const pub = this.parsePublic(row?.dograhPublic ?? null);
-    const baseUrl = this.resolveBaseUrl(row?.dograhBaseUrl);
-    let resolved: { key: string; inherited: boolean } | null = null;
-    try {
-      resolved = this.resolveKey(row?.dograhSecretsEnc);
-    } catch {
-      // Undecryptable (CRM_SECRET_KEY missing or rotated). The editor should say
-      // "no key" and let it be replaced, not fail to load.
-      resolved = null;
-    }
+    // Safe: an undecryptable centre key shows as "no key" so it can be replaced.
+    const resolved = await this.resolve(row, { safe: true });
+    const { baseUrl } = resolved;
     return {
-      connected: Boolean(baseUrl && resolved && pub.workflowId && pub.embedToken),
+      connected: Boolean(baseUrl && resolved.key && pub.workflowId && pub.embedToken),
       baseUrl,
-      hasApiKey: Boolean(resolved),
-      inheritedFromDeployment: Boolean(resolved?.inherited),
+      hasApiKey: Boolean(resolved.key),
+      // Predates the platform setting, so it is true for either inherited source.
+      inheritedFromDeployment: resolved.source === 'platform' || resolved.source === 'deployment',
+      source: resolved.source,
       workflowId: pub.workflowId,
       workflowName: pub.workflowName || null,
       hasEmbedToken: Boolean(pub.embedToken),
@@ -226,19 +300,11 @@ export class DograhService {
   /** Prove the stored credential works, and say how much it can see. */
   async test(orgId: string): Promise<TestDograhConnectionOutput> {
     const row = await this.row(orgId);
-    const baseUrl = this.resolveBaseUrl(row?.dograhBaseUrl) ?? '';
+    const baseUrl = (await this.resolve(row, { safe: true })).baseUrl ?? '';
     try {
       const { client } = await this.clientFor(orgId);
-      const me = await client.whoAmI();
-      const count = await client.workflowCount().catch(() => null);
-      return {
-        ok: true,
-        baseUrl,
-        workflowCount: count?.total ?? null,
-        detail: me.email
-          ? `Connected as ${me.email}${count ? ` — ${count.total} workflow(s)` : ''}`
-          : `Connected${count ? ` — ${count.total} workflow(s)` : ''}`,
-      };
+      const { detail, workflowCount } = await this.probe(client);
+      return { ok: true, baseUrl, workflowCount, detail };
     } catch (e) {
       return {
         ok: false,
@@ -378,7 +444,8 @@ export class DograhService {
   async widgetFor(orgId: string): Promise<DograhWidgetDto> {
     const row = await this.row(orgId);
     const pub = this.parsePublic(row?.dograhPublic ?? null);
-    const baseUrl = this.resolveBaseUrl(row?.dograhBaseUrl);
+    // Resolved exactly as clientFor does, so it is the host the token was minted on.
+    const { baseUrl } = await this.resolve(row, { safe: true });
     const usable = Boolean(baseUrl && pub.embedToken && pub.workflowId);
     if (!usable || !baseUrl) return DOGRAH_WIDGET_DISABLED;
     const dialers = this.parseDialers(row?.dograhDialers ?? null);
@@ -1030,22 +1097,16 @@ export class DograhService {
    */
   async dialersView(orgId: string): Promise<DemoCallsView> {
     const row = await this.row(orgId);
-    const baseUrl = this.resolveBaseUrl(row?.dograhBaseUrl);
     const dialers = this.parseDialers(row?.dograhDialers ?? null);
-
-    let key: { key: string; inherited: boolean } | null = null;
-    try {
-      key = this.resolveKey(row?.dograhSecretsEnc);
-    } catch {
-      key = null;
-    }
+    // Counts the platform setting and the deployment's key, not just the centre's.
+    const { baseUrl, key } = await this.resolve(row, { safe: true });
     const connected = Boolean(baseUrl && key);
 
     let workflows: DemoCallsView['workflows'] = [];
     let workflowsError: string | null = null;
     if (connected) {
       try {
-        workflows = (await new DograhClient(baseUrl!, key!.key).listWorkflows()).map((w) => ({
+        workflows = (await new DograhClient(baseUrl!, key!).listWorkflows()).map((w) => ({
           id: w.id,
           name: w.name,
           status: w.status,
@@ -1158,7 +1219,7 @@ export class DograhService {
     kind: DemoDialerKind,
   ): Promise<{ ok: boolean; detail: string; scriptSrc: string | null }> {
     const row = await this.row(orgId);
-    const baseUrl = this.resolveBaseUrl(row?.dograhBaseUrl);
+    const { baseUrl } = await this.resolve(row, { safe: true });
     const dialers = this.parseDialers(row?.dograhDialers ?? null);
     const slot = dialers[kind];
     const label = DEMO_DIALER_LABELS[kind].label.toLowerCase();
