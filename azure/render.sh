@@ -23,15 +23,15 @@ VARS=(
   WEB_ORIGIN PUBLIC_BASE_URL
   ELEVENLABS_API_KEY ELEVENLABS_AGENT_ID
   ELEVENLABS_BRIDGE_SECRET ELEVENLABS_WEBHOOK_SECRET
-  DOGRAH_BASE_URL DOGRAH_API_KEY
 )
 
 # LOCATION is spelled LOC in the runbook's exports, because that is what reads
 # naturally next to RG. Accept either rather than making the two disagree.
 : "${LOCATION:=${LOC:-}}"
 
-# The shared voice host. Every deployment so far uses this one, so only the key
-# has to be supplied.
+# The shared voice host — optional. With a key it becomes the deployment-wide
+# fallback; without one the Dograh lines are dropped from the output and centres
+# use the Dograh saved on the platform page instead.
 : "${DOGRAH_BASE_URL:=https://voice.hirestella.ai}"
 
 missing=()
@@ -45,6 +45,16 @@ if [[ ${#missing[@]} -gt 0 ]]; then
 fi
 
 cp "$TEMPLATE" "$OUT"
+if [[ -n "${DOGRAH_API_KEY:-}" ]]; then
+  VARS+=(DOGRAH_BASE_URL DOGRAH_API_KEY)
+else
+  # Drop every line from a "dograh:begin" marker to its "dograh:end".
+  OUT="$OUT" python3 - <<'PY'
+import os, pathlib, re
+p = pathlib.Path(os.environ['OUT'])
+p.write_text(re.sub(r'(?ms)^[ \t]*# dograh:begin.*?^[ \t]*# dograh:end[^\n]*\n', '', p.read_text()))
+PY
+fi
 for v in "${VARS[@]}"; do
   # Python rather than sed: these values contain /, +, = and & from base64 and
   # from connection strings, and every one of those is special to sed in either

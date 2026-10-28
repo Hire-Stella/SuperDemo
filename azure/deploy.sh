@@ -165,9 +165,8 @@ fi
 
 : "${DOGRAH_BASE_URL:=https://voice.hirestella.ai}"
 if [[ -z "${DOGRAH_API_KEY:-}" ]]; then
-  echo "Not found in the environment or .env — DOGRAH_API_KEY" >&2
-  echo "Without it no centre gets demo-call agents. Create one at $DOGRAH_BASE_URL (Settings -> API keys)." >&2
-  exit 1
+  # Optional since the platform page can hold the Dograh instead.
+  echo "note: no DOGRAH_API_KEY — set the Dograh on the platform page after deploying" >&2
 fi
 
 # WEB_ORIGIN is the one thing this script cannot discover: it is your Vercel

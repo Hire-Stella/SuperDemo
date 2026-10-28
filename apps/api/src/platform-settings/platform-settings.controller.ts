@@ -174,7 +174,7 @@ export class PlatformSettingsController {
 }
 
 /** Switched-on slots with no agent behind them (neither workflow id nor uuid). */
-function missingKinds(raw: unknown): DemoDialerKind[] {
+export function missingKinds(raw: unknown): DemoDialerKind[] {
   const parsed = DograhDialers.safeParse(raw ?? {});
   if (!parsed.success) return [];
   return DEMO_DIALER_KINDS.filter((kind) => {
