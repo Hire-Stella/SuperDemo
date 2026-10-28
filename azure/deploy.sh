@@ -139,11 +139,13 @@ FLAT="$(printf '%s%s' "$STACK" "$ORG" | tr -cd '[:alnum:]' | tr '[:upper:]' '[:l
 : "${JWT_REFRESH_SECRET:=$(openssl rand -base64 48)}"
 : "${CRM_SECRET_KEY:=$(openssl rand -base64 32)}"
 
-# Brought across from your local .env if not already set. These are the four
-# that make real calls work; the deploy succeeds without them but the API will
-# refuse to boot with TELEPHONY_DRIVER=elevenlabs and no key.
+# Brought across from your local .env if not already set. The four ElevenLabs
+# values make real calls work; the deploy succeeds without them but the API will
+# refuse to boot with TELEPHONY_DRIVER=elevenlabs and no key. The Dograh pair
+# builds every centre's demo-call agents.
 if [[ -f .env ]]; then
-  for v in ELEVENLABS_API_KEY ELEVENLABS_AGENT_ID ELEVENLABS_BRIDGE_SECRET ELEVENLABS_WEBHOOK_SECRET; do
+  for v in ELEVENLABS_API_KEY ELEVENLABS_AGENT_ID ELEVENLABS_BRIDGE_SECRET ELEVENLABS_WEBHOOK_SECRET \
+           DOGRAH_BASE_URL DOGRAH_API_KEY; do
     if [[ -z "${!v:-}" ]]; then
       val="$(grep -E "^${v}=" .env | head -1 | cut -d= -f2- | tr -d '"' || true)"
       [[ -n "$val" ]] && export "$v=$val"
@@ -158,6 +160,13 @@ done
 if [[ ${#missing[@]} -gt 0 ]]; then
   echo "Not found in the environment or .env — ${missing[*]}" >&2
   echo "TELEPHONY_DRIVER=elevenlabs will not boot without them. Export them and re-run." >&2
+  exit 1
+fi
+
+: "${DOGRAH_BASE_URL:=https://voice.hirestella.ai}"
+if [[ -z "${DOGRAH_API_KEY:-}" ]]; then
+  echo "Not found in the environment or .env — DOGRAH_API_KEY" >&2
+  echo "Without it no centre gets demo-call agents. Create one at $DOGRAH_BASE_URL (Settings -> API keys)." >&2
   exit 1
 fi
 
@@ -366,7 +375,8 @@ say "app"
 export LOCATION="$LOC" ENV_ID ACR ACR_PASSWORD TAG IMAGE_REPO SHARE \
   DATABASE_URL REDIS_URL JWT_ACCESS_SECRET JWT_REFRESH_SECRET CRM_SECRET_KEY \
   WEB_ORIGIN ELEVENLABS_API_KEY ELEVENLABS_AGENT_ID \
-  ELEVENLABS_BRIDGE_SECRET ELEVENLABS_WEBHOOK_SECRET
+  ELEVENLABS_BRIDGE_SECRET ELEVENLABS_WEBHOOK_SECRET \
+  DOGRAH_BASE_URL DOGRAH_API_KEY
 
 if az containerapp show -g "$RG" -n "$APP" -o none 2>/dev/null; then
   API_HOST="$(az containerapp show -g "$RG" -n "$APP" --query 'properties.configuration.ingress.fqdn' -o tsv)"
