@@ -1,5 +1,5 @@
 import { Logger } from '@nestjs/common';
-import { DOGRAH_API_PREFIX, type DograhWorkflowRow } from '@superdemo/contracts';
+import { DOGRAH_API_PREFIX, type DograhCallerId, type DograhWorkflowRow } from '@superdemo/contracts';
 
 /**
  * A thin, typed client for one Dograh host.
@@ -23,6 +23,43 @@ export const FAREWELL_CONDITION = (lead: string): string =>
   `Choose this pathway when ${lead}, or says a farewell (${FAREWELL_PHRASES}). A farewell always wins over any other pathway.`;
 export const FAREWELL_RULE =
   `When the caller says a farewell (${FAREWELL_PHRASES}), do not ask another question or start a new topic: take the End Call pathway at once.`;
+
+/** A campaign as Dograh's CampaignResponse returns it (the fields this dashboard reads). */
+export type DograhCampaign = {
+  id: number;
+  name: string;
+  workflow_id: number;
+  workflow_name: string;
+  state: string;
+  total_rows: number | null;
+  processed_rows: number;
+  failed_rows: number;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  telephony_configuration_name?: string | null;
+  max_concurrency: number | null;
+  rate_limit_per_second: number;
+  retry_config: {
+    enabled: boolean;
+    max_retries: number;
+    retry_delay_seconds: number;
+    retry_on_busy: boolean;
+    retry_on_no_answer: boolean;
+    retry_on_voicemail: boolean;
+  };
+  schedule_config: {
+    enabled: boolean;
+    timezone: string;
+    slots: { day_of_week: number; start_time: string; end_time: string }[];
+  } | null;
+  circuit_breaker: {
+    enabled: boolean;
+    failure_threshold: number;
+    window_seconds: number;
+    min_calls_in_window: number;
+  } | null;
+};
 
 export class DograhClient {
   private readonly log = new Logger(DograhClient.name);
@@ -116,6 +153,57 @@ export class DograhClient {
         },
       ];
     });
+  }
+
+  /**
+   * Every number this key's org can place an outbound call from.
+   *
+   * Dograh keeps numbers under telephony configs (one per carrier account or
+   * SIP trunk), so this is one listing plus one per config. Configs that are
+   * switched off or fail Dograh's own outbound pre-flight are skipped: a call
+   * naming them is refused, so offering their numbers would only move the
+   * failure from the picker to the moment someone presses Call.
+   *
+   * Only the listing endpoints are read — never `/telephony-configs/{id}`,
+   * which carries the carrier credentials.
+   */
+  async listCallerIds(): Promise<DograhCallerId[]> {
+    const raw = await this.call<{ configurations?: unknown[] }>('/organizations/telephony-configs');
+    const configs = (raw?.configurations ?? []).flatMap((c) => {
+      if (!c || typeof c !== 'object') return [];
+      const o = c as Record<string, unknown>;
+      const id = Number(o.id);
+      if (!Number.isFinite(id) || o.inactive === true || o.is_ready_for_outbound === false) return [];
+      return [{ id, name: String(o.name ?? `Config ${id}`), provider: String(o.provider ?? '') }];
+    });
+
+    const perConfig = await Promise.all(
+      configs.map(async (cfg) => {
+        const r = await this.call<{ phone_numbers?: unknown[] }>(
+          `/organizations/telephony-configs/${cfg.id}/phone-numbers`,
+        );
+        return (r?.phone_numbers ?? []).flatMap((n): DograhCallerId[] => {
+          if (!n || typeof n !== 'object') return [];
+          const o = n as Record<string, unknown>;
+          const id = Number(o.id);
+          const number = String(o.address_normalized ?? o.address ?? '');
+          if (!Number.isFinite(id) || !number || o.is_active === false) return [];
+          return [
+            {
+              id,
+              number,
+              label: typeof o.label === 'string' && o.label ? o.label : null,
+              telephonyConfigId: cfg.id,
+              telephonyConfigName: cfg.name,
+              provider: cfg.provider,
+              inboundWorkflowName:
+                typeof o.inbound_workflow_name === 'string' ? o.inbound_workflow_name : null,
+            },
+          ];
+        });
+      }),
+    );
+    return perConfig.flat();
   }
 
   /** {total, active, archived}. Used to prove a key works and say how much it sees. */
@@ -842,15 +930,110 @@ export class DograhClient {
     workflowUuid: string,
     phoneE164: string,
     context?: Record<string, unknown>,
+    from?: { telephonyConfigId: number; phoneNumberId: number },
   ): Promise<{ status: string; workflow_run_id: number; workflow_run_name: string }> {
     return this.call(`/public/agent/test/workflow/${workflowUuid}`, {
       method: 'POST',
       body: {
         phone_number: phoneE164,
         ...(context && Object.keys(context).length ? { initial_context: context } : {}),
+        // Both or neither: Dograh only accepts a number inside the config named.
+        ...(from
+          ? { telephony_configuration_id: from.telephonyConfigId, from_phone_number_id: from.phoneNumberId }
+          : {}),
       },
       timeoutMs: 30_000,
     });
+  }
+
+  /* ------------------------------ campaigns ------------------------------ */
+
+  /**
+   * Put a contacts CSV where a campaign can read it, the way Dograh's own form
+   * does: ask for a presigned URL, then PUT the file straight to storage.
+   * Returns the key a campaign names as its `source_id`.
+   */
+  async uploadCampaignCsv(fileName: string, csv: string): Promise<string> {
+    const body = Buffer.from(csv, 'utf8');
+    const presigned = await this.call<{ upload_url: string; file_key: string }>(
+      '/s3/presigned-upload-url',
+      { method: 'POST', body: { file_name: fileName, file_size: body.byteLength, content_type: 'text/csv' } },
+    );
+    const res = await fetch(presigned.upload_url, {
+      method: 'PUT',
+      // Azure Blob needs the blob type on a presigned PUT; S3 and MinIO ignore it.
+      headers: { 'Content-Type': 'text/csv', 'x-ms-blob-type': 'BlockBlob' },
+      body,
+      signal: AbortSignal.timeout(60_000),
+    });
+    if (!res.ok) throw new Error(`The contacts file was not stored (${res.status} ${res.statusText})`);
+    return presigned.file_key;
+  }
+
+  /** Whether a workflow has a draft newer than what is published ('draft') or not. */
+  async workflowVersionStatus(workflowId: number): Promise<string | null> {
+    const raw = await this.call<{ version_status?: string }>(`/workflow/fetch/${workflowId}`);
+    return raw.version_status ?? null;
+  }
+
+  /** Dograh's CreateCampaignRequest, already in its own snake_case. */
+  async createCampaign(body: Record<string, unknown>): Promise<DograhCampaign> {
+    return this.call('/campaign/create', { method: 'POST', body, timeoutMs: 30_000 });
+  }
+
+  async listCampaigns(): Promise<DograhCampaign[]> {
+    return (await this.call<{ campaigns?: DograhCampaign[] }>('/campaign/')).campaigns ?? [];
+  }
+
+  async getCampaign(id: number): Promise<DograhCampaign> {
+    return this.call(`/campaign/${id}`);
+  }
+
+  async campaignProgress(id: number): Promise<{
+    state: string;
+    total_rows: number;
+    processed_rows: number;
+    failed_calls: number;
+    progress_percentage: number;
+  }> {
+    return this.call(`/campaign/${id}/progress`);
+  }
+
+  async campaignRuns(
+    id: number,
+    page = 1,
+    limit = 50,
+  ): Promise<{ runs: Record<string, unknown>[]; total_count: number }> {
+    return this.call(`/campaign/${id}/runs?page=${page}&limit=${limit}&sort_by=created_at&sort_order=desc`);
+  }
+
+  /** start, pause or resume — each a bare POST that returns the campaign. */
+  async campaignAction(id: number, action: 'start' | 'pause' | 'resume'): Promise<DograhCampaign> {
+    return this.call(`/campaign/${id}/${action}`, { method: 'POST' });
+  }
+
+  /** The org's call limit and Dograh's default retry settings, as its form starts from. */
+  async campaignDefaults(): Promise<{
+    concurrent_call_limit: number;
+    default_retry_config: DograhCampaign['retry_config'];
+  }> {
+    return this.call('/organizations/campaign-defaults');
+  }
+
+  /** Phone lines (telephony configs). Listing only — never the credentials endpoint. */
+  async listTelephonyConfigs(): Promise<
+    { id: number; name: string; provider: string; is_default_outbound: boolean; phone_number_count: number }[]
+  > {
+    const raw = await this.call<{ configurations?: Record<string, unknown>[] }>('/organizations/telephony-configs');
+    return (raw.configurations ?? [])
+      .filter((c) => c.inactive !== true && c.is_ready_for_outbound !== false)
+      .map((c) => ({
+        id: Number(c.id),
+        name: String(c.name ?? `Line ${c.id}`),
+        provider: String(c.provider ?? ''),
+        is_default_outbound: c.is_default_outbound === true,
+        phone_number_count: Number(c.phone_number_count ?? 0),
+      }));
   }
 
   /** Ask Dograh to ring a number with a workflow. Its telephony, its DID. */

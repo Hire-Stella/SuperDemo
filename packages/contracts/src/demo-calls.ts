@@ -83,6 +83,22 @@ export const DemoDialerConfig = z.object({
    * useful elsewhere is the domain list Dograh enforces against it.
    */
   embedToken: z.string().default(''),
+  /**
+   * The number this slot's calls show as, by Dograh's phone-number id.
+   *
+   * Null leaves the choice to Dograh: its default outbound telephony config,
+   * and that config's default caller ID if one is flagged. When none is, an
+   * Asterisk (ARI) config sends no caller ID at all and the SIP trunk decides
+   * what the person being rung sees — which is how campaign calls for a Dubai
+   * centre went out showing a UK number nobody had chosen.
+   *
+   * The telephony config id is stored with it because Dograh only accepts a
+   * number inside the config the call goes out on, and the number itself is
+   * kept for display, as `workflowName` is — so neither needs a round trip.
+   */
+  callerIdNumberId: z.number().int().positive().nullable().default(null),
+  telephonyConfigId: z.number().int().positive().nullable().default(null),
+  callerId: z.string().default(''),
 });
 export type DemoDialerConfig = z.infer<typeof DemoDialerConfig>;
 
@@ -92,7 +108,31 @@ const BLANK: DemoDialerConfig = {
   workflowUuid: '',
   workflowName: '',
   embedToken: '',
+  callerIdNumberId: null,
+  telephonyConfigId: null,
+  callerId: '',
 };
+
+/**
+ * One number Dograh can place outbound calls from.
+ *
+ * Like the workflow list, this is every number on the host — other clients'
+ * included — so it is only ever shown to the platform operator.
+ */
+export const DograhCallerId = z.object({
+  /** Dograh's phone-number id, which is what a call names as its caller ID. */
+  id: z.number().int(),
+  /** E.164, as Dograh normalised it. */
+  number: z.string(),
+  label: z.string().nullable(),
+  telephonyConfigId: z.number().int(),
+  telephonyConfigName: z.string(),
+  /** twilio, ari, … — so the picker can say which carrier a number rides on. */
+  provider: z.string(),
+  /** The inbound agent this number answers for, if any. */
+  inboundWorkflowName: z.string().nullable(),
+});
+export type DograhCallerId = z.infer<typeof DograhCallerId>;
 
 /** All three slots, as stored in `Setting.dograhDialers`. */
 export const DograhDialers = z.object({
@@ -144,6 +184,9 @@ export const DemoCallsView = z.object({
   ),
   /** Set when the workflow list could not be fetched, so the picker can say why. */
   workflowsError: z.string().nullable(),
+  /** Numbers the slots can call from, for the caller ID pickers. Operator-only. */
+  callerIds: z.array(DograhCallerId),
+  callerIdsError: z.string().nullable(),
   updatedAt: z.coerce.date().nullable(),
 });
 export type DemoCallsView = z.infer<typeof DemoCallsView>;
@@ -160,6 +203,8 @@ export const SaveDemoDialerInput = z.object({
   enabled: z.boolean().optional(),
   /** Null clears the slot's workflow, which is not the same as disabling it. */
   workflowId: z.number().int().positive().nullable().optional(),
+  /** Dograh's phone-number id to call from. Null hands the choice back to Dograh. */
+  callerIdNumberId: z.number().int().positive().nullable().optional(),
 });
 export type SaveDemoDialerInput = z.infer<typeof SaveDemoDialerInput>;
 

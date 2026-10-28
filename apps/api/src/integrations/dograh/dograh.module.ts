@@ -2,6 +2,8 @@ import { Global, Module } from '@nestjs/common';
 import { DograhService } from './dograh.service';
 import { DograhController } from './dograh.controller';
 import { DemoCallsController } from './demo-calls.controller';
+import { VoiceCampaignsController } from './voice-campaigns.controller';
+import { VoiceCampaignsService } from './voice-campaigns.service';
 import { CalendarModule } from '../../calendar/calendar.module';
 
 /**
@@ -14,8 +16,8 @@ import { CalendarModule } from '../../calendar/calendar.module';
 @Module({
   // For the calendar token in the booking tools' URLs.
   imports: [CalendarModule],
-  controllers: [DograhController, DemoCallsController],
-  providers: [DograhService],
+  controllers: [DograhController, DemoCallsController, VoiceCampaignsController],
+  providers: [DograhService, VoiceCampaignsService],
   exports: [DograhService],
 })
 export class DograhModule {}

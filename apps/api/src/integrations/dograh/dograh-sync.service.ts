@@ -14,6 +14,9 @@ import { ENV } from '../../config/config.module';
 import { PrismaService } from '../../prisma/prisma.service';
 import { TenantContext } from '../../tenancy/tenant-context.service';
 import { AnalyticsService } from '../../analytics/analytics.service';
+import { CalendarService } from '../../calendar/calendar.service';
+import { readCalendarSettings } from '../../calendar/calendar-settings';
+import { checkOfficeHours } from '../../calendar/office-hours';
 import { STORAGE_PROVIDER } from '../storage/storage.module';
 
 const DEFAULT_BASE_URL = 'https://voice.hirestella.ai';
@@ -105,6 +108,7 @@ export class DograhSyncService implements OnApplicationBootstrap {
     private readonly prisma: PrismaService,
     private readonly tenants: TenantContext,
     private readonly analytics: AnalyticsService,
+    private readonly calendar: CalendarService,
     @Inject(STORAGE_PROVIDER) private readonly storage: StorageProvider,
     @Inject(ENV) private readonly env: ApiEnv,
   ) {}
@@ -416,7 +420,93 @@ export class DograhSyncService implements OnApplicationBootstrap {
     // external call should not be pushed to the centre's CRM as its own.
     await this.analytics.rollUp({ callId: conversation.call!.id });
     await this.attachArtifacts(run, conversation.call!.id, conversation.id, startedAt, durationMs);
+    await this.applyOutcome(orgId, run, contact?.id ?? null, theirNumber, conversation.id, startedAt);
     return true;
+  }
+
+  /**
+   * Act on what the agent agreed with the caller, once, as the run is imported.
+   *
+   * Two outcomes are acted on rather than only recorded. A caller who asked
+   * not to be called again is marked do-not-call and taken off any list still
+   * waiting — the outbound compliance rail. A viewing the caller agreed is
+   * booked on the centre's calendar: the agent captures the caller's own words
+   * (`viewing_day_time`, "tomorrow at five"), resolved here against the time of
+   * the call by the same parser the office-hours check uses, so no date
+   * arithmetic is ever left to the model. The agent cannot reach this API
+   * during the call, which is why it promises a confirmation, not a slot.
+   */
+  private async applyOutcome(
+    orgId: string,
+    run: DograhRun,
+    contactId: string | null,
+    phoneE164: string | null,
+    conversationId: string,
+    startedAt: Date,
+  ): Promise<void> {
+    const gathered = run.gathered_context ?? {};
+    const initial = run.initial_context ?? {};
+
+    const optedOut =
+      gathered.do_not_call === true ||
+      gathered.opening_result === 'do_not_call' ||
+      gathered.call_outcome === 'do_not_call';
+    if (contactId && optedOut) {
+      await this.prisma.contact.update({ where: { id: contactId }, data: { doNotCall: true } });
+      await this.prisma.campaignTarget.updateMany({
+        where: { contactId, status: 'PENDING' },
+        data: { status: 'SUPPRESSED', lastError: 'Asked on a call not to be called again' },
+      });
+    }
+
+    const words = str(gathered.viewing_day_time);
+    if (gathered.viewing_booked !== true || !words || !phoneE164) return;
+
+    let tag = 'viewing-to-confirm';
+    let note: string;
+    try {
+      const { config, timezone } = await readCalendarSettings(this.prisma, orgId);
+      const slot = checkOfficeHours(
+        words,
+        '',
+        { timeZone: timezone, days: config.workingDays, open: config.openTime, close: config.closeTime, breaks: [] },
+        startedAt,
+      );
+      if (!slot.ok || !slot.date || !slot.time) {
+        note = `Viewing requested for "${words}" but not booked: ${slot.speech}`;
+      } else {
+        const name =
+          str(initial.name) ?? str(initial.first_name) ?? str(gathered.caller_name) ?? 'Viewing';
+        const booked = await this.calendar.voiceBook(await this.calendar.ensureToken(orgId), {
+          name: name.length >= 2 ? name : 'Viewing',
+          phone: phoneE164,
+          start: `${slot.date} ${slot.time}`,
+          notes: [`Viewing agreed on a call (caller said "${words}").`, str(gathered.viewing_notes)]
+            .filter(Boolean)
+            .join(' ')
+            .slice(0, 600),
+        });
+        if (booked.ok) tag = 'viewing-booked';
+        note = booked.ok
+          ? `Viewing booked: ${slot.readback ?? `${slot.date} ${slot.time}`}.`
+          : `Viewing requested for "${words}" but not booked: ${booked.speech}`;
+      }
+    } catch (error) {
+      note = `Viewing requested for "${words}" but not booked: ${String(error)}`;
+    }
+
+    const conv = await this.prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { tags: true, notes: true },
+    });
+    await this.prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        tags: [...new Set([...(conv?.tags ?? []), tag])],
+        notes: [conv?.notes, note].filter(Boolean).join('\n'),
+      },
+    });
+    this.log.log(`run ${run.id}: ${note}`);
   }
 
   /**

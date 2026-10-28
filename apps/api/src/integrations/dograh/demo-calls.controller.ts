@@ -54,7 +54,8 @@ export class DemoCallsController {
    * host, and a centre with no key of its own is using the deployment's — so
    * that list names other clients' agents. The operator picks from it on the
    * platform page; a centre's admin only needs to know which agent answers
-   * here, which `workflowName` already says.
+   * here, which `workflowName` already says. `callerIds` goes for the same
+   * reason: it is every number on the host, and `callerId` names theirs.
    */
   @Roles('ADMIN', 'SUPERVISOR')
   @Get()
@@ -62,7 +63,7 @@ export class DemoCallsController {
     const orgId = this.tenants.requireOrgId();
     await this.assertEnabled(orgId);
     const v = await this.dograh.dialersView(orgId);
-    return { ...v, workflows: [], workflowsError: null };
+    return { ...v, workflows: [], workflowsError: null, callerIds: [], callerIdsError: null };
   }
 
   /**

@@ -14,6 +14,7 @@ import {
   FlaskConical,
   Globe,
   Inbox,
+  ListPlus,
   LogOut,
   PhoneCall,
   PhoneForwarded,
@@ -66,6 +67,9 @@ const NAV = [
   { href: '/ai-agent', label: 'AI assistant', icon: Sparkles, roles: ['ADMIN', 'SUPERVISOR'] },
   { href: '/knowledge', label: 'Knowledge', icon: BookOpen, roles: ['ADMIN', 'SUPERVISOR'] },
   { href: '/campaigns', label: 'Outbound', icon: PhoneOutgoing, roles: ['ADMIN', 'SUPERVISOR'] },
+  // Not "/campaign": the nav matches by prefix, so it would light up on /campaigns too.
+  // Opt-in (see OPT_IN_PATHS): only users whose allowlist names it see it.
+  { href: '/call-list', label: 'Campaign', icon: ListPlus, roles: ['ADMIN', 'SUPERVISOR'] },
   // Everyone on the floor reads it — an agent taking a call needs to know who
   // is coming in as much as anyone. Booking and the hours are guarded on the
   // page and by the API, not by hiding the section.
@@ -102,6 +106,13 @@ const NAV = [
 /** Tenant pages need a centre in context; only /superadmin does not. */
 const PLATFORM_ONLY_PATHS = ['/superadmin'];
 
+/**
+ * Sections nobody sees unless their navAllowlist names them. Everything else is
+ * shown by default and the allowlist only greys it out; these are built for one
+ * client and would be noise in every other centre's sidebar.
+ */
+const OPT_IN_PATHS: string[] = ['/call-list'];
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, loading, logout, socket, viewingOrgId, viewOrg } = useSession();
   const router = useRouter();
@@ -127,13 +138,21 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   /*
    * A user restricted to some sections should not reach the rest by typing the
    * URL or following an in-page link, so landing on one sends them home. Live
-   * ops is never blocked here so the redirect cannot loop.
+   * ops is never blocked here so the redirect cannot loop. Opt-in sections are
+   * blocked for everyone whose allowlist does not name them — once the session
+   * has loaded, or a deep link to one would bounce while it restores.
    */
   const allowlist = user?.navAllowlist ?? [];
   const blockedPath =
-    allowlist.length > 0 &&
+    Boolean(user) &&
     pathname !== '/' &&
-    NAV.some((n) => n.href !== '/' && pathname.startsWith(n.href) && !allowlist.includes(n.href));
+    NAV.some(
+      (n) =>
+        n.href !== '/' &&
+        pathname.startsWith(n.href) &&
+        !allowlist.includes(n.href) &&
+        (allowlist.length > 0 || OPT_IN_PATHS.includes(n.href)),
+    );
   useEffect(() => {
     if (blockedPath) router.replace('/');
   }, [blockedPath, router]);
@@ -218,6 +237,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (n.href === '/website' && user.orgWebsiteEnabled === false) return false;
     if (n.href === '/simulator' && user.orgSimulatorEnabled === false) return false;
     if (n.href === '/demo-calls' && user.orgDemoCallsEnabled === false) return false;
+    if (OPT_IN_PATHS.includes(n.href) && !allowlist.includes(n.href)) return false;
     // A centre's pages are only reachable from inside that centre. On the
     // platform page they would render another tenant's data or nothing at all,
     // so the operator gets exactly one item until they pick a centre.

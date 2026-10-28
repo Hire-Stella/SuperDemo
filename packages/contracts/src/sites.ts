@@ -589,6 +589,7 @@ export const RESERVED_SLUGS = new Set([
   'ai-agent',
   'analytics',
   'campaigns',
+  'call-list',
   'conversations',
   'knowledge',
   'settings',

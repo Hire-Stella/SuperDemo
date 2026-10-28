@@ -918,6 +918,10 @@ model Campaign {
   maxAttempts       Int @default(2)
   retryAfterMinutes Int @default(120)
 
+  /// Dial through the centre's outbound voice agent (its Dograh outbound slot)
+  /// rather than the telephony driver. Off by default: on, the calls are real.
+  voiceAgent Boolean @default(false)
+
   startedAt   DateTime?
   completedAt DateTime?
   createdAt   DateTime  @default(now())
@@ -942,6 +946,9 @@ model CampaignTarget {
   nextAttemptAt  DateTime?
   /// The conversation the successful attempt produced.
   conversationId String?
+  /// The Dograh run of the latest voice-agent attempt. Its import (Call
+  /// providerCallId `dograh-run-<id>`) is how the dialer learns how it ended.
+  dograhRunId    Int?
   lastError      String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt

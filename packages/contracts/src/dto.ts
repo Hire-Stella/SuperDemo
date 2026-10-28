@@ -1097,6 +1097,8 @@ export const CampaignSummary = z.object({
   daysOfWeek: z.array(z.number().int()),
   maxAttempts: z.number().int(),
   retryAfterMinutes: z.number().int(),
+  /** Real calls through the centre's outbound voice agent, not the telephony driver. */
+  voiceAgent: z.boolean(),
   startedAt: z.coerce.date().nullable(),
   completedAt: z.coerce.date().nullable(),
   createdAt: z.coerce.date(),
@@ -1134,6 +1136,8 @@ export const CreateCampaignInput = z.object({
   daysOfWeek: z.array(z.coerce.number().int().min(1).max(7)).default([]),
   maxAttempts: z.coerce.number().int().min(1).max(5).default(2),
   retryAfterMinutes: z.coerce.number().int().min(5).max(10080).default(120),
+  /** See Campaign.voiceAgent: on, the dialer places real calls through Dograh. */
+  voiceAgent: z.boolean().default(false),
 });
 export type CreateCampaignInput = z.infer<typeof CreateCampaignInput>;
 
@@ -1147,6 +1151,41 @@ export const AddCampaignTargetsInput = z.object({
   contactIds: z.array(Cuid).min(1).max(1000),
 });
 export type AddCampaignTargetsInput = z.infer<typeof AddCampaignTargetsInput>;
+
+/**
+ * People typed in or read from a CSV, who become contacts and then targets.
+ *
+ * Phones arrive as typed ("050 123 4567", "+971…", "971…"): the server turns
+ * them into E.164 against `country` and reports the ones it cannot, by row,
+ * rather than rejecting the whole upload over one bad cell. 1000 per request
+ * keeps a batch under the API's default body limit; the page sends a longer
+ * file in several.
+ */
+export const AddCampaignPeopleInput = z.object({
+  people: z
+    .array(
+      z.object({
+        name: z.string().trim().max(120).optional(),
+        phone: z.string().trim().max(40),
+      }),
+    )
+    .min(1)
+    .max(1000),
+  /** ISO country of numbers written without a country code. */
+  country: z.string().length(2).default('AE'),
+});
+export type AddCampaignPeopleInput = z.infer<typeof AddCampaignPeopleInput>;
+
+export const AddCampaignPeopleResult = z.object({
+  added: z.number().int(),
+  /** Already a target of this campaign, so not queued twice. */
+  alreadyOnList: z.number().int(),
+  /** Known contacts who asked not to be called. */
+  optedOut: z.number().int(),
+  /** Rows whose phone could not be read, numbered as sent (first = 1). */
+  invalid: z.array(z.object({ row: z.number().int(), phone: z.string(), reason: z.string() })),
+});
+export type AddCampaignPeopleResult = z.infer<typeof AddCampaignPeopleResult>;
 
 export const CampaignTargetRow = z.object({
   id: Cuid,
