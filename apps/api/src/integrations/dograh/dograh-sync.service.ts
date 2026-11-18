@@ -3,6 +3,7 @@ import { Interval } from '@nestjs/schedule';
 import {
   DEMO_DIALER_KINDS,
   DograhDialers,
+  DograhPublic,
   demoCallTag,
   type AiLiveCall,
   type ApiEnv,
@@ -19,6 +20,8 @@ import { PlatformSettingsService } from '../../platform-settings/platform-settin
 
 const DEFAULT_BASE_URL = 'https://voice.hirestella.ai';
 const TICK_MS = 60_000;
+/** How often (in ticks) to re-check which workflows each centre is configured with. */
+const ADOPT_EVERY_TICKS = 10;
 const PAGE_SIZE = 100;
 /**
  * How far behind the newest imported call each sync looks again. A run is only
@@ -99,6 +102,7 @@ export class DograhSyncService implements OnApplicationBootstrap {
   private readonly log = new Logger(DograhSyncService.name);
   private syncing = false;
   private pollingLive = false;
+  private ticks = 0;
   /** Calls in progress per centre, refreshed every LIVE_POLL_MS. */
   private readonly live = new Map<string, AiLiveCall[]>();
 
@@ -136,6 +140,8 @@ export class DograhSyncService implements OnApplicationBootstrap {
     if (this.syncing || !this.env.DOGRAH_SUPERUSER_KEY) return;
     this.syncing = true;
     try {
+      if (this.ticks++ % ADOPT_EVERY_TICKS === 0) await this.adoptConfiguredWorkflows();
+
       // Unscoped on purpose: the import serves every mapped centre, and each
       // one is then processed inside its own tenant context.
       const orgs = await this.prisma.organization.findMany({
@@ -154,6 +160,69 @@ export class DograhSyncService implements OnApplicationBootstrap {
       }
     } finally {
       this.syncing = false;
+    }
+  }
+
+  /**
+   * Import calls from every workflow a centre's agent or demo slots use.
+   *
+   * Building or picking an agent registers its workflows for import
+   * (DograhService.registerForImport), but that registration is best-effort,
+   * runs only when a slot's workflow *changes*, and did not exist when the
+   * earliest centres were set up. Those centres placed demo calls that never
+   * reached their Inbox: Demo Business rang five between 20 Oct and 11 Nov
+   * and imported none. This closes the gap from the configuration itself.
+   *
+   * Only ever adds ids. A workflow configured in more than one centre (a
+   * shared demo agent), or already imported by another centre, is skipped: its
+   * calls cannot be attributed to one tenant, and importing them into each
+   * would show one client's callers in another's Inbox.
+   */
+  private async adoptConfiguredWorkflows(): Promise<void> {
+    const orgs = await this.prisma.organization.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, dograhWorkflowIds: true },
+    });
+
+    const configured = new Map<string, number[]>();
+    const claims = new Map<number, number>();
+    for (const org of orgs) {
+      try {
+        const row = await this.tenants.runAs(org.id, null, () =>
+          this.prisma.setting.findFirst({ select: { dograhPublic: true, dograhDialers: true } }),
+        );
+        const pub = DograhPublic.safeParse(row?.dograhPublic ?? {});
+        const dialers = DograhDialers.safeParse(row?.dograhDialers ?? {});
+        const ids = new Set(
+          [
+            pub.success ? pub.data.workflowId : null,
+            pub.success ? pub.data.chatWorkflowId : null,
+            ...(dialers.success ? DEMO_DIALER_KINDS.map((k) => dialers.data[k].workflowId) : []),
+          ].filter((id): id is number => typeof id === 'number'),
+        );
+        configured.set(org.id, [...ids]);
+        for (const id of ids) claims.set(id, (claims.get(id) ?? 0) + 1);
+      } catch (error) {
+        this.log.warn(`could not read ${org.name}'s Dograh workflows: ${String(error)}`);
+      }
+    }
+
+    const importedBy = new Map<number, string>();
+    for (const org of orgs) for (const id of org.dograhWorkflowIds) importedBy.set(id, org.id);
+
+    for (const org of orgs) {
+      const missing = (configured.get(org.id) ?? []).filter(
+        (id) =>
+          !org.dograhWorkflowIds.includes(id) &&
+          claims.get(id) === 1 &&
+          (importedBy.get(id) ?? org.id) === org.id,
+      );
+      if (missing.length === 0) continue;
+      await this.prisma.organization.update({
+        where: { id: org.id },
+        data: { dograhWorkflowIds: [...org.dograhWorkflowIds, ...missing] },
+      });
+      this.log.log(`now importing workflow(s) ${missing.join(', ')} into ${org.name}`);
     }
   }
 
