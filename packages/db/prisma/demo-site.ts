@@ -112,7 +112,101 @@ const CAR_RENTAL_PAGE = {
   footerNote: 'Legend Rent A Car · Sheikh Zayed Road, Dubai · Fleet, corporate and long-term leasing',
 };
 
+/**
+ * A neighbourhood store with delivery: the page for "Demo Business".
+ *
+ * Written to match the RETAIL demo pack that seeds its calls (orders and
+ * delivery, payments and refunds, festival hampers, trade accounts), so the
+ * page a prospect is shown and the inbox they are shown next tell the same
+ * story. Generic on purpose: no named brand, no real address.
+ */
+const STORE_PAGE = {
+  hero: {
+    eyebrow: 'Groceries & home essentials · delivered same day',
+    headline: 'Everything for the week, at your door by this evening',
+    subhead:
+      'Fresh produce, pantry staples and household essentials from one store. Order by phone or WhatsApp before 4pm and it arrives the same day — our assistant answers every call, any hour.',
+    primaryCta: { label: 'Call to order', kind: 'call' },
+    secondaryCta: { label: 'Request a callback', kind: 'callback' },
+  },
+  highlights: [
+    { title: 'Same-day delivery', body: 'Order before 4pm and it arrives the same evening. Free on baskets over AED 100.' },
+    { title: 'Answered on the first ring', body: 'Our AI assistant takes orders, checks stock and tracks deliveries around the clock, and hands you to a person whenever you ask.' },
+    { title: 'Fresh, or it comes back', body: 'Anything that is not right is replaced on the next delivery or refunded the same day. No forms.' },
+    { title: 'Pay how you like', body: 'Card on delivery, bank transfer, or a monthly invoice on a trade account.' },
+    { title: 'Your usual order, remembered', body: 'Say "the usual" and we repeat your last basket. Weekly reminders if you want them.' },
+    { title: 'Collect it yourself', body: 'Order ahead and we text you when it is packed and waiting at the counter.' },
+  ],
+  services: [
+    { name: 'Fresh produce', body: 'Fruit, vegetables and herbs, delivered daily from the market and checked before they are packed.' },
+    { name: 'Pantry & staples', body: 'Rice, flour, lentils, spices, oils and the brands you already buy, in household and bulk sizes.' },
+    { name: 'Household essentials', body: 'Cleaning, laundry and personal care, so the weekly shop is one order rather than three.' },
+    { name: 'Festival & gift hampers', body: 'Ready-made or built to order for Eid, Diwali, Christmas and corporate gifting, delivered to a list.' },
+    { name: 'Trade accounts', body: 'For restaurants, offices and caterers: standing orders, credit terms and one monthly invoice.' },
+    { name: 'Click & collect', body: 'Order by phone or WhatsApp, pick it up at the counter with no queue.' },
+  ],
+  steps: [
+    { title: 'Call or message', body: 'Tell the assistant what you need, or say "the usual". It confirms stock and the total as you go.' },
+    { title: 'We pack it', body: 'Picked fresh and checked against your order. You get a message if anything has to be swapped.' },
+    { title: 'Delivered or collected', body: 'A delivery slot the same evening, or a text when it is ready at the counter.' },
+    { title: 'Anything wrong, we fix it', body: 'Call back and it is replaced on the next delivery or refunded the same day.' },
+  ],
+  testimonials: [
+    { quote: 'I call at eleven at night, say "the usual", and it is at the door the next evening. I have not been to a supermarket in months.', author: 'Priya Raman', role: 'Customer since 2023' },
+    { quote: 'Our café runs on a standing order. One invoice a month, and when we are short on something they add it to the same day run.', author: 'Daniel Okafor', role: 'Café owner, trade account' },
+    { quote: 'We sent forty Eid hampers to clients from one spreadsheet. Every one arrived on the day, and they called me when two addresses were wrong.', author: 'Huda Al Mansoori', role: 'Office manager' },
+  ],
+  pricing: [
+    { name: 'Everyday delivery', price: 'Free over AED 100', note: 'AED 10 below that', features: ['Same day if ordered before 4pm', 'Evening delivery slots', 'Replacement or refund on anything wrong', 'Card on delivery'] },
+    { name: 'Weekly standing order', price: 'No fee', note: 'Your usual, every week', features: ['Reminder before each order', 'Change or skip with one call', 'Priority delivery slot', 'Free delivery on every order'] },
+    { name: 'Trade account', price: 'On application', note: 'Restaurants, offices, caterers', features: ['Credit terms', 'One monthly invoice', 'Same-day top-ups', 'Named account contact'] },
+  ],
+  comparison: {
+    beforeLabel: 'The usual corner shop',
+    afterLabel: 'With Demo Business',
+    before: ['Phone rings out when it is busy', 'Orders taken on paper, items missed', 'No idea when the delivery will come', 'Refunds mean another trip to the shop'],
+    after: ['Every call answered, any hour', 'Orders confirmed back to you item by item', 'A text when it leaves and when it arrives', 'Replaced on the next delivery, or refunded the same day'],
+  },
+  proof: {
+    stats: [
+      { value: '3,000+', label: 'Products in stock' },
+      { value: 'Same day', label: 'Delivery before 4pm' },
+      { value: '24/7', label: 'Orders by phone' },
+      { value: '< 1 min', label: 'To place an order' },
+    ],
+    quote: {
+      text: 'The phone used to ring out every Friday evening. Now every call is an order, and my team packs instead of answering.',
+      author: 'Store manager',
+      role: 'Demo Business',
+    },
+  },
+  faq: [
+    { q: 'What time do I need to order for same-day delivery?', a: 'Before 4pm for delivery the same evening. Orders after 4pm go out on the first slot the next day.' },
+    { q: 'Is there a minimum order?', a: 'No. Delivery is free on baskets over AED 100 and AED 10 below that.' },
+    { q: 'What if something is missing or not fresh?', a: 'Call us and tell the assistant. It is replaced on your next delivery or refunded the same day — you do not need to send anything back.' },
+    { q: 'Can I pay on delivery?', a: 'Yes, by card or cash. Trade accounts can pay by bank transfer on a monthly invoice.' },
+    { q: 'Do you make hampers for companies?', a: 'Yes. Send us a list of names and addresses and we deliver each hamper on the day you choose, with a card if you want one.' },
+    { q: 'Can I speak to a person instead of the assistant?', a: 'Any time. Say so on the call and you are passed to the team with your order already on screen.' },
+  ],
+  contact: {
+    phoneOverride: '',
+    email: 'orders@demobusiness.example',
+    address: 'Demo Business · Dubai',
+    hours: 'Store 8am – 11pm daily · Phone orders 24 hours',
+    showForm: true,
+    formNote: 'Leave a number and we call you back — usually within the hour.',
+  },
+  sections: ['highlights', 'services', 'steps', 'proof', 'testimonials', 'pricing', 'comparison', 'faq', 'contact'],
+  footerNote: 'Demo Business · Groceries and home essentials, delivered same day',
+};
+
 const PAGES: Record<string, { content: unknown; metaTitle: string; metaDescription: string }> = {
+  STORE: {
+    content: STORE_PAGE,
+    metaTitle: 'Demo Business · Groceries and essentials, delivered same day',
+    metaDescription:
+      'Fresh produce, pantry staples and household essentials, ordered by phone or WhatsApp any hour and delivered the same day.',
+  },
   CAR_RENTAL: {
     content: CAR_RENTAL_PAGE,
     metaTitle: 'Legend Rent A Car · Car rental in Dubai',

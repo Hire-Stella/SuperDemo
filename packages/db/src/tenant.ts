@@ -174,13 +174,19 @@ export function withConnectionRetry<T extends PrismaClient>(client: T): T {
          * of seconds at best. Ten attempts backing off to eight seconds gives
          * roughly a minute of tolerance, which turns most of those from a dead
          * run into a pause.
+         *
+         * Forty attempts (about five minutes) because a new firewall rule on
+         * Azure Postgres takes one to two minutes to apply. P2024 (pool timeout)
+         * is what an outage looks like while the pool is still waiting for a
+         * connection. The query was never sent, so retrying it is safe.
          */
-        for (let attempt = 0; attempt < 10; attempt += 1) {
+        for (let attempt = 0; attempt < 40; attempt += 1) {
           try {
             return await query(args);
           } catch (err) {
-            const code = (err as { code?: string }).code;
-            if (code !== 'P1017' && code !== 'P1001') throw err;
+            const e = err as { code?: string; errorCode?: string };
+            const code = e.code ?? e.errorCode;
+            if (code !== 'P1017' && code !== 'P1001' && code !== 'P2024') throw err;
             last = err;
             await new Promise((r) => setTimeout(r, Math.min(8000, 400 * 2 ** attempt)));
           }
