@@ -291,8 +291,14 @@ export default function WebsitePage() {
       </Card>
 
       {/* ------------------------------- looks ----------------------------- */}
+      {/*
+        Picker and preview side by side, the preview pinned while the list
+        scrolls, so a click on a template shows the real page at once. They
+        used to be stacked, with the preview below thirty thumbnails next to an
+        empty column the removed treatment and brand cards had left behind.
+      */}
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,30rem)] xl:items-start">
       <Card
-        className="mb-4"
         title="Template"
         subtitle="Pick a finished design. Everything on the page is filled from your website — there is nothing else to set."
       >
@@ -354,7 +360,7 @@ export default function WebsitePage() {
             );
           }
           return (
-            <div className="grid gap-3 p-4 sm:grid-cols-3">
+            <div className="grid gap-3 p-4 sm:grid-cols-2 2xl:grid-cols-3">
               {visible.map((key) => {
               const t = SITE_TEMPLATES[key];
               const active = draft.template === key;
@@ -409,29 +415,11 @@ export default function WebsitePage() {
         })()}
       </Card>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,30rem)]">
-        <div className="space-y-4">
-          {/* --------------------------- layout --------------------------- */}
-          {/*
-            The layout picker is gone: there is one template now, a ported
-            design that is already finished. Treatment (surface, face, corners,
-            density) is still a choice, because those re-dress one layout
-            rather than asking somebody to pick between four.
-          */}
-          <></>
-
-          {/* -------------------------- treatment -------------------------- */}
-          <></>{/* Treatment card removed — filled from the scrape */}
-
-          {/* --------------------------- identity -------------------------- */}
-          <></>{/* Brand card removed — filled from the scrape */}
-        </div>
-
         {/* ---------------------------- preview --------------------------- */}
         <Card
-          className="xl:sticky xl:top-4 xl:self-start"
+          className="xl:sticky xl:top-4"
           title="Preview"
-          subtitle="Your real page, rendered with the selections above"
+          subtitle="Your real page, in the template you pick"
           action={
             <div className="flex items-center gap-1">
               <button
@@ -500,20 +488,9 @@ export default function WebsitePage() {
             </div>
           </div>
           <p className="border-t border-border px-4 py-2 text-[11px] leading-relaxed text-muted-foreground">
-            Treatment changes show immediately. Text changes need a save, then the reload button.
+            A template you pick shows here at once. Copy changes need a save, then the reload button.
           </p>
         </Card>
-      </div>
-
-      {/* ------------------------------- hero ------------------------------ */}
-      <></>{/* Hero copy card removed — filled from the scrape */}
-
-      <div className="mt-4 grid gap-4 xl:grid-cols-2">
-        {/* ---------------------------- sections -------------------------- */}
-        <></>{/* Section order card removed — filled from the scrape */}
-
-        {/* ---------------------------- contact --------------------------- */}
-        <></>{/* Contact details card removed — filled from the scrape */}
       </div>
 
       {/* --------------------------- lead routing -------------------------- */}
