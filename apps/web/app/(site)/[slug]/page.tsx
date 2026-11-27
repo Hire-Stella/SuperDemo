@@ -19,6 +19,8 @@ import { TEMPLATES as LIBRARY } from '@stella/template-runtime';
 import { TalkToStellaWidget as OscarTalkToStellaWidget } from '@stella/template-oscar';
 import { SiteRender } from '@/components/site/templates';
 import { DograhWidget } from '@/components/site/dograh-widget';
+import { VoiceWarmupGate } from '@/components/site/voice-warmup';
+import { VoiceCaptions } from '@/components/site/voice-captions';
 import { CallPanel } from '@/components/site/call-panel';
 
 /**
@@ -233,6 +235,13 @@ export default async function TenantSitePage({ params, searchParams }: Params) {
           chatContainerId={site.dograh.chatContainerId}
         />
       )}
+      {/*
+        Every template's "Talk to Stella" waits for the voice model to answer,
+        behind one percentage loader — see VoiceWarmupGate.
+      */}
+      {!previewing && site.dograh.enabled ? <VoiceWarmupGate slug={site.slug} /> : null}
+      {/* One speaker at a time, while a voice call is live — see VoiceCaptions. */}
+      {!previewing && site.dograh.enabled ? <VoiceCaptions /> : null}
       {/* The centre's demo calls — talk now, call me back, info call. */}
       {!previewing && (
         <CallPanel

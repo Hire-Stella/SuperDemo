@@ -380,7 +380,7 @@ export function TalkToStellaWidget({
 
       {menuOpen && !mode && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14, alignItems: 'flex-end' }}>
-          <button onClick={() => pickMode('voice')} style={menuItemStyle}>
+          <button data-stella-voice-start onClick={() => pickMode('voice')} style={menuItemStyle}>
             <span style={menuIconStyle}>
               <MicIcon size={18} />
             </span>
@@ -494,7 +494,7 @@ export function TalkToStellaWidget({
                   </button>
                 )}
                 {(callStatus === 'ended' || callStatus === 'error') && (
-                  <button onClick={() => pickMode('voice')} style={primaryButtonStyle}>
+                  <button data-stella-voice-start onClick={() => pickMode('voice')} style={primaryButtonStyle}>
                     Try again
                   </button>
                 )}

@@ -24,6 +24,32 @@ export const FAREWELL_CONDITION = (lead: string): string =>
 export const FAREWELL_RULE =
   `When the caller says a farewell (${FAREWELL_PHRASES}), do not ask another question or start a new topic: take the End Call pathway at once.`;
 
+/**
+ * The fleet's turn-start standard, written onto every graph we build.
+ *
+ * Dograh's schema defaults are `default` / 3, which lets a VAD blip or a
+ * not-yet-final word open a turn: the bot is cut off, the reply in flight is
+ * cancelled, and to the caller it sounds like the agent went quiet. Under
+ * `min_words` a turn opens only on transcribed words — one while the bot is
+ * silent, two while it is speaking — so "okay" or a breath no longer interrupts.
+ */
+export const TURN_START_DEFAULTS = {
+  turn_start_strategy: 'min_words',
+  turn_start_min_words: 2,
+} as const;
+
+/**
+ * Why a question is answered where the caller is, not routed.
+ *
+ * Every transition costs a whole extra model round trip before the caller
+ * hears anything: the first call only picks the pathway, the second writes the
+ * answer. On workflow 588 that turned a ~1 s reply into 3.3–4.3 s on the first
+ * real question of every call. So pathways are for doing something, not for
+ * answering something.
+ */
+const ROUTE_ONLY_TO_ACT =
+  'A question the verified facts already answer is not a reason to switch: answer it where you are.';
+
 export class DograhClient {
   private readonly log = new Logger(DograhClient.name);
 
@@ -222,6 +248,36 @@ export class DograhClient {
    * embed token and therefore one widget mode. The copy shares the original's
    * nodes and prompts, so both modes are genuinely the same agent.
    */
+  /**
+   * This account's self-hosted voice model, or null when there is nothing of
+   * ours to wake.
+   *
+   * Read from the account's own model settings rather than configured on our
+   * side, so it follows the model when Dograh is pointed somewhere else. Only a
+   * self-hosted model has a `base_url` (an OpenAI-compatible server, `/v1`
+   * included); a hosted API (Gemini, OpenAI) never sleeps, so it returns null
+   * and the caller skips the wait. The key is the model server's own and must
+   * never leave the API.
+   */
+  async voiceModelEndpoint(): Promise<{ baseUrl: string; model: string; apiKey: string | null } | null> {
+    const cfg = await this.call<{ llm?: { base_url?: unknown; model?: unknown; api_key?: unknown } }>(
+      '/user/configurations/user',
+    );
+    const llm = cfg?.llm;
+    const base = typeof llm?.base_url === 'string' ? llm.base_url.trim() : '';
+    const model = typeof llm?.model === 'string' ? llm.model.trim() : '';
+    if (!base || !model) return null;
+    try {
+      new URL(base);
+    } catch {
+      return null;
+    }
+    // Dograh masks the key in this response (`****…`); a masked key is no key.
+    const raw = typeof llm?.api_key === 'string' ? llm.api_key.trim() : '';
+    const apiKey = raw && !/[*•]/.test(raw) ? raw : null;
+    return { baseUrl: base.replace(/\/+$/, ''), model, apiKey };
+  }
+
   async duplicateWorkflow(workflowId: number): Promise<{ id: number; name: string }> {
     return this.call(`/workflow/${workflowId}/duplicate`, {
       method: 'POST',
@@ -475,7 +531,7 @@ export class DograhClient {
    * a graph their runtime is known to accept:
    *
    *   id 0        globalNode  — persona, rules and the business's facts
-   *   id 1        startCall   — greeting, then routes on the caller's need
+   *   id 1        startCall   — greeting; answers from the facts, routes only to act
    *   id 2..n+1   agentNode   — one per stage
    *   id n+2      endCall
    *
@@ -547,15 +603,19 @@ export class DograhClient {
         type: 'startCall',
         position: { x: 205, y: 60 },
         data: {
-          name: 'Greeting & Routing',
+          name: 'Greeting & Questions',
           prompt: [
             '# MAIN ACTION POINT AT THIS STAGE',
             '',
-            'Greet the caller, find out in one question what they need, then route.',
+            'Greet the caller, find out what they need, and answer it yourself.',
             '',
-            '- Do not try to answer their question here. Route to the stage that owns it.',
-            '- If what they want is still unclear after one question, ask one more, then route',
-            '  to the closest stage rather than looping.',
+            '- If the verified facts answer their question, answer it here, in this turn.',
+            '  Never route just to answer a question.',
+            '- Route only when the caller wants to go ahead with something a stage handles,',
+            '  such as booking or leaving their details, and needs more than an answer.',
+            '- When you route, the tool call is your whole reply. No text with it.',
+            '- If what they want is still unclear after one question, ask one more, then',
+            '  answer or route rather than looping.',
           ].join('\n'),
           allow_interrupt: true,
           add_global_prompt: true,
@@ -584,9 +644,11 @@ export class DograhClient {
             '',
             st.purpose,
             '',
-            '## Staying in your lane',
-            '- Answer only this subject. If the caller moves to something else, route to the',
-            '  stage that owns it rather than answering outside your remit.',
+            '## Other questions',
+            '- If the caller asks about something else the verified facts answer, answer it',
+            '  here. Never route just to answer a question.',
+            '- Route to another stage only when the caller wants to go ahead with something',
+            '  that stage handles. When you route, the tool call is your whole reply.',
             '- Everything you state must come from the verified facts. No exceptions.',
           ].join('\n'),
           allow_interrupt: true,
@@ -636,25 +698,49 @@ export class DograhClient {
         data: { condition, label },
       });
 
+    // A stage is entered to do its work, never to answer a question the
+    // current node can answer from the facts — see ROUTE_ONLY_TO_ACT.
+    const routeTo = (st: { routeWhen: string }) =>
+      `Choose this pathway only when the caller wants to go ahead with this (${st.routeWhen}) ` +
+      `and needs more than an answer. ${ROUTE_ONLY_TO_ACT}`;
+
     // start -> every stage, on that stage's own routing condition
-    stages.forEach((st, i) =>
-      link(startId, stageIds[i]!, `Choose this pathway when ${st.routeWhen}.`, st.name),
-    );
+    stages.forEach((st, i) => link(startId, stageIds[i]!, routeTo(st), st.name));
     link(startId, endId, FAREWELL_CONDITION('the caller says they have finished, or rings off'), 'Done');
 
     // stage -> peers, so a caller can change subject; and stage -> end
     stageIds.forEach((from, i) => {
       stageIds.forEach((to, j) => {
         if (i === j) return;
-        link(from, to, `Choose this pathway when ${stages[j]!.routeWhen}.`, stages[j]!.name);
+        link(from, to, routeTo(stages[j]!), stages[j]!.name);
       });
       link(from, endId, FAREWELL_CONDITION('the caller has what they need, or wants to end the call'), 'Done');
     });
+
+    /*
+     * Turn settings ride along with the graph. `workflow_configurations` is a
+     * whole object on Dograh's side — fields left out fall back to schema
+     * defaults — so the current one is read and only the turn-start keys are
+     * changed. If it cannot be read, the configuration is left alone rather
+     * than reset: a graph with the old turn settings beats one with none.
+     */
+    const current = await this.call<{ workflow_configurations?: unknown }>(
+      `/workflow/fetch/${workflowId}`,
+    ).catch(() => null);
+    const cfg = current?.workflow_configurations;
+    const workflowConfigurations =
+      cfg && typeof cfg === 'object' && !Array.isArray(cfg)
+        ? { ...(cfg as Record<string, unknown>), ...TURN_START_DEFAULTS }
+        : undefined;
+    if (!workflowConfigurations) {
+      this.log.warn(`workflow ${workflowId}: configuration unreadable, turn-start settings not applied`);
+    }
 
     await this.call(`/workflow/${workflowId}`, {
       method: 'PUT',
       body: {
         workflow_definition: { nodes, edges, viewport: { x: 0, y: 0, zoom: 0.55 } },
+        ...(workflowConfigurations ? { workflow_configurations: workflowConfigurations } : {}),
       },
       timeoutMs: 60_000,
     });

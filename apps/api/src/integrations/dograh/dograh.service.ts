@@ -53,6 +53,22 @@ interface ResolvedDograh {
 /** Heading the booking how-to is appended under; also what makes it idempotent. */
 const BOOKING_MARKER = '## BOOKING APPOINTMENTS';
 
+/** What a landing page is told before it starts a call. See warmVoiceModel. */
+export interface VoiceWarmup {
+  /** The model answered (or needs no waking). False still means "go ahead". */
+  ready: boolean;
+  /** How long this request waited on the model; 0 when it was already warm. */
+  ms: number;
+  /** The account's model is hosted, so there was nothing to wake. */
+  skipped?: boolean;
+}
+/** Long enough for a Modal cold start to load a 26B model; past it, call anyway. */
+const WARMUP_TIMEOUT_MS = 90_000;
+/** Treated as warm this long after a good ping, well inside Modal's idle window. */
+const WARM_FOR_MS = 60_000;
+/** How long a centre's model endpoint is trusted before Dograh is asked again. */
+const HEALTH_URL_TTL_MS = 10 * 60_000;
+
 /** Nothing stored yet — the shape the editor and the page both start from. */
 const EMPTY: DograhPublic = {
   workflowId: null,
@@ -438,6 +454,98 @@ export class DograhService {
       /* WEB_ORIGIN is url-validated by the env schema, so this cannot happen. */
     }
     return [...out];
+  }
+
+  /** Per centre: its voice model endpoint, and when we looked. */
+  private readonly modelEndpoints = new Map<
+    string,
+    { endpoint: { baseUrl: string; model: string; apiKey: string | null } | null; at: number }
+  >();
+  /** Per model server: when it last answered, and the request in flight if any. */
+  private readonly warmth = new Map<string, { okAt: number; inflight: Promise<VoiceWarmup> | null }>();
+
+  /**
+   * Wake the centre's voice model before a visitor's call needs it.
+   *
+   * The self-hosted Gemma behind most agents runs on Modal, which scales to
+   * zero when idle. The first call after a quiet spell then either waits on a
+   * cold container or — after 2 s of silence — is handed to the fallback model
+   * mid-turn, and to the visitor both just sound like a slow agent.
+   *
+   * The wake-up is a real one-token completion, not a health check: it starts
+   * the container, loads the model and runs it once, so the caller's first turn
+   * is the model's second. Answered means warm.
+   *
+   * `fresh` skips the "answered in the last minute" shortcut — the press of
+   * "Talk to Stella" always sends one, so the loader reflects the model as it is
+   * now. Concurrent requests still share one completion.
+   *
+   * Never throws: a page must be able to start the call whatever happens here,
+   * so every failure is `ready: false` and the caller proceeds anyway.
+   */
+  async warmVoiceModel(orgId: string, opts: { fresh?: boolean } = {}): Promise<VoiceWarmup> {
+    const started = Date.now();
+    let endpoint: { baseUrl: string; model: string; apiKey: string | null } | null;
+    try {
+      const cached = this.modelEndpoints.get(orgId);
+      if (cached && Date.now() - cached.at < HEALTH_URL_TTL_MS) {
+        endpoint = cached.endpoint;
+      } else {
+        const { client } = await this.clientFor(orgId);
+        endpoint = await client.voiceModelEndpoint();
+        this.modelEndpoints.set(orgId, { endpoint, at: Date.now() });
+      }
+    } catch (e) {
+      this.log.warn(`warm-up: no model address for org=${orgId} — ${e instanceof Error ? e.message : e}`);
+      return { ready: false, ms: Date.now() - started };
+    }
+    // A hosted model (no base_url) does not sleep: nothing to wait for.
+    if (!endpoint) return { ready: true, ms: 0, skipped: true };
+
+    const key = `${endpoint.baseUrl}|${endpoint.model}`;
+    const entry = this.warmth.get(key) ?? { okAt: 0, inflight: null };
+    this.warmth.set(key, entry);
+    if (!opts.fresh && Date.now() - entry.okAt < WARM_FOR_MS) return { ready: true, ms: 0 };
+
+    // A key we can use: the model server's own (Dograh masks it), else ours.
+    const apiKey = endpoint.apiKey ?? this.env.VOICE_MODEL_API_KEY?.trim() ?? null;
+
+    // Every visitor arriving during a cold start shares one request.
+    entry.inflight ??= (async (): Promise<VoiceWarmup> => {
+      const t0 = Date.now();
+      // With a key: a one-token completion, which runs the model. Without one:
+      // the server's root `/health`, which wakes the container and only answers
+      // once the model is loaded, but does not run it.
+      const how = apiKey ? 'completion' : 'health';
+      try {
+        const res = apiKey
+          ? await fetch(`${endpoint.baseUrl}/chat/completions`, {
+              method: 'POST',
+              headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
+              body: JSON.stringify({
+                model: endpoint.model,
+                messages: [{ role: 'user', content: 'Say OK.' }],
+                max_tokens: 1,
+                temperature: 0,
+              }),
+              signal: AbortSignal.timeout(WARMUP_TIMEOUT_MS),
+            })
+          : await fetch(new URL('/health', endpoint.baseUrl), { signal: AbortSignal.timeout(WARMUP_TIMEOUT_MS) });
+        if (res.ok) {
+          entry.okAt = Date.now();
+          const ms = Date.now() - t0;
+          this.log.log(`warm-up: ${endpoint.model} ${how} answered in ${ms} ms`);
+          return { ready: true, ms };
+        }
+        this.log.warn(`warm-up: ${endpoint.model} ${how} answered ${res.status}`);
+      } catch (e) {
+        this.log.warn(`warm-up: ${endpoint.model} did not answer — ${e instanceof Error ? e.message : e}`);
+      }
+      return { ready: false, ms: Date.now() - t0 };
+    })().finally(() => {
+      entry.inflight = null;
+    });
+    return entry.inflight;
   }
 
   /** What a public page is handed. Safe by construction: no key, ever. */

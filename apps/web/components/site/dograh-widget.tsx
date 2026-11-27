@@ -1,7 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { prefetchDNS, preconnect } from 'react-dom';
 import Script from 'next/script';
+
+function originOf(url: string | null): string | null {
+  if (!url) return null;
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The centre's Dograh agent on its public page: a call bubble and a chat
@@ -41,6 +51,17 @@ export function DograhWidget({
   chatSrc: string | null;
   chatContainerId: string;
 }) {
+  /*
+   * Open the connection to Dograh while the page is still loading, so the
+   * script and its config fetch do not each start with a fresh DNS + TLS
+   * handshake (~0.35 s measured). Emitted in the server-rendered <head>.
+   */
+  const dograhOrigin = originOf(src ?? chatSrc);
+  if (dograhOrigin) {
+    preconnect(dograhOrigin, { crossOrigin: 'anonymous' });
+    prefetchDNS(dograhOrigin);
+  }
+
   /**
    * Context the agent can read as {{initial_context.page_url}}.
    *
@@ -64,7 +85,15 @@ export function DograhWidget({
   return (
     <>
       {src && context ? (
-        <Script id="dograh-widget" src={src} strategy="lazyOnload" data-dograh-context={context} />
+        /*
+          afterInteractive, not lazyOnload: lazyOnload waits for the window
+          `load` event — every hero image, video and font — and then for an idle
+          moment, so on a heavy page "Talk to Stella" appeared seconds late, and
+          on one whose load never settles it could not appear at all. The
+          button is the page's main call to action; it loads once the page is
+          interactive instead.
+        */
+        <Script id="dograh-widget" src={src} strategy="afterInteractive" data-dograh-context={context} />
       ) : null}
 
       {chatSrc ? (
