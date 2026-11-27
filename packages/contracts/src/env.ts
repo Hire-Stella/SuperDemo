@@ -86,6 +86,17 @@ export const ApiEnv = z
     DOGRAH_SUPERUSER_KEY: optionalStr,
 
     /**
+     * The self-hosted voice model's own API key (the Gemma server on Modal).
+     *
+     * Optional. With it, the "Talk to Stella" warm-up sends the model a real
+     * one-token completion, so the caller's first turn is the model's second.
+     * Without it the warm-up falls back to the server's `/health`, which still
+     * wakes a scaled-to-zero container but does not run the model. Needed
+     * because Dograh masks this key when we read the model settings back.
+     */
+    VOICE_MODEL_API_KEY: optionalStr,
+
+    /**
      * Which model writes the landing-page copy during website enrichment.
      *
      * Separate from LLM_DRIVER, which is the *conversation* brain: that one runs

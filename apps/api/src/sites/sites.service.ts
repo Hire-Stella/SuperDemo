@@ -23,7 +23,7 @@ import {
 import { Prisma } from '@superdemo/db';
 import { PrismaService } from '../prisma/prisma.service';
 import { TenantContext } from '../tenancy/tenant-context.service';
-import { DograhService } from '../integrations/dograh/dograh.service';
+import { DograhService, type VoiceWarmup } from '../integrations/dograh/dograh.service';
 import { ENV } from '../config/config.module';
 
 /**
@@ -180,6 +180,19 @@ export class SitesService {
    * unknown slug, a deactivated centre, an unpublished page — so the caller
    * renders one 404 and a probe cannot tell which of the three it hit.
    */
+  /**
+   * Wake this page's voice model, for the "Talk to Stella" loader.
+   *
+   * Null on exactly the cases publicBySlug hides, so the route 404s the same
+   * way and a probe learns nothing new. The model address never leaves the
+   * API: the page is told only whether to wait.
+   */
+  async warmVoice(slug: string, opts: { fresh?: boolean } = {}): Promise<VoiceWarmup | null> {
+    const org = await this.prisma.organization.findUnique({ where: { slug: slug.toLowerCase() } });
+    if (!org || !org.isActive || !org.websiteEnabled) return null;
+    return this.tenants.runAs(org.id, null, () => this.dograh.warmVoiceModel(org.id, opts));
+  }
+
   async publicBySlug(slug: string): Promise<PublicSiteDto | null> {
     // Organization is a platform model, so this read needs no context. It is
     // also the only thing that decides which context the rest of this runs in.

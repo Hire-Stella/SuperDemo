@@ -1,16 +1,17 @@
-import { Controller, Get, HttpCode, NotFoundException, Param, Post, Req } from '@nestjs/common';
+import { Controller, Get, HttpCode, NotFoundException, Param, Post, Query, Req } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
 import { type PublicSiteDto, SiteLeadInput, type SiteLeadOutput } from '@superdemo/contracts';
 import { SitesService } from './sites.service';
+import type { VoiceWarmup } from '../integrations/dograh/dograh.service';
 import { Public } from '../auth/guards';
 import { ZodBody } from '../shared/zod.pipe';
 
 /**
  * The only unauthenticated, tenant-touching surface on the platform.
  *
- * Everything about it is deliberately narrow: two routes, one of which is a
- * read, and the org is always derived from the slug in the path — never from a
+ * Everything about it is deliberately narrow: a read, a lead form and a model
+ * warm-up, and the org is always derived from the slug in the path — never from a
  * body field, a header, or anything else a caller controls beyond which page
  * they asked for.
  *
@@ -47,6 +48,26 @@ export class PublicSitesController {
    * visitor submits once, so ten leaves room for the crowd without leaving room
    * for a script.
    */
+  /**
+   * Wake the voice model before the visitor's call starts.
+   *
+   * The page calls it on load and again when "Talk to Stella" is pressed. It
+   * returns quickly when the model is already warm and shares one ping between
+   * visitors during a cold start, so the outbound cost is bounded no matter how
+   * often it is hit; the limit is only there so a loop cannot hold a request
+   * open per call. Twenty leaves room for a crowd behind one address.
+   */
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
+  @Post(':slug/voice-warmup')
+  @HttpCode(200)
+  async voiceWarmup(@Param('slug') slug: string, @Query('fresh') fresh?: string): Promise<VoiceWarmup> {
+    // `?fresh=1` is sent by the "Talk to Stella" press: one real completion now,
+    // never the cached "warm a minute ago" answer.
+    const out = await this.sites.warmVoice(slug, { fresh: fresh === '1' });
+    if (!out) throw new NotFoundException('No page here');
+    return out;
+  }
+
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @Post(':slug/leads')
   @HttpCode(200)
